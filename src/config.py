@@ -60,9 +60,12 @@ TARGET = "kp"
 GFZ_DEFINITIVE = 2           # GFZ 'D' flag value for definitive Kp
 KP_BLOCK_HOURS = 3
 
-# Storm-level bins for error-by-level evaluation: 0–3, 4, 5, 6, 7+
-KP_BINS = [0, 4, 5, 6, 7, 9.01]
-KP_BIN_LABELS = ["0-3", "4", "5", "6", "7+"]
+# Storm-level bins for error-by-level evaluation: 0–3, 4, 5 (G1), 6 (G2), 7+ (G3–G5).
+# Kp comes in thirds (4- = 3.667, 5- = 4.667); NOAA rounds to the nearest integer, so
+# edges sit at the half-integers.
+KP_BINS = [0, 3.5, 4.5, 5.5, 6.5, 9.01]
+KP_BIN_LABELS = ["0-3", "4", "5 (G1)", "6 (G2)", "7+ (G3-G5)"]
+STORM_THRESHOLD = 4.5        # Kp >= 5- is a geomagnetic storm (NOAA G1+)
 
 # ── Features ─────────────────────────────────────────────────────────────────
 LAG_HOURS = [1, 3, 6, 9]

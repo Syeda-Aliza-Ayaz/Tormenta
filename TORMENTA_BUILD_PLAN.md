@@ -6,6 +6,8 @@
 **Framing:** A **nowcaster** — estimates current Kp from upstream (L1) solar-wind conditions, with an effective horizon of ~30–60 min (L1→Earth transit). Multi-day forecasting is out of scope (needs CME/solar imagery — "future work").
 
 > This document is the single source of truth for the build. Follow the phases in order. The constraints in §0 are non-negotiable — violating any of them breaks the project, usually silently.
+>
+> **Team:** Aliza, HRK. Notebooks are run in Anaconda Jupyter with the "Python 3.12 (tormenta)" kernel. After every phase, update `docs/PROJECT_NOTES.md` and `docs/report_notes.tex`.
 
 ---
 
@@ -96,7 +98,9 @@ ML Project/
 │   ├── flask_app/             # REST API + HTML front end (localhost)
 │   └── hf_space/              # Gradio demo + model card (Hugging Face Space)
 ├── .github/workflows/retrain.yml
-├── requirements.txt           # pinned exact versions
+├── docs/                      # PROJECT_NOTES.md + report_notes.tex (living docs, updated every phase)
+├── reports/figures/           # figures saved by notebooks for the report
+├── requirements.txt           # pinned exact versions (runtime); requirements-dev.txt adds notebook/test tools
 └── README.md
 ```
 
@@ -265,13 +269,15 @@ jobs:
 - [x] Sanity check: no duplicate timestamps; hourly grid has no holes; Kp ∈ [0, 9]
 
 ### Phase 2 — EDA
-- [ ] Distributions of key fields and Kp
-- [ ] Missingness plot
-- [ ] Bz (and V·Bs) vs Kp
-- [ ] Storm-level balance (Kp bins)
-- [ ] Time series of a known storm (May 2024)
+- [x] Distributions of key fields and Kp
+- [x] Missingness plot
+- [x] Bz (and V·Bs) vs Kp
+- [x] Storm-level balance (Kp bins)
+- [x] Time series of a known storm (May 2024)
+- [x] Extra: gap-length analysis, lag correlation, solar-cycle split view, extreme-value check (figures in `reports/figures/`)
 
 ### Phase 3 — Features & modeling
+- [ ] **EDA follow-ups:** decide 12 h / 24 h trailing speed means (needs SWPC 3-day feed live); clean F10.7 flare spikes (7 days > 400 sfu); model selection must not rely on val alone (2017–2019 is solar minimum: 0.09% G3+ hours) — also use CV + storm-level errors
 - [ ] `features.py` pure function of hourly frame; derived fields recomputed; OMNI cols 11–15 unused
 - [ ] One-off check: recomputed β, M_A ≈ OMNI cols 13–14; P / OMNI col 11 ≈ constant ratio
 - [ ] All rolling windows trailing (incl. F10.7 81-day); F10.7 uses previous day
