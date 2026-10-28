@@ -87,7 +87,7 @@ def model_specs() -> dict:
             params={"model__learning_rate": loguniform(0.03, 0.2), "model__max_iter": [200, 400, 700],
                     "model__max_leaf_nodes": [15, 31, 63], "model__min_samples_leaf": [20, 50, 100],
                     "model__l2_regularization": loguniform(1e-3, 10)},
-            n_iter=8, tune_stride=1, fit_stride=1, n_jobs=2),   # HistGB is already multithreaded
+            n_iter=config.HISTGB_N_ITER, tune_stride=1, fit_stride=1, n_jobs=2),  # HistGB is multithreaded
     }
 
 
@@ -96,11 +96,13 @@ def _rows(mask, stride, fast):
     return idx[:: stride * (6 if fast else 1)]
 
 
-def tune_models(X, y, masks, fast=False, log=print) -> dict:
+def tune_models(X, y, masks, fast=False, log=print, names=None) -> dict:
     """TimeSeriesSplit CV search within the training years; refit best params on train rows."""
     cv = TimeSeriesSplit(n_splits=3 if fast else config.CV_SPLITS)
     out = {}
     for name, spec in model_specs().items():
+        if names is not None and name not in names:
+            continue
         t0 = time.time()
         rows = _rows(masks["train"], spec["tune_stride"], fast)
         Xt, yt = X.iloc[rows], y.iloc[rows]
@@ -136,6 +138,7 @@ def validation_table(tuned, X, y, masks, persistence) -> pd.DataFrame:
     val, tr = masks["val"], _rows(masks["train"], config.SUBSAMPLE_STRIDE, False)
     preds = {"Persistence (baseline)": persistence[val]}
     preds.update({n: r["estimator"].predict(X[val]) for n, r in tuned.items()})
+    preds = with_ensemble(preds)
     table = metrics_table(y[val], preds)
     table["cv_rmse"] = pd.Series({n: r["cv_rmse"] for n, r in tuned.items()})
     table["train_rmse"] = pd.Series({n: metrics(y.iloc[tr], r["estimator"].predict(X.iloc[tr]))["rmse"]
@@ -152,7 +155,26 @@ def test_evaluation(tuned, X, y, masks, persistence, fast=False, log=print):
         models[name] = fit_model(name, r["best_params"], X, y, trval, fast)
         preds[name] = models[name].predict(X[test])
         log(f"{name:18s} refit + test in {time.time() - t0:4.0f} s")
+    preds = with_ensemble(preds)
     return metrics_table(y[test], preds), preds, models
+
+
+def with_ensemble(preds: dict) -> dict:
+    """Add an equal-weight average of the ensemble members (no weights are fitted, so no leakage)."""
+    members = [m for m in config.ENSEMBLE_MEMBERS if m in preds]
+    if len(members) == len(config.ENSEMBLE_MEMBERS):
+        preds = dict(preds)
+        preds["Ensemble (HistGB+RF+SVR)"] = np.mean([np.asarray(preds[m]) for m in members], axis=0)
+    return preds
+
+
+def kp_history_ablation(best_params, X, y, masks, kp_feats, fast=False):
+    """ABLATION ONLY: HistGB on solar wind vs solar wind + past Kp; trained on train, scored on val."""
+    train, val = masks["train"], masks["val"]
+    Xk = pd.concat([X, kp_feats], axis=1)
+    preds = {"HistGB (solar wind only)": fit_model("HistGB", best_params, X, y, train, fast).predict(X[val]),
+             "HistGB + past Kp (ablation)": fit_model("HistGB", best_params, Xk, y, train, fast).predict(Xk[val])}
+    return metrics_table(y[val], preds), preds
 
 
 def weighting_ablation(best_params, X, y, masks, fast=False):
@@ -186,34 +208,60 @@ def fit_bundle(best_params, X, y, mask, fast=False, sample_weight=None) -> dict:
     }
 
 
-def fit_production(best_params, X, y, fast=False, sample_weight=None):
-    """Bundle trained up to the gate-holdout start (no refit-on-all); gate metrics on the holdout."""
-    holdout_start = y.index.max() - pd.DateOffset(months=config.GATE_HOLDOUT_MONTHS)
-    hold = y.index >= holdout_start
-    bundle = fit_bundle(best_params, X, y, ~hold, fast, sample_weight)
+def _holdout_mask(y):
+    return y.index >= y.index.max() - pd.DateOffset(months=config.GATE_HOLDOUT_MONTHS)
 
+
+def gate_metrics(bundle, X, y) -> dict:
+    """Score a bundle on the current gate holdout (the most recent 6 months of definitive labels)."""
     from src.predict import predict_with_interval
+    hold = _holdout_mask(y)
     band = predict_with_interval(bundle, X[hold])
     gate = metrics(y[hold], band["kp_pred"])
     gate["coverage_80"] = float(((y[hold] >= band["kp_lo"]) & (y[hold] <= band["kp_hi"])).mean())
     gate["holdout"] = f"{y.index[hold].min()} → {y.index[hold].max()}"
-    return bundle, gate
+    return gate
 
 
-def save_bundle(bundle, test_metrics: dict, gate_metrics: dict) -> str:
-    """Versioned model file + current.joblib + append to metrics_history.json."""
+def fit_production(best_params, X, y, fast=False, sample_weight=None):
+    """Bundle trained up to the gate-holdout start (no refit-on-all); gate metrics on the holdout."""
+    bundle = fit_bundle(best_params, X, y, ~_holdout_mask(y), fast, sample_weight)
+    return bundle, gate_metrics(bundle, X, y)
+
+
+def gate_decision(candidate_gate: dict, X, y) -> tuple[bool, dict | None]:
+    """Promote if candidate RMSE ≤ incumbent RMSE × tolerance, both scored on THIS run's holdout.
+
+    The incumbent must not have been trained on the holdout; its stored trained_until is checked.
+    """
+    if not config.CURRENT_MODEL.exists():
+        return True, None
+    from src.predict import load_bundle
+    incumbent = load_bundle()
+    hold_start = y.index[_holdout_mask(y)].min()
+    assert pd.Timestamp(incumbent["trained_until"]) < hold_start, "incumbent was trained on the holdout"
+    inc = gate_metrics(incumbent, X, y)
+    return candidate_gate["rmse"] <= inc["rmse"] * config.GATE_TOLERANCE, inc
+
+
+def save_bundle(bundle, test_metrics: dict, gate_metrics: dict, promote: bool = True,
+                incumbent_gate: dict | None = None) -> str:
+    """Versioned model file (+ current.joblib if promoted) and an entry in metrics_history.json."""
     config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    version = f"tormenta_v{datetime.now(timezone.utc):%Y%m%d}"
+    version = f"tormenta_v{datetime.now(timezone.utc):%Y%m%d_%H%M}"
     bundle["version"] = version
     joblib.dump(bundle, config.MODELS_DIR / f"{version}.joblib", compress=3)
-    joblib.dump(bundle, config.CURRENT_MODEL, compress=3)
+    if promote:
+        joblib.dump(bundle, config.CURRENT_MODEL, compress=3)
 
     history = json.loads(config.METRICS_HISTORY.read_text()) if config.METRICS_HISTORY.exists() else []
     clean = lambda d: {k: (float(v) if isinstance(v, (int, float, np.floating)) else v) for k, v in d.items()}
     history.append({"version": version, "created_utc": bundle["created_utc"],
                     "trained_until": bundle["trained_until"], "params": bundle["params"],
-                    "weighted": bundle["weighted"],
-                    "test": clean(test_metrics), "gate": clean(gate_metrics), "promoted": True})
+                    "weighted": bundle["weighted"], "n_features": len(bundle["features"]),
+                    "test": clean(test_metrics), "gate": clean(gate_metrics),
+                    "incumbent_gate": clean(incumbent_gate) if incumbent_gate else None,
+                    "promoted": promote})
     config.METRICS_HISTORY.write_text(json.dumps(history, indent=2, default=str))
     return version
 
@@ -230,8 +278,9 @@ def run(fast=False):
     print(test_table.round(3))
     best = tuned["HistGB"]["best_params"]
     bundle, gate = fit_production(best, X, y, fast)
-    version = save_bundle(bundle, test_table.loc["HistGB"].to_dict(), gate)
-    print(f"Saved {version}; gate holdout: {gate}")
+    promote, incumbent = gate_decision(gate, X, y)
+    version = save_bundle(bundle, test_table.loc["HistGB"].to_dict(), gate, promote, incumbent)
+    print(f"Saved {version} (promoted={promote}); gate: {gate}; incumbent: {incumbent}")
 
 
 if __name__ == "__main__":

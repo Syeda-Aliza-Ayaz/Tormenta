@@ -57,6 +57,31 @@ def history(base: pd.DataFrame) -> pd.DataFrame:
     cols["speed_max3h"] = base["speed"].rolling(3, min_periods=_min_periods(3)).max()
     for w in config.LONG_SPEED_WINDOWS:
         cols[f"speed_mean{w}h"] = base["speed"].rolling(w, min_periods=_min_periods(w)).mean()
+    for w in config.LONG_NEWELL_WINDOWS:
+        cols[f"newell_mean{w}h"] = base["newell"].rolling(w, min_periods=_min_periods(w)).mean()
+
+    # Pressure dynamics: sudden compressions mark shock/CME arrival
+    p = base["pressure"]
+    cols["pressure_mean3h"] = p.rolling(3, min_periods=_min_periods(3)).mean()
+    cols["pressure_max3h"] = p.rolling(3, min_periods=_min_periods(3)).max()
+    cols["pressure_change1h"] = p - p.shift(1)
+    return pd.DataFrame(cols, index=base.index)
+
+
+def block_so_far(base: pd.DataFrame) -> pd.DataFrame:
+    """Position inside the current 3-h Kp block and running stats since the block started.
+
+    Uses only hours from the block start up to and including t (cumulative within the block),
+    so it is causal; it tells the model how much of the block it has already seen.
+    """
+    block = base.index.floor(f"{config.KP_BLOCK_HOURS}h")
+    cols = {"block_hour": base.index.hour % config.KP_BLOCK_HOURS}
+    for c in config.BLOCK_SO_FAR_MEAN:
+        s = base[c]
+        n = s.notna().groupby(block).cumsum()
+        cols[f"{c}_block_mean"] = s.fillna(0).groupby(block).cumsum() / n.where(n > 0)
+    cols["newell_block_max"] = base["newell"].fillna(-np.inf).groupby(block).cummax().replace(-np.inf, np.nan)
+    cols["bz_block_min"] = base["bz_gsm"].fillna(np.inf).groupby(block).cummin().replace(np.inf, np.nan)
     return pd.DataFrame(cols, index=base.index)
 
 
@@ -92,4 +117,23 @@ def build_features(hourly: pd.DataFrame, f107_daily: pd.Series) -> pd.DataFrame:
     f107 = f107_daily_features(f107_daily).reindex(sw.index.normalize())
     f107.index = sw.index
 
-    return pd.concat([base, history(base), f107, time_features(sw.index)], axis=1)
+    return pd.concat([base, history(base), block_so_far(base), f107, time_features(sw.index)], axis=1)
+
+
+def kp_history_features(kp_hourly: pd.Series, index: pd.DatetimeIndex) -> pd.DataFrame:
+    """ABLATION ONLY — never called by build_features, never used in production.
+
+    Kp of the two previous *complete* blocks and the mean of the previous 8 blocks (24 h),
+    relative to the block containing each hour. The current block's Kp is never used.
+    Shows how much a model allowed to use past Kp (autoregression) would gain.
+    """
+    starts = kp_hourly[kp_hourly.index.hour % config.KP_BLOCK_HOURS == 0]
+    kp_block = starts.asfreq(f"{config.KP_BLOCK_HOURS}h")
+    block = index.floor(f"{config.KP_BLOCK_HOURS}h")
+    prior = kp_block.shift(1)                       # value of the block before, stamped at this block
+    out = pd.DataFrame({
+        "kp_prev1": prior.reindex(block).to_numpy(),
+        "kp_prev2": kp_block.shift(2).reindex(block).to_numpy(),
+        "kp_prev_mean24h": prior.rolling(8, min_periods=4).mean().reindex(block).to_numpy(),
+    }, index=index)
+    return out

@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b 🟡 (improvement round: code done, runs pending) · Phase 4–7 ⬜
 
 ---
 
@@ -243,3 +243,42 @@ All logic lives in `src/`, and the notebooks only *call* it. This lets the live 
 - Trained on 1998 → 2025-07-10.
 - On the held-back 6 months (Jul 2025 – Jan 2026): RMSE 0.581, R² 0.82, storm RMSE 0.70, 80%-range coverage 78%.
 - These numbers are the baseline the weekly retrain must match to replace it.
+
+---
+
+## Phase 3b — Improvement round (v1 → v2)
+
+**Why:** v1's error was clearly highest in the **first hour of each 3-hour Kp block** (validation RMSE 0.56 vs 0.51; on storms 1.02 vs 0.79). The model didn't know where it was inside the block, or what had already happened in it.
+
+### What changed (all in `src/features.py`, 56 → 66 features)
+
+| New feature(s) | Plain meaning | Leakage-safe because… |
+|---|---|---|
+| `block_hour` (0/1/2) | "Which hour of the 3-hour block are we in?" | Just the clock |
+| `newell_block_mean`, `newell_block_max`, `vbs_block_mean`, `bz_block_min` | "What has the solar wind done so far in this block?" | Uses only hours from the block start up to now. A test proves that changing a *later* hour of the block doesn't change earlier features. |
+| `pressure_mean3h`, `pressure_max3h`, `pressure_change1h` | Recent pressure, and sudden jumps (a CME/shock arriving) | Trailing windows only |
+| `newell_mean12h`, `newell_mean24h` | Longer memory of energy input | Trailing windows only |
+
+Also new in `src/train.py`:
+- **Wider HistGB search:** 20 tries instead of 8.
+- **Ensemble:** a plain average of HistGB + RF + SVR. Nothing is fitted, so nothing can leak.
+- **Fair gate:** the new model replaces the current one only if it is at least as good on the same held-back 6 months, scored in the same run. The code also *checks* that neither model was trained on those months.
+
+### How we avoid fooling ourselves
+1. Tuning uses cross-validation inside 1998–2016 only.
+2. The decision to keep v2 is made on **CV + validation only**. The rule was fixed in advance: keep v2 only if both get better.
+3. The test set (2020+) is used **once more** at the end, and **both v1 and v2** test results are reported (v1 is archived in `reports/v1/`).
+4. 3 new automatic tests (7 total, all pass):
+   - block-so-far features ignore later hours of the block;
+   - the past-Kp comparison never sees the current block;
+   - production features never include Kp.
+
+### Ablation: "what if we were allowed to use past Kp?"
+- **What:** HistGB with 3 extra inputs: Kp of the two previous *finished* blocks and the average of the last 24 h.
+- **Why:** to show how much our "no geomagnetic inputs" rule costs. It is **not** used in production.
+
+### Notebooks
+- `04_improvements.ipynb` (~15–20 min): v1 vs v2 on CV + validation, error by block hour, the decision, and the past-Kp comparison.
+- Then re-run `03_modeling.ipynb` (~30–40 min): all models with v2 features, the single test evaluation, the gate against v1, and promotion if v2 is better.
+
+**Result:** ⏳ pending the team's runs.

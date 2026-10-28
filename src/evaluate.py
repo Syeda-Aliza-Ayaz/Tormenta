@@ -37,6 +37,21 @@ def error_by_level(y, preds: dict) -> pd.DataFrame:
     return pd.DataFrame(rows).T
 
 
+def rmse_by_block_hour(y, preds: dict) -> pd.DataFrame:
+    """RMSE by position inside the 3-h Kp block (0 = first hour), all hours and storm hours."""
+    y = pd.Series(y)
+    pos = y.index.hour % config.KP_BLOCK_HOURS
+    storm = (y >= config.STORM_THRESHOLD).to_numpy()
+    rows = {}
+    for name, p in preds.items():
+        sq = pd.Series((np.asarray(p) - y.to_numpy()) ** 2, index=y.index)
+        rows[(name, "all")] = sq.groupby(pos).mean() ** 0.5
+        rows[(name, "storm")] = sq[storm].groupby(pos[storm]).mean() ** 0.5
+    out = pd.DataFrame(rows).T
+    out.columns = [f"hour {c + 1} of block" for c in out.columns]
+    return out
+
+
 def _save(fig, name):
     config.FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     fig.savefig(config.FIGURES_DIR / f"{name}.png", bbox_inches="tight")

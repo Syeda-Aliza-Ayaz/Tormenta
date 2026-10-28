@@ -293,6 +293,14 @@ jobs:
 - [x] Save versioned model, `current.joblib`, `models/metrics_history.json`
 - [x] **Full training run** of `03_modeling.ipynb` (28 Oct 2026, ~20 min): HistGB test RMSE 0.585 / R² 0.80 (persistence 0.862); 80% interval coverage 77% test, 78% gate holdout; production `tormenta_v20261028`
 
+### Phase 3b — Improvement round (v1 → v2)
+- [x] Archive v1 results (`reports/v1/`); diagnose v1 error by block hour (first hour worst)
+- [x] v2 features: block position + block-so-far stats, pressure dynamics, 12/24 h Newell; leakage tests (7 total)
+- [x] Wider HistGB search (20); equal-weight ensemble; fair gate (both models on same holdout, same run, asserted unseen)
+- [x] Past-Kp ablation (validation only, never production)
+- [ ] Team runs `04_improvements.ipynb` → adopt v2 only if CV **and** val improve (rule fixed in advance)
+- [ ] Team re-runs `03_modeling.ipynb` → v2 test once; gate vs v1; docs updated with v1 vs v2
+
 ### Phase 4 — Live nowcast
 - [ ] Verify SWPC 1-day endpoint shapes
 - [ ] `fetch_live.py` → hourly frame with training's raw columns

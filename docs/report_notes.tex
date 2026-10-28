@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: Phase 3 complete (full training run, 28 Oct 2026)}
+\date{Last updated: Phase 3 (v1) complete; v2 improvement round in progress}
 
 \begin{document}
 \maketitle
@@ -197,6 +197,10 @@ $B_T$, $\theta$ & nT, rad & $B_T=\sqrt{B_y^2+B_z^2}$, $\theta=\operatorname{atan
 Newell coupling & -- & $V^{4/3}B_T^{2/3}\sin^{8/3}(\theta/2)$ \cite{newell2007} & Best-known single formula for ``how much energy gets in''\\
 Lags (16) & -- & $B_z, V, N, VB_s$ at $t-1, 3, 6, 9$\,h & What the wind was doing a few hours ago\\
 Rolling stats (19) & -- & Trailing mean/std of $B_z$ and $V$ over 3/6/9\,h; mean Newell coupling over 3/6/9\,h; min $B_z$ and max $V$ over 3\,h; mean $V$ over 12/24\,h & Recent average, variability and extremes\\
+v2: block position (1) & -- & \code{block\_hour} = hour mod 3 & Which hour of the 3-h Kp block we are in\\
+v2: block-so-far (4) & -- & Cumulative mean of Newell and $VB_s$, cumulative max Newell, cumulative min $B_z$ since the block start & What the wind has done so far in this block\\
+v2: pressure dynamics (3) & nPa & 3-h trailing mean and max of $P$; $P_t-P_{t-1}$ & Sudden compression marks a shock arriving\\
+v2: long coupling (2) & -- & 12/24-h trailing mean of Newell coupling & Longer memory of energy input\\
 F10.7 features (2) & sfu & Previous day's value; trailing 81-day mean. Days $>2\times$ the trailing 27-day median are treated as flare-contaminated (missing) & Solar background without peeking at the future\\
 Cyclical time & -- & $\sin/\cos$ of hour-of-day and day-of-year & Time of day and season, as circles not lines\\\bottomrule
 \end{longtable}
@@ -663,6 +667,57 @@ retrain must match.
 \end{itemize}
 
 %=====================================================================
+\section{Improvement round: v1 to v2 (Phase 3b)}\label{sec:v2}
+%=====================================================================
+\paragraph{Motivation.} Splitting v1's validation error by position inside the 3-h Kp block showed the first hour
+is clearly hardest:
+\begin{itemize}
+\item All hours: RMSE 0.564 vs 0.508 and 0.516 for the second and third hours.
+\item Storm hours: 1.02 vs 0.84 and 0.79.
+\end{itemize}
+The v1 model knew neither its position in the block nor what had already happened in it.
+
+\paragraph{New features (56 $\rightarrow$ 66).}
+\begin{itemize}
+\item \code{block\_hour} $\in\{0,1,2\}$.
+\item Block-so-far statistics: cumulative mean of Newell coupling and $VB_s$, cumulative max of Newell, and
+cumulative min of $B_z$, all computed from the block start up to $t$.
+\item Pressure dynamics: 3-h mean and max, and the 1-h change (a marker of shock/CME arrival).
+\item 12/24-h trailing Newell means.
+\end{itemize}
+
+\paragraph{Other changes.}
+\begin{itemize}
+\item HistGB search widened from 8 to 20 sampled configurations.
+\item An equal-weight ensemble (HistGB + RF + SVR) is reported. It has no fitted weights, so there is no leakage.
+\item The validation gate now scores the incumbent and the candidate on the same holdout in the same run, and
+asserts that neither was trained on it.
+\end{itemize}
+
+\paragraph{Leakage protocol.}
+\begin{enumerate}
+\item All new features are causal. Unit tests verify that:
+  \begin{itemize}
+  \item past features are unchanged when data is truncated (cuts at every block position);
+  \item block-so-far features are unchanged when a \emph{later} hour of the same block is altered;
+  \item production features contain no Kp.
+  \end{itemize}
+\item Tuning uses time-series CV within 1998--2016.
+\item The adoption decision uses CV and validation only, by a rule fixed in advance: adopt v2 only if both CV
+RMSE and validation RMSE improve.
+\item The test set is evaluated once more, and v1 and v2 test results are both reported. Iterating on test
+results would turn the test set into a second validation set and inflate the reported performance.
+\end{enumerate}
+
+\paragraph{Ablation: past Kp (not used in production).} HistGB is given Kp of the two previous \emph{complete}
+blocks and the previous-24-h mean, never the current block (unit-tested). It is scored on the validation years.
+This quantifies what autoregression would add on top of solar-wind inputs. Note that it uses definitive Kp,
+which is not available in real time (operationally only NOAA's estimated Kp is), so it is an optimistic upper
+bound.
+
+\paragraph{Results.} \textit{Pending the runs of \code{04\_improvements.ipynb} and \code{03\_modeling.ipynb}.}
+
+%=====================================================================
 \section{Key design decisions (for the viva)}
 %=====================================================================
 \begin{longtable}{p{4.6cm}p{11.2cm}}\toprule
@@ -715,6 +770,12 @@ $-0.63$). Sample weighting reduced storm RMSE by 4\% at a 2.5\% overall cost.
 seen the solar wind that drives the rest of that block.
 \item[Is your model overfitting?] HistGB: train 0.548, CV 0.572, validation 0.530 RMSE are all close, so no.
 KNN memorises (train $\approx$0); Linear underfits.
+\item[How did you improve the model without overfitting to the test set?] Every change was judged on CV and the
+validation years by a rule fixed in advance. The test set was evaluated once per version, and both versions are
+reported.
+\item[Isn't ``what happened so far in this block'' leakage?] No. It only uses hours from the block start up to
+now, all of which are known in real time. A unit test changes a later hour of the block and checks that the
+earlier features do not move.
 \item[What is persistence and why compare to it?] ``Kp now = Kp of the previous block.'' It is the simplest
 forecast, and a model must beat it to be useful.
 \item[What is train/serve skew and how do you prevent it?] It is any difference between how features are
