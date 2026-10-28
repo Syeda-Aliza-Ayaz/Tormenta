@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 🟡 (code done; full training run pending) · Phase 4–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4–7 ⬜
 
 ---
 
@@ -196,4 +196,50 @@ All logic lives in `src/`, and the notebooks only *call* it. This lets the live 
 ### `notebooks/03_modeling.ipynb`
 - **What:** runs all of the above in order and saves tables (`reports/metrics/*.csv`) and figures 09–14.
 - **How to run:** kernel "Python 3.12 (tormenta)", `FAST = False`, Run All. It takes **~30–60 min**, so close other heavy apps first.
-- **Result:** ⏳ *pending the full run.* These notes will be filled in from the saved tables and figures.
+- **Result:** full run took ~20 min on the laptop. Tables are in `reports/metrics/`, figures 09–14 in `reports/figures/`.
+
+### Phase 3 results (full run, 28 Oct 2026)
+
+**Tuned settings (best of the randomised search, CV RMSE in brackets):**
+
+| Model | Best settings | CV RMSE |
+|---|---|---|
+| Linear Regression | none to tune | 0.673 |
+| KNN | 20 neighbours, distance-weighted | 0.709 |
+| SVR | C = 4.6, γ = 0.0052, ε = 0.1 | 0.619 |
+| Random Forest | depth 12, leaf ≥ 5, 50% of features per split | 0.647 |
+| **HistGB** | 700 trees, learning rate 0.039, 31 leaves, leaf ≥ 50, L2 = 0.28 | **0.572** |
+
+**Test set 2020–2026 (each model trained on 1998–2019, tested once):**
+
+| Model | RMSE | MAE | R² | Storm RMSE | Storm MAE |
+|---|---|---|---|---|---|
+| Persistence (baseline) | 0.862 | 0.643 | 0.57 | 1.37 | 1.06 |
+| Linear Regression | 0.671 | 0.505 | 0.74 | 1.49 | 1.02 |
+| KNN | 0.674 | 0.513 | 0.73 | 1.41 | 1.19 |
+| SVR | 0.609 | 0.461 | 0.78 | 1.10 | 0.84 |
+| Random Forest | 0.612 | 0.473 | 0.78 | 1.01 | 0.77 |
+| **HistGB** | **0.585** | **0.445** | **0.80** | **0.88** | **0.65** |
+
+**What the results mean:**
+
+| # | Finding | Evidence | Meaning |
+|---|---|---|---|
+| 1 | **HistGB is best on every metric** | Table above, fig. 10 | Its RMSE is 32% lower than persistence and 36% lower on storms. The production choice is confirmed by the data, not only by convenience. |
+| 2 | **Solar wind alone beats "repeat last Kp"** | All 4 ML models beat persistence on overall RMSE | Physics inputs carry real information beyond Kp's own memory. |
+| 3 | **HistGB doesn't overfit** | Train 0.548 ≈ CV 0.572 ≈ val 0.530 (fig. 09) | Train and unseen data score alike. Validation is even a bit lower, because 2017–2019 was quiet. |
+| 4 | **KNN memorises** | Train RMSE ≈ 0 (its bar is invisible in fig. 09), val 0.633 | Distance weighting means each training point predicts itself perfectly: classic overfitting. |
+| 5 | **RF and SVR overfit mildly** | Train–CV gap ~0.07–0.09 | Acceptable, but they generalise worse than HistGB. |
+| 6 | **Linear underfits** | Train 0.70: high error everywhere | A straight line can't capture "only southward Bz matters". |
+| 7 | **All models under-predict storms** | Bias is negative from Kp 4 upwards (fig. 11). HistGB's is smallest: −0.35 at G1, −0.63 at G3+ | "Regression to the mean": rare extremes get pulled toward common values. Expected and honest. |
+| 8 | **Linear *over*-predicts the biggest storms** | G3+ bias +1.16 | A linear model extrapolates extreme Bz × speed without limit, while trees saturate. |
+| 9 | **May 2024 storm tracked well** | Fig. 14: predicted ~8.5 vs observed 9, and both storm phases followed | Strong evidence of generalisation, since the model never saw 2020+. |
+| 10 | **Small delay at sudden onsets** | Fig. 14: the jump to 7.67 is caught 1–2 h late | A block's Kp covers 3 hours. In its first hour the model hasn't yet seen the solar wind that arrives later in the block. This is an inherent limit of nowcasting. |
+| 11 | **Interval nearly calibrated** | The 80% range contains the truth 77.0% of the time on test, 78.3% on the 2025 holdout | Slightly too narrow but close. The fast-mode 69% was an artefact of the tiny search. |
+| 12 | **The model relies on physics** | Top features (fig. 13): pressure, 3 h Newell coupling, speed, \|B\|, 6 h Newell, then hour-of-day and season | Matches theory: energy coupling (Newell) and compression (pressure). Time features matter because of Earth's tilt (Russell–McPherron) and Kp's station network. |
+| 13 | **Storm weighting is a trade-off** | Weighted HistGB: storm RMSE 0.876 → 0.839 (−4%) but overall 0.585 → 0.599 (+2.5%) | Weighting helps storms a little and costs a little everywhere else. Production stays **unweighted** (better overall, and the weekly check uses overall RMSE). |
+
+**Production model** (`models/tormenta_v20261028.joblib`, 3.4 MB):
+- Trained on 1998 → 2025-07-10.
+- On the held-back 6 months (Jul 2025 – Jan 2026): RMSE 0.581, R² 0.82, storm RMSE 0.70, 80%-range coverage 78%.
+- These numbers are the baseline the weekly retrain must match to replace it.

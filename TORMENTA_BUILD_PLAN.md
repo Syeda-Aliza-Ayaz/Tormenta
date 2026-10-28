@@ -291,7 +291,7 @@ jobs:
 - [x] Quantile HistGB for interval; band widened to include point estimate
 - [x] Plots: residuals, error by storm level, feature importance; comparison table
 - [x] Save versioned model, `current.joblib`, `models/metrics_history.json`
-- [ ] **Full training run** of `03_modeling.ipynb` (FAST = False) by the team → results into docs; check 80% interval coverage (fast run: ~69%)
+- [x] **Full training run** of `03_modeling.ipynb` (28 Oct 2026, ~20 min): HistGB test RMSE 0.585 / R² 0.80 (persistence 0.862); 80% interval coverage 77% test, 78% gate holdout; production `tormenta_v20261028`
 
 ### Phase 4 — Live nowcast
 - [ ] Verify SWPC 1-day endpoint shapes

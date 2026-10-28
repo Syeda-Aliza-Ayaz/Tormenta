@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: Phase 3 code complete (full training run pending)}
+\date{Last updated: Phase 3 complete (full training run, 28 Oct 2026)}
 
 \begin{document}
 \maketitle
@@ -350,14 +350,7 @@ predicted-vs-observed hexbins, permutation importance, storm case-study plot.
 \item \code{predict.py}: loads the bundle and returns Kp with its interval, clipped to $[0,9]$.
 \end{itemize}
 
-\paragraph{Results.} \textit{Pending the full training run of \code{03\_modeling.ipynb}.} A fast smoke test
-(tiny search, heavy subsampling) already showed:
-\begin{itemize}
-\item HistGB beating persistence by about 27\% in test RMSE.
-\item Systematic under-prediction of G3+ hours.
-\item Interval coverage below the nominal 80\%.
-\end{itemize}
-These will be confirmed or revised with the full run.
+\paragraph{Results.} See Section~\ref{sec:results}. The full run took about 20 minutes on a 6-core laptop.
 
 %=====================================================================
 \section{Exploratory data analysis (Phase 2)}
@@ -514,6 +507,162 @@ one-day spikes caused by solar flares contaminating the noon measurement, and th
 \end{itemize}
 
 %=====================================================================
+\section{Modelling results (Phase 3)}\label{sec:results}
+%=====================================================================
+\subsection{Tuned hyperparameters}
+\begin{table}[H]\centering\small
+\caption{Best settings from \code{RandomizedSearchCV} with \code{TimeSeriesSplit(5)} on 1998--2016.}
+\begin{tabularx}{\textwidth}{lLr}\toprule
+Model & Best hyperparameters & CV RMSE\\\midrule
+Linear Regression & -- (no hyperparameters) & 0.673\\
+KNN & $k=20$, distance weighting (strided 1/9 sample) & 0.709\\
+SVR (RBF) & $C=4.62$, $\gamma=0.0052$, $\epsilon=0.1$ (strided 1/9 sample) & 0.619\\
+Random Forest & 100 trees, max depth 12, min leaf 5, max features 0.5 & 0.647\\
+HistGB & 700 iterations, learning rate 0.039, 31 leaves, min leaf 50, L2 0.28 & \textbf{0.572}\\\bottomrule
+\end{tabularx}\end{table}
+
+\subsection{Fitting diagnosis: over- and underfitting}
+\begin{figure}[H]\centering
+\includegraphics[width=0.8\textwidth]{09_overfitting.png}
+\caption{RMSE on training data (strided sample), in time-series CV, and on the validation years. KNN's
+training bar is invisible because its training RMSE is $\approx0$.}
+\end{figure}
+\begin{itemize}
+\item \textbf{HistGB:} train 0.548, CV 0.572, validation 0.530. The three are close, so there is no meaningful
+overfitting. Validation is lower than CV because 2017--2019 is a quiet period, which is easier to predict.
+\item \textbf{KNN:} training RMSE $\approx0$ vs validation 0.633. With distance weighting, each training point
+predicts itself exactly: textbook overfitting (memorisation).
+\item \textbf{Random Forest and SVR:} train--CV gaps of 0.09 and 0.07 indicate mild overfitting.
+\item \textbf{Linear Regression:} high error on all three (train 0.70), which is underfitting. A linear function
+cannot represent the rectified (``only southward $B_z$ counts'') coupling.
+\end{itemize}
+\easy{a model that is great on data it has seen but worse on new data is ``memorising'' (overfitting). A model
+that is bad everywhere is ``too simple'' (underfitting). HistGB is about equally good on both, which is what we
+want.}
+
+\subsection{Test-set comparison (2020--2026, evaluated once)}
+\begin{table}[H]\centering\small
+\caption{Test metrics (52{,}848 hours). Each model was refit on 1998--2019 with its tuned settings. Storm
+metrics use hours with observed Kp $\geq$ 5$-$.}
+\begin{tabular}{lrrrrr}\toprule
+Model & RMSE & MAE & $R^2$ & Storm RMSE & Storm MAE\\\midrule
+Persistence (baseline) & 0.862 & 0.643 & 0.566 & 1.368 & 1.059\\
+Linear Regression & 0.671 & 0.505 & 0.737 & 1.489 & 1.019\\
+KNN & 0.674 & 0.513 & 0.734 & 1.408 & 1.191\\
+SVR & 0.609 & 0.461 & 0.784 & 1.101 & 0.835\\
+Random Forest & 0.612 & 0.473 & 0.781 & 1.006 & 0.766\\
+\textbf{HistGB} & \textbf{0.585} & \textbf{0.445} & \textbf{0.800} & \textbf{0.876} & \textbf{0.650}\\\bottomrule
+\end{tabular}\end{table}
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{10_model_comparison.png}
+\caption{Test RMSE on all hours (left) and on storm hours (right).}
+\end{figure}
+\begin{itemize}
+\item HistGB is best on every metric. It cuts RMSE by 32\% relative to persistence overall and by 36\% on storm
+hours, and explains 80\% of the variance in Kp.
+\item All four ML models beat persistence overall, so the solar-wind inputs carry information beyond Kp's own
+autocorrelation.
+\item On storm hours, Linear Regression and KNN are \emph{worse} than persistence. Only the tree ensembles and
+SVR beat it there.
+\item The ranking agrees across CV, validation and test (HistGB $<$ SVR $\approx$ RF $<$ Linear $\approx$ KNN),
+so the model selection is robust despite the quiet validation period.
+\end{itemize}
+
+\subsection{Errors by storm level}
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{11_error_by_level.png}
+\caption{Test MAE (left) and mean bias (right; prediction minus observation) per observed Kp level.}
+\end{figure}
+\begin{itemize}
+\item Every model's error grows with storm level, and the bias is negative from Kp~4 upwards. This is
+\textbf{regression toward the mean}: with storms making up only 4\% of training hours, a squared-error model
+shrinks extreme predictions toward common values.
+\item HistGB has the smallest bias: $-0.23$ (Kp 4), $-0.35$ (G1), $-0.60$ (G2), $-0.63$ (G3+).
+\item KNN under-predicts most ($-1.71$ at G3+). Averaging neighbours cannot exceed the values it has seen often.
+\item Linear Regression \emph{over}-predicts G3+ by $+1.16$. It extrapolates extreme $B_z\times V$ values without
+bound, whereas tree models saturate.
+\end{itemize}
+
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{12_pred_vs_actual.png}
+\caption{HistGB on the test set: predicted vs observed Kp (left) and residuals vs observed Kp (right), log colour
+scale.}
+\end{figure}
+\begin{itemize}
+\item Points follow the diagonal, but the residual cloud tilts: positive residuals at low Kp and negative at high
+Kp. This is the same regression-to-the-mean effect.
+\item The few large positive residuals at Kp $\approx$ 0--1 are most likely hours where the solar wind looked
+disturbed but the magnetosphere stayed quiet (e.g.\ a strong but northward IMF). This is not yet verified
+case by case.
+\end{itemize}
+
+\subsection{Storm-weighting ablation}
+\begin{table}[H]\centering\small
+\caption{HistGB trained with and without sample weights $w = 1 + \text{Kp}/3$ (test set).}
+\begin{tabular}{lrrrr}\toprule
+Variant & RMSE & $R^2$ & Storm RMSE & Storm MAE\\\midrule
+Unweighted & \textbf{0.585} & \textbf{0.800} & 0.876 & 0.650\\
+Weighted $1+\text{Kp}/3$ & 0.599 & 0.790 & \textbf{0.839} & \textbf{0.622}\\\bottomrule
+\end{tabular}\end{table}
+\begin{itemize}
+\item Weighting reduces storm RMSE by 4\% but increases overall RMSE by 2.5\%: a precision trade-off, not a
+free gain.
+\item Production stays unweighted, because it is better overall and the retrain gate compares overall RMSE. An
+operator who cares only about storm warnings could prefer the weighted variant.
+\end{itemize}
+
+\subsection{What the model relies on}
+\begin{figure}[H]\centering
+\includegraphics[width=0.75\textwidth]{13_feature_importance.png}
+\caption{Permutation importance of the train-only HistGB on the validation years: RMSE increase when one feature
+is randomly shuffled.}
+\end{figure}
+\begin{itemize}
+\item The top features are physically meaningful: dynamic pressure (magnetospheric compression and a strong
+$V^2$ proxy), 3-h mean Newell coupling (energy input), speed, $|B|$, and 6-h Newell coupling.
+\item The 3-h \emph{averaged} coupling outranks its instantaneous value, consistent with the $\sim$1\,h response
+delay seen in the EDA.
+\item \code{hour\_cos} and \code{doy\_cos} rank 6th and 8th. Kp has known universal-time and seasonal modulation,
+partly physical (dipole tilt, Russell--McPherron effect) and partly from the uneven longitude distribution of
+Kp observatories.
+\item Raw $B_z$ itself does not appear in the top 20, because its information is carried by Newell coupling,
+$V B_s$ lags and the 3-h minimum of $B_z$. Permutation importance splits credit among correlated features.
+\end{itemize}
+\easy{if shuffling a clue makes the model much worse, the model depends on that clue. Our model leans on exactly
+the quantities physics says should matter.}
+
+\subsection{Case study: the May 2024 storm, unseen in training}
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{14_may2024_nowcast.png}
+\caption{HistGB nowcast with 80\% interval vs observed Kp, 9--15 May 2024. The model was trained on 1998--2019
+only.}
+\end{figure}
+\begin{itemize}
+\item The model tracks both storm phases: the main phase peaks at a predicted $\approx$8.5 vs observed 9, and the
+second intensification on 13 May is also followed.
+\item At the sudden onset (10 May, around 17\,UT) the prediction lags by 1--2\,h. A Kp block summarises 3 hours,
+and in the block's first hour the model has not yet seen the solar wind that arrives later in that block. This
+is inherent to nowcasting with a 3-hourly label.
+\item The interval widens during disturbed periods: uncertainty is larger when it matters most.
+\end{itemize}
+
+\subsection{Prediction-interval calibration}
+\begin{itemize}
+\item The nominal 80\% interval (q10--q90 quantile HistGB) contains the observed Kp in \textbf{77.0\%} of test
+hours and \textbf{78.3\%} of the 2025 holdout hours. It is slightly narrow but close to nominal.
+\item Possible refinement (future work): conformal calibration on a recent window.
+\end{itemize}
+
+\subsection{Production model}
+\begin{itemize}
+\item \code{models/tormenta\_v20261028.joblib} (3.4\,MB): point and quantile HistGB, trained on 1998-01 to
+2025-07-10.
+\item On the held-back gate window (2025-07-10 to 2026-01-10, 4{,}417 hours): RMSE 0.581, MAE 0.455,
+$R^2=0.817$, storm RMSE 0.702, interval coverage 78.3\%. These are the incumbent's numbers that the weekly
+retrain must match.
+\end{itemize}
+
+%=====================================================================
 \section{Key design decisions (for the viva)}
 %=====================================================================
 \begin{longtable}{p{4.6cm}p{11.2cm}}\toprule
@@ -559,6 +708,13 @@ effect) modulates coupling with season and UT. Sin/cos encoding keeps 23\,h next
 checks that past features are identical; every rolling window is trailing.
 \item[Why HistGB in production?] It has the best accuracy for its cost, a small file, native missing-value
 handling (live feeds have gaps) and quantile loss for prediction intervals.
+\item[Why does every model under-predict storms?] Regression toward the mean: storms are 4\% of hours, so
+squared-error training pulls extreme predictions toward typical values. HistGB has the smallest bias (G3+:
+$-0.63$). Sample weighting reduced storm RMSE by 4\% at a 2.5\% overall cost.
+\item[Why is the nowcast late at storm onset?] A Kp block covers 3 hours. In its first hour the model has not yet
+seen the solar wind that drives the rest of that block.
+\item[Is your model overfitting?] HistGB: train 0.548, CV 0.572, validation 0.530 RMSE are all close, so no.
+KNN memorises (train $\approx$0); Linear underfits.
 \item[What is persistence and why compare to it?] ``Kp now = Kp of the previous block.'' It is the simplest
 forecast, and a model must beat it to be useful.
 \item[What is train/serve skew and how do you prevent it?] It is any difference between how features are
@@ -574,7 +730,9 @@ run a parity test.
 propagation models.
 \item There is a propagation offset between OMNI (bow shock) and SWPC (L1); an optional ballistic delay
 correction is possible.
-\item Extreme storms are rare, so G4--G5 events are likely to be under-predicted.
+\item Extreme storms are rare, so storms are systematically under-predicted (HistGB G3+ bias $-0.63$ Kp).
+\item Sudden storm onsets are caught 1--2\,h late within a 3-h Kp block.
+\item The 80\% interval is slightly narrow (77--78\% coverage); conformal calibration is a possible fix.
 \item Future work: MLflow/Airflow orchestration, sequence models, CME/coronal-hole inputs.
 \end{itemize}
 
