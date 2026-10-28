@@ -1,0 +1,95 @@
+"""Shared feature engineering — the ONLY place model features are defined.
+
+Imported by training (src/train.py) and live serving (src/predict.py and the apps), so the
+exact same transformation runs in both (no train/serve skew).
+
+Inputs:
+  hourly     — naive-UTC hourly frame with config.SW_FEATURES (gaps allowed)
+  f107_daily — daily observed F10.7 series (GFZ in training; history file + SWPC live)
+
+Every feature at hour t uses only data at or before t (tests/test_features.py checks this).
+"""
+import numpy as np
+import pandas as pd
+
+from src import config
+
+PROTON_MASS_NPA = 1.6726e-6   # m_p · (cm⁻³ · (km/s)²) → nPa
+
+
+def _min_periods(window: int) -> int:
+    return max(2, window // 2)
+
+
+def derived(sw: pd.DataFrame) -> pd.DataFrame:
+    """Physics quantities recomputed from raw B/V/N/T — never taken from OMNI's columns."""
+    V, N, T = sw["speed"], sw["density"], sw["temperature"]
+    by, bz = sw["by_gsm"], sw["bz_gsm"]
+    B = sw["b_scalar"].where(sw["b_scalar"] > 0)
+
+    out = pd.DataFrame(index=sw.index)
+    out["pressure"] = PROTON_MASS_NPA * N * V**2              # nPa, protons only (no alpha live)
+    out["efield"] = -V * bz * 1e-3                            # mV/m
+    out["vbs"] = V * (-bz).clip(lower=0) * 1e-3               # rectified E-field, mV/m
+    out["beta"] = (4.16e-5 * T + 5.34) * N / B**2             # OMNI's definition
+    out["mach_a"] = V * np.sqrt(N) / (20 * B)                 # OMNI's definition
+    out["bt"] = np.hypot(by, bz)                              # transverse field
+    out["sin_half_clock"] = np.abs(np.sin(np.arctan2(by, bz) / 2))
+    out["newell"] = V ** (4 / 3) * out["bt"] ** (2 / 3) * out["sin_half_clock"] ** (8 / 3)
+    return out
+
+
+def history(base: pd.DataFrame) -> pd.DataFrame:
+    """Lags and trailing rolling statistics (window ends at t, never centred)."""
+    cols = {}
+    for c in config.LAG_COLUMNS:
+        for k in config.LAG_HOURS:
+            cols[f"{c}_lag{k}h"] = base[c].shift(k)
+
+    for w in config.ROLL_WINDOWS:
+        for c in ["bz_gsm", "speed"]:
+            roll = base[c].rolling(w, min_periods=_min_periods(w))
+            cols[f"{c}_mean{w}h"] = roll.mean()
+            cols[f"{c}_std{w}h"] = roll.std()
+        cols[f"newell_mean{w}h"] = base["newell"].rolling(w, min_periods=_min_periods(w)).mean()
+
+    cols["bz_min3h"] = base["bz_gsm"].rolling(3, min_periods=_min_periods(3)).min()
+    cols["speed_max3h"] = base["speed"].rolling(3, min_periods=_min_periods(3)).max()
+    for w in config.LONG_SPEED_WINDOWS:
+        cols[f"speed_mean{w}h"] = base["speed"].rolling(w, min_periods=_min_periods(w)).mean()
+    return pd.DataFrame(cols, index=base.index)
+
+
+def f107_daily_features(f107_daily: pd.Series) -> pd.DataFrame:
+    """Daily F10.7 features usable on day D: previous day's value and trailing 81-day mean.
+
+    The daily flux is measured ~20 UT, so day D's own value is not used. Flare-contaminated
+    spikes (> 2× the trailing 27-day median of earlier days) are treated as missing.
+    """
+    s = f107_daily.sort_index().asfreq("D")
+    prior_median = s.shift(1).rolling(config.F107_SPIKE_WINDOW_DAYS, min_periods=10).median()
+    clean = s.mask(s > config.F107_SPIKE_RATIO * prior_median)
+    upto_yesterday = clean.shift(1)
+    return pd.DataFrame({
+        "f107_prev": upto_yesterday.ffill(limit=7),
+        "f107_mean81d": upto_yesterday.rolling(config.F107_TRAILING_DAYS, min_periods=40).mean(),
+    })
+
+
+def time_features(index: pd.DatetimeIndex) -> pd.DataFrame:
+    """Cyclical hour-of-day and day-of-year (dipole tilt / season modulate coupling)."""
+    hour = 2 * np.pi * index.hour / 24
+    doy = 2 * np.pi * (index.day_of_year - 1) / 365.25
+    return pd.DataFrame({"hour_sin": np.sin(hour), "hour_cos": np.cos(hour),
+                         "doy_sin": np.sin(doy), "doy_cos": np.cos(doy)}, index=index)
+
+
+def build_features(hourly: pd.DataFrame, f107_daily: pd.Series) -> pd.DataFrame:
+    """Full feature matrix on a complete hourly grid (missing hours become NaN rows)."""
+    sw = hourly[config.SW_FEATURES].sort_index().asfreq("h")
+    base = pd.concat([sw, derived(sw)], axis=1)
+
+    f107 = f107_daily_features(f107_daily).reindex(sw.index.normalize())
+    f107.index = sw.index
+
+    return pd.concat([base, history(base), f107, time_features(sw.index)], axis=1)

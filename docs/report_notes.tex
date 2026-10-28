@@ -25,8 +25,8 @@
 
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
-\author{Aliza \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: Phase 2 (EDA) complete}
+\author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
+\date{Last updated: Phase 3 code complete (full training run pending)}
 
 \begin{document}
 \maketitle
@@ -195,9 +195,9 @@ $\beta$ & -- & $(4.16\times10^{-5}T+5.34)\,N/B^2$ & Gas pressure vs magnetic pre
 $M_A$ & -- & $V\sqrt{N}/(20B)$ & Wind speed relative to magnetic wave speed\\
 $B_T$, $\theta$ & nT, rad & $B_T=\sqrt{B_y^2+B_z^2}$, $\theta=\operatorname{atan2}(B_y,B_z)$ & Field strength and direction across the flow\\
 Newell coupling & -- & $V^{4/3}B_T^{2/3}\sin^{8/3}(\theta/2)$ \cite{newell2007} & Best-known single formula for ``how much energy gets in''\\
-Lags & -- & $B_z, V, N$ at $t-1, 3, 6, 9$\,h & What the wind was doing a few hours ago\\
-Rolling stats & -- & Trailing mean/std over 3/6/9\,h; min $B_z$, max $V$ over 3\,h & Recent average and variability\\
-F10.7 features & sfu & Previous day's value; trailing 81-day mean & Solar background without peeking at the future\\
+Lags (16) & -- & $B_z, V, N, VB_s$ at $t-1, 3, 6, 9$\,h & What the wind was doing a few hours ago\\
+Rolling stats (19) & -- & Trailing mean/std of $B_z$ and $V$ over 3/6/9\,h; mean Newell coupling over 3/6/9\,h; min $B_z$ and max $V$ over 3\,h; mean $V$ over 12/24\,h & Recent average, variability and extremes\\
+F10.7 features (2) & sfu & Previous day's value; trailing 81-day mean. Days $>2\times$ the trailing 27-day median are treated as flare-contaminated (missing) & Solar background without peeking at the future\\
 Cyclical time & -- & $\sin/\cos$ of hour-of-day and day-of-year & Time of day and season, as circles not lines\\\bottomrule
 \end{longtable}
 
@@ -282,6 +282,82 @@ trailing windows matches live use exactly.
   \item Derived features go in \code{features.py}, so the live apps use identical code.
   \end{itemize}
 \end{itemize}
+
+\subsection{Phase 3: features and modelling}
+\paragraph{\code{src/features.py} (shared by training and serving).}
+\begin{itemize}
+\item \textit{What:} builds 56 features in six groups: raw (7), derived physics (8), lags (16), trailing rolling
+statistics (19), F10.7 (2) and cyclical time (4); see the glossary.
+\item \textit{How:} one pure function, \code{build\_features(hourly, f107\_daily)}.
+  \begin{itemize}
+  \item It first enforces a complete hourly grid (\code{asfreq("h")}).
+  \item All windows are trailing, so every feature at $t$ uses data at or before $t$.
+  \end{itemize}
+\item \textit{Why:}
+  \begin{itemize}
+  \item A single implementation removes train/serve skew.
+  \item The 12/24\,h speed means follow the lag-correlation result (speed retains memory for about a day).
+  \item The previous-day F10.7 respects its $\sim$20\,UT measurement time.
+  \item The cyclical time features let the model capture the semi-annual/diurnal modulation of coupling by
+  the dipole tilt (Russell--McPherron effect).
+  \end{itemize}
+\item \textit{Verification against OMNI:} on 2005--2006, our $E$, $\beta$ and $M_A$ equal OMNI's columns
+(median ratio 1.000, $r=1.000$). Our proton-only pressure is $0.88\times$ OMNI's ($r=0.989$), a near-constant
+factor from the alpha-particle term that is deliberately omitted because SWPC provides no alpha data.
+\end{itemize}
+
+\paragraph{\code{tests/test\_features.py}.} Four automated tests:
+\begin{enumerate}
+\item \textbf{Causality:} features at $t$ are unchanged when later rows are appended.
+\item \textbf{Gaps:} dropped rows become NaN rows, so lags never cross gaps.
+\item \textbf{F10.7:} flare spikes are removed and only the previous day's value is used.
+\item \textbf{Inputs:} no geomagnetic index is used, and there are more than 15 features.
+\end{enumerate}
+These tests turn the two silent failure modes (future leakage and gap-crossing lags) into automatic checks.
+
+\paragraph{\code{src/train.py}.}
+\begin{itemize}
+\item \textbf{Baselines:}
+  \begin{itemize}
+  \item Persistence: Kp of the previous 3-h block. It uses past Kp, so it is a baseline only, never a feature.
+  \item Linear Regression.
+  \end{itemize}
+\item \textbf{Model families:} KNN, SVR (RBF kernel), Random Forest, HistGradientBoosting. Linear, KNN and SVR
+use median imputation and standard scaling inside a \code{Pipeline}.
+\item \textbf{Tuning:} \code{RandomizedSearchCV} with \code{TimeSeriesSplit(5)} on the training years (each
+fold trains on the past and validates on the future), scored by RMSE.
+  \begin{itemize}
+  \item KNN and SVR are tuned and fitted on a strided subsample (every 9th hour, $\approx$18.5k rows).
+  \item Random Forest is tuned on every 3rd hour and refit on all hours.
+  \end{itemize}
+\item \textbf{Selection and fitting diagnosis:} the validation table reports validation RMSE/MAE/$R^2$, storm-hour
+RMSE, CV RMSE and training RMSE. A large train--CV gap indicates overfitting; uniformly high errors indicate
+underfitting. Because validation is at solar minimum, CV, validation and storm metrics are read together.
+\item \textbf{Test:} every family is refit on train+val with its tuned parameters and evaluated once on
+2020--2026.
+\item \textbf{Ablation:} HistGB with sample weights $w=1+\text{Kp}/3$ vs unweighted.
+\item \textbf{Prediction interval:} two quantile HistGBs ($q=0.1, 0.9$) give a nominal 80\% interval. It is
+widened to always contain the point estimate, and its empirical coverage is reported.
+\item \textbf{Production model:} HistGB (point + quantiles) trained on all definitive data up to the start of the
+last 6 months, which serve as the validation-gate holdout of the weekly retrain. It is saved with its feature
+list, parameters and scikit-learn version.
+\end{itemize}
+
+\paragraph{\code{src/evaluate.py}, \code{src/predict.py}.}
+\begin{itemize}
+\item \code{evaluate.py}: metrics (including storm-only RMSE/MAE), error and bias by storm level,
+predicted-vs-observed hexbins, permutation importance, storm case-study plot.
+\item \code{predict.py}: loads the bundle and returns Kp with its interval, clipped to $[0,9]$.
+\end{itemize}
+
+\paragraph{Results.} \textit{Pending the full training run of \code{03\_modeling.ipynb}.} A fast smoke test
+(tiny search, heavy subsampling) already showed:
+\begin{itemize}
+\item HistGB beating persistence by about 27\% in test RMSE.
+\item Systematic under-prediction of G3+ hours.
+\item Interval coverage below the nominal 80\%.
+\end{itemize}
+These will be confirmed or revised with the full run.
 
 %=====================================================================
 \section{Exploratory data analysis (Phase 2)}
@@ -477,6 +553,14 @@ for other models, fitted on training data only. Long outages (>24\,h) are common
 events we care most about.
 \item[Why does the validation period matter?] 2017--2019 is solar minimum with very few large storms, so
 selecting models on it alone would favour quiet-time accuracy.
+\item[Why include hour-of-day and day-of-year?] The angle between Earth's dipole and the IMF (Russell--McPherron
+effect) modulates coupling with season and UT. Sin/cos encoding keeps 23\,h next to 0\,h and Dec~31 next to Jan~1.
+\item[How do you know your features don't leak?] An automated test recomputes features on truncated data and
+checks that past features are identical; every rolling window is trailing.
+\item[Why HistGB in production?] It has the best accuracy for its cost, a small file, native missing-value
+handling (live feeds have gaps) and quantile loss for prediction intervals.
+\item[What is persistence and why compare to it?] ``Kp now = Kp of the previous block.'' It is the simplest
+forecast, and a model must beat it to be useful.
 \item[What is train/serve skew and how do you prevent it?] It is any difference between how features are
 computed in training and in production. We use one shared \code{features.py}, resample live data to hourly, and
 run a parity test.

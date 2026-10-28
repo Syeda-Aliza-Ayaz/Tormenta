@@ -22,10 +22,11 @@ OMNI_SPDF_URL = "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2_{ye
 GFZ_URL = "https://kp.gfz.de/app/files/Kp_ap_Ap_SN_F107_since_1932.txt"
 
 SWPC_BASE = "https://services.swpc.noaa.gov"
-SWPC_MAG = SWPC_BASE + "/products/solar-wind/mag-1-day.json"
-SWPC_MAG_FALLBACK = SWPC_BASE + "/products/solar-wind/mag-3-day.json"
-SWPC_PLASMA = SWPC_BASE + "/products/solar-wind/plasma-1-day.json"
-SWPC_PLASMA_FALLBACK = SWPC_BASE + "/products/solar-wind/plasma-3-day.json"
+# 3-day products: features need >= 24 h of history (24 h trailing speed mean)
+SWPC_MAG = SWPC_BASE + "/products/solar-wind/mag-3-day.json"
+SWPC_MAG_FALLBACK = SWPC_BASE + "/products/solar-wind/mag-7-day.json"
+SWPC_PLASMA = SWPC_BASE + "/products/solar-wind/plasma-3-day.json"
+SWPC_PLASMA_FALLBACK = SWPC_BASE + "/products/solar-wind/plasma-7-day.json"
 SWPC_KP = SWPC_BASE + "/products/noaa-planetary-k-index.json"
 SWPC_F107 = SWPC_BASE + "/products/summary/10cm-flux.json"
 
@@ -67,11 +68,18 @@ KP_BINS = [0, 3.5, 4.5, 5.5, 6.5, 9.01]
 KP_BIN_LABELS = ["0-3", "4", "5 (G1)", "6 (G2)", "7+ (G3-G5)"]
 STORM_THRESHOLD = 4.5        # Kp >= 5- is a geomagnetic storm (NOAA G1+)
 
+# Solar-wind columns of the hourly frame passed to features.build_features (F10.7 goes in separately, daily)
+SW_FEATURES = [c for c in RAW_FEATURES if c != "f107_obs"]
+
 # ── Features ─────────────────────────────────────────────────────────────────
 LAG_HOURS = [1, 3, 6, 9]
+LAG_COLUMNS = ["bz_gsm", "speed", "density", "vbs"]
 ROLL_WINDOWS = [3, 6, 9]
+LONG_SPEED_WINDOWS = [12, 24]  # EDA: speed keeps ~a day of memory
 F107_TRAILING_DAYS = 81
-MIN_HISTORY_HOURS = 21       # live window needed for lags + rolling
+F107_SPIKE_WINDOW_DAYS = 27    # flare-spike check against the trailing median
+F107_SPIKE_RATIO = 2.0         # value > 2× trailing median → treated as flare-contaminated
+MIN_HISTORY_HOURS = 24         # live window needed for the longest trailing window (SWPC 3-day feed)
 
 # ── Split & training ─────────────────────────────────────────────────────────
 TRAIN_YEARS = (1998, 2016)
@@ -79,8 +87,15 @@ VAL_YEARS = (2017, 2019)
 TEST_START_YEAR = 2020
 CV_SPLITS = 5
 SUBSAMPLE_STRIDE = 9         # strided subsample for KNN/SVR (~15–20k rows)
+RF_TUNE_STRIDE = 3           # Random Forest tuned on every 3rd hour, refit on all
 RANDOM_STATE = 42
 QUANTILES = (0.1, 0.9)
+N_JOBS = 4                   # 7.4 GB RAM laptop: keep parallel workers modest
+SAMPLE_WEIGHT = lambda kp: 1 + kp / 3   # storm-weighting ablation
+
+REPORTS_DIR = ROOT / "reports"
+FIGURES_DIR = REPORTS_DIR / "figures"
+METRICS_DIR = REPORTS_DIR / "metrics"
 
 # ── Slow loop ────────────────────────────────────────────────────────────────
 GATE_HOLDOUT_MONTHS = 6

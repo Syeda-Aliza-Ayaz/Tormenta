@@ -1,0 +1,240 @@
+"""Training pipeline: features → time split → baselines + 4 model families → tuning →
+validation → single test evaluation → weighting ablation → production fit → save.
+
+Run from the notebook (03_modeling.ipynb) step by step, or end-to-end:
+    python -m src.train            # full run (~30–60 min on a 6-core laptop)
+    python -m src.train --fast     # smoke test (~2 min)
+"""
+import argparse
+import json
+import time
+from datetime import datetime, timezone
+
+import joblib
+import numpy as np
+import pandas as pd
+import sklearn
+from scipy.stats import loguniform
+from sklearn.base import clone
+from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit, cross_val_score
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVR
+
+from src import config
+from src.evaluate import metrics, metrics_table
+from src.features import build_features
+from src.preprocessing import load_processed
+
+
+# ── Data ─────────────────────────────────────────────────────────────────────
+def load_xy():
+    """Feature matrix, target and persistence baseline on definitive-label hours."""
+    df = load_processed()
+    f107_daily = df["f107_obs"].resample("D").first()
+    X = build_features(df[config.SW_FEATURES], f107_daily)
+    y = df[config.TARGET]
+
+    # Persistence: Kp of the previous 3-h block (uses past Kp — baseline only, never a feature)
+    prev_block = df.index.floor(f"{config.KP_BLOCK_HOURS}h") - pd.Timedelta(hours=config.KP_BLOCK_HOURS)
+    persistence = pd.Series(y.reindex(prev_block).to_numpy(), index=df.index)
+
+    keep = y.notna() & df["kp_definitive"]
+    return X[keep], y[keep], persistence[keep].fillna(y[keep].median())
+
+
+def split_masks(index: pd.DatetimeIndex) -> dict:
+    year = index.year
+    return {
+        "train": year <= config.TRAIN_YEARS[1],
+        "val": (year >= config.VAL_YEARS[0]) & (year <= config.VAL_YEARS[1]),
+        "test": year >= config.TEST_START_YEAR,
+    }
+
+
+# ── Models ───────────────────────────────────────────────────────────────────
+def _scaled(model):
+    return Pipeline([("impute", SimpleImputer(strategy="median")), ("scale", StandardScaler()), ("model", model)])
+
+
+def model_specs() -> dict:
+    """Estimator, search space and row strides (tune on / fit on) per model family."""
+    rs = config.RANDOM_STATE
+    return {
+        "Linear Regression": dict(est=_scaled(LinearRegression()), params=None,
+                                  tune_stride=1, fit_stride=1, n_jobs=1),
+        "KNN": dict(est=_scaled(KNeighborsRegressor()),
+                    params={"model__n_neighbors": [10, 20, 40, 80], "model__weights": ["uniform", "distance"]},
+                    n_iter=8, tune_stride=config.SUBSAMPLE_STRIDE, fit_stride=config.SUBSAMPLE_STRIDE,
+                    n_jobs=config.N_JOBS),
+        "SVR": dict(est=_scaled(SVR(cache_size=500)),
+                    params={"model__C": loguniform(0.3, 10), "model__gamma": loguniform(3e-3, 1e-1),
+                            "model__epsilon": [0.1, 0.3, 0.5]},
+                    n_iter=6, tune_stride=config.SUBSAMPLE_STRIDE, fit_stride=config.SUBSAMPLE_STRIDE,
+                    n_jobs=config.N_JOBS),
+        "Random Forest": dict(
+            est=Pipeline([("impute", SimpleImputer(strategy="median")),
+                          ("model", RandomForestRegressor(n_estimators=100, n_jobs=1, random_state=rs))]),
+            params={"model__max_depth": [12, 18, 24], "model__min_samples_leaf": [5, 10, 20],
+                    "model__max_features": [0.3, 0.5]},
+            n_iter=5, tune_stride=config.RF_TUNE_STRIDE, fit_stride=1, n_jobs=config.N_JOBS),
+        "HistGB": dict(
+            est=Pipeline([("model", HistGradientBoostingRegressor(early_stopping=False, random_state=rs))]),
+            params={"model__learning_rate": loguniform(0.03, 0.2), "model__max_iter": [200, 400, 700],
+                    "model__max_leaf_nodes": [15, 31, 63], "model__min_samples_leaf": [20, 50, 100],
+                    "model__l2_regularization": loguniform(1e-3, 10)},
+            n_iter=8, tune_stride=1, fit_stride=1, n_jobs=2),   # HistGB is already multithreaded
+    }
+
+
+def _rows(mask, stride, fast):
+    idx = np.flatnonzero(mask)
+    return idx[:: stride * (6 if fast else 1)]
+
+
+def tune_models(X, y, masks, fast=False, log=print) -> dict:
+    """TimeSeriesSplit CV search within the training years; refit best params on train rows."""
+    cv = TimeSeriesSplit(n_splits=3 if fast else config.CV_SPLITS)
+    out = {}
+    for name, spec in model_specs().items():
+        t0 = time.time()
+        rows = _rows(masks["train"], spec["tune_stride"], fast)
+        Xt, yt = X.iloc[rows], y.iloc[rows]
+        if spec["params"] is None:
+            scores = cross_val_score(clone(spec["est"]), Xt, yt, cv=cv, scoring="neg_root_mean_squared_error")
+            best, cv_rmse = {}, -scores.mean()
+        else:
+            search = RandomizedSearchCV(clone(spec["est"]), spec["params"], n_iter=2 if fast else spec["n_iter"],
+                                        cv=cv, scoring="neg_root_mean_squared_error", n_jobs=spec["n_jobs"],
+                                        random_state=config.RANDOM_STATE, refit=False)
+            search.fit(Xt, yt)
+            best, cv_rmse = search.best_params_, -search.best_score_
+        est = fit_model(name, best, X, y, masks["train"], fast)
+        out[name] = {"estimator": est, "best_params": best, "cv_rmse": cv_rmse, "seconds": time.time() - t0}
+        log(f"{name:18s} CV RMSE {cv_rmse:.3f}  ({time.time() - t0:5.0f} s)  {best}")
+    return out
+
+
+def fit_model(name, params, X, y, mask, fast=False, sample_weight=None):
+    """Fit one family with given params on the rows of `mask` (at that family's fit stride)."""
+    spec = model_specs()[name]
+    rows = _rows(mask, spec["fit_stride"], fast)
+    est = clone(spec["est"]).set_params(**params)
+    if name == "Random Forest":
+        est.set_params(model__n_jobs=config.N_JOBS)
+    kw = {} if sample_weight is None else {"model__sample_weight": sample_weight.iloc[rows].to_numpy()}
+    return est.fit(X.iloc[rows], y.iloc[rows], **kw)
+
+
+# ── Evaluation steps ─────────────────────────────────────────────────────────
+def validation_table(tuned, X, y, masks, persistence) -> pd.DataFrame:
+    """Val metrics + CV RMSE + train RMSE (strided sample) for the overfitting check."""
+    val, tr = masks["val"], _rows(masks["train"], config.SUBSAMPLE_STRIDE, False)
+    preds = {"Persistence (baseline)": persistence[val]}
+    preds.update({n: r["estimator"].predict(X[val]) for n, r in tuned.items()})
+    table = metrics_table(y[val], preds)
+    table["cv_rmse"] = pd.Series({n: r["cv_rmse"] for n, r in tuned.items()})
+    table["train_rmse"] = pd.Series({n: metrics(y.iloc[tr], r["estimator"].predict(X.iloc[tr]))["rmse"]
+                                     for n, r in tuned.items()})
+    return table
+
+
+def test_evaluation(tuned, X, y, masks, persistence, fast=False, log=print):
+    """Refit every family on train+val with its tuned params, evaluate ONCE on test."""
+    trval, test = masks["train"] | masks["val"], masks["test"]
+    preds, models = {"Persistence (baseline)": persistence[test].to_numpy()}, {}
+    for name, r in tuned.items():
+        t0 = time.time()
+        models[name] = fit_model(name, r["best_params"], X, y, trval, fast)
+        preds[name] = models[name].predict(X[test])
+        log(f"{name:18s} refit + test in {time.time() - t0:4.0f} s")
+    return metrics_table(y[test], preds), preds, models
+
+
+def weighting_ablation(best_params, X, y, masks, fast=False):
+    """HistGB unweighted vs storm-weighted (w = 1 + Kp/3), both trained on train+val."""
+    trval, test = masks["train"] | masks["val"], masks["test"]
+    w = config.SAMPLE_WEIGHT(y)
+    preds = {"HistGB (unweighted)": fit_model("HistGB", best_params, X, y, trval, fast).predict(X[test]),
+             "HistGB (weighted 1+Kp/3)": fit_model("HistGB", best_params, X, y, trval, fast,
+                                                   sample_weight=w).predict(X[test])}
+    return metrics_table(y[test], preds), preds
+
+
+# ── Production model ─────────────────────────────────────────────────────────
+def fit_bundle(best_params, X, y, mask, fast=False, sample_weight=None) -> dict:
+    """Point + q10/q90 HistGB trained on the rows of `mask`, packaged for predict.py."""
+    params = {k.removeprefix("model__"): v for k, v in best_params.items()}
+    rows = _rows(mask, 1, fast)
+    Xf, yf = X.iloc[rows], y.iloc[rows]
+    w = None if sample_weight is None else sample_weight.iloc[rows].to_numpy()
+
+    rs = config.RANDOM_STATE
+    point = HistGradientBoostingRegressor(early_stopping=False, random_state=rs, **params).fit(Xf, yf, sample_weight=w)
+    q_lo, q_hi = (HistGradientBoostingRegressor(loss="quantile", quantile=q, early_stopping=False,
+                                                random_state=rs, **params).fit(Xf, yf)
+                  for q in config.QUANTILES)
+    return {
+        "point": point, "q_lo": q_lo, "q_hi": q_hi,
+        "features": list(X.columns), "params": params, "weighted": sample_weight is not None,
+        "trained_until": str(y.index[rows].max()), "sklearn_version": sklearn.__version__,
+        "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
+def fit_production(best_params, X, y, fast=False, sample_weight=None):
+    """Bundle trained up to the gate-holdout start (no refit-on-all); gate metrics on the holdout."""
+    holdout_start = y.index.max() - pd.DateOffset(months=config.GATE_HOLDOUT_MONTHS)
+    hold = y.index >= holdout_start
+    bundle = fit_bundle(best_params, X, y, ~hold, fast, sample_weight)
+
+    from src.predict import predict_with_interval
+    band = predict_with_interval(bundle, X[hold])
+    gate = metrics(y[hold], band["kp_pred"])
+    gate["coverage_80"] = float(((y[hold] >= band["kp_lo"]) & (y[hold] <= band["kp_hi"])).mean())
+    gate["holdout"] = f"{y.index[hold].min()} → {y.index[hold].max()}"
+    return bundle, gate
+
+
+def save_bundle(bundle, test_metrics: dict, gate_metrics: dict) -> str:
+    """Versioned model file + current.joblib + append to metrics_history.json."""
+    config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    version = f"tormenta_v{datetime.now(timezone.utc):%Y%m%d}"
+    bundle["version"] = version
+    joblib.dump(bundle, config.MODELS_DIR / f"{version}.joblib", compress=3)
+    joblib.dump(bundle, config.CURRENT_MODEL, compress=3)
+
+    history = json.loads(config.METRICS_HISTORY.read_text()) if config.METRICS_HISTORY.exists() else []
+    clean = lambda d: {k: (float(v) if isinstance(v, (int, float, np.floating)) else v) for k, v in d.items()}
+    history.append({"version": version, "created_utc": bundle["created_utc"],
+                    "trained_until": bundle["trained_until"], "params": bundle["params"],
+                    "weighted": bundle["weighted"],
+                    "test": clean(test_metrics), "gate": clean(gate_metrics), "promoted": True})
+    config.METRICS_HISTORY.write_text(json.dumps(history, indent=2, default=str))
+    return version
+
+
+def run(fast=False):
+    """End-to-end run (same steps as the notebook)."""
+    X, y, persistence = load_xy()
+    masks = split_masks(X.index)
+    print(f"{X.shape[1]} features | train {masks['train'].sum():,} | val {masks['val'].sum():,} | "
+          f"test {masks['test'].sum():,} hours")
+    tuned = tune_models(X, y, masks, fast)
+    print(validation_table(tuned, X, y, masks, persistence).round(3))
+    test_table, _, _ = test_evaluation(tuned, X, y, masks, persistence, fast)
+    print(test_table.round(3))
+    best = tuned["HistGB"]["best_params"]
+    bundle, gate = fit_production(best, X, y, fast)
+    version = save_bundle(bundle, test_table.loc["HistGB"].to_dict(), gate)
+    print(f"Saved {version}; gate holdout: {gate}")
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--fast", action="store_true", help="tiny search + heavy subsampling (smoke test)")
+    run(ap.parse_args().fast)

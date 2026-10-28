@@ -1,10 +1,10 @@
 # Tormenta — Project Notes
 
-**Team:** Aliza, HRK · **Course:** CT-378 Machine Learning, NED University (Fall 2026)
+**Team:** Alizeh, HRK · **Course:** CT-378 Machine Learning, NED University (Fall 2026)
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 🟡 (code done; full training run pending) · Phase 4–7 ⬜
 
 ---
 
@@ -123,3 +123,77 @@ All logic lives in `src/`, and the notebooks only *call* it. This lets the live 
 1. Add 12 h / 24 h trailing speed means. This needs ≥ 33 h of live history, so the live app would use NOAA's 3-day feed.
 2. Clean F10.7 flare spikes.
 3. Account for the quiet validation period in model selection.
+
+---
+
+## Phase 3 — Features & modelling
+
+### `src/features.py` (the most important file in the project)
+- **What:** turns raw hourly solar-wind readings into the **56 clues** (features) the model learns from.
+- **How:** one function, `build_features(hourly, f107_daily)`, builds six groups:
+
+  | Group | Count | Examples | Plain meaning |
+  |---|---|---|---|
+  | Raw | 7 | `bz_gsm`, `speed`, `density` | The satellite readings themselves |
+  | Derived physics | 8 | `pressure`, `vbs`, `newell`, `beta` | Physics formulas that combine readings (e.g. "how much energy gets in") |
+  | Lags | 16 | `bz_gsm_lag3h`, `vbs_lag1h` | What the wind was doing 1, 3, 6, 9 hours ago |
+  | Rolling stats | 19 | `speed_mean24h`, `bz_gsm_std6h`, `bz_min3h` | Recent averages, wobbliness, extremes |
+  | F10.7 | 2 | `f107_prev`, `f107_mean81d` | Yesterday's solar brightness and its ~3-month average |
+  | Time | 4 | `hour_sin`, `doy_cos` | Time of day and season, as points on a circle |
+
+- **Why it's built this way:**
+  - **Used by both training and the live app**, so the two can never compute features differently (no train/serve skew).
+  - **Only looks backwards:** every feature at hour *t* uses data from *t* or earlier. Rolling windows are trailing, never centred.
+  - **Complete hourly grid first** (`asfreq("h")`), so a 3-hour lag is always exactly 3 hours.
+  - **Physics is recomputed from raw readings**, because NOAA's live feed doesn't include OMNI's ready-made columns.
+  - **The 12 h / 24 h speed averages** were added because EDA showed speed matters for about a day.
+  - **The F10.7 value** is *yesterday's*, because today's is measured at about 20 UT. Flare spikes (more than 2× the median of the previous 27 days) are removed.
+  - **Time-of-day and season** matter physically: Earth's magnetic tilt changes how well the solar wind couples (the Russell–McPherron effect). Sin/cos makes 23:00 sit next to 00:00.
+- **Result — check against OMNI's own columns:**
+  - Our E-field, beta and Mach number match OMNI's exactly (ratio 1.000).
+  - Our pressure is 0.88 × OMNI's, a constant ratio, because we deliberately leave out the alpha-particle term (live data has no alpha measurements).
+
+### `tests/test_features.py`
+- **What:** 4 automatic tests, run with `pytest`.
+- **How and why:**
+  1. **Causality:** features at time *t* don't change when future rows are added. This proves there's no leakage from the future.
+  2. **Gaps:** deleting rows doesn't shift the lags. A 3-hour lag stays 3 hours.
+  3. **F10.7:** flare spikes are removed, and only yesterday's value is used.
+  4. **No storm indices as inputs, and more than 15 features.**
+- **Result:** all 4 pass. These tests catch the "silent" bugs that would otherwise make the scores look great and the live app fail.
+
+### `src/train.py`
+- **What:** the full training recipe, run step by step from the notebook.
+- **How:**
+  1. `load_xy`: builds the features and keeps only hours with a final (definitive) Kp. Also builds the **persistence baseline** ("Kp = the previous block's Kp").
+  2. `split_masks`: train 1998–2016, validation 2017–2019, test 2020–2026.
+  3. `tune_models`: each of Linear Regression, KNN, SVR, Random Forest and HistGB gets a **randomised search** over its settings, scored by `TimeSeriesSplit(5)`. Each fold trains on earlier years and checks on later ones.
+     - KNN and SVR use every 9th hour (~18k rows), because SVR gets very slow on big data.
+     - Random Forest is tuned on every 3rd hour, then retrained on all hours.
+  4. `validation_table`: validation scores, CV scores and training scores side by side, to judge **over- and underfitting**.
+  5. `test_evaluation`: every model is retrained on train+val and tested **once** on 2020–2026.
+  6. `weighting_ablation`: HistGB with vs without extra weight on storm hours (`1 + Kp/3`).
+  7. `fit_production`: the final HistGB, plus two "quantile" HistGBs that give an **80% range** (10th–90th percentile), trained on all data **except the last 6 months**. Those months are kept as the check for the weekly retrain.
+  8. `save_bundle`: saves `models/tormenta_vYYYYMMDD.joblib` and `current.joblib`, and logs the scores to `models/metrics_history.json`.
+- **Why HistGB for production:** accurate, small file, copes with missing values by itself (important, because live data has gaps), and supports quantile ranges.
+- **Smoke test (fast mode, tiny search, not final numbers):**
+  - HistGB test RMSE 0.63 vs persistence 0.86.
+  - Storms are still under-predicted (G3+ bias about −0.75 Kp).
+  - The 80% range covered only ~69% of hours, so we check calibration after the full run.
+
+### `src/evaluate.py`
+- **What:** scoring and report plots.
+- **How:**
+  - **Scores:** RMSE, MAE and R² overall, plus **RMSE and MAE on storm hours only** (because storms are rare, the overall score hides how storms go).
+  - **Error by storm level:** MAE and *bias* (does the model guess too low?).
+  - **Plots:** predicted-vs-actual hexbins, permutation importance (how much worse the model gets when one clue is shuffled), and the storm case-study plot.
+
+### `src/predict.py`
+- **What:** loads the saved model and returns Kp plus its 80% range.
+- **How:** the range is widened if needed so it always contains the point estimate, then clipped to 0–9. (The point model and the range models are trained separately, so occasionally the point falls outside the range.)
+- Phase 4 adds the live NOAA data path.
+
+### `notebooks/03_modeling.ipynb`
+- **What:** runs all of the above in order and saves tables (`reports/metrics/*.csv`) and figures 09–14.
+- **How to run:** kernel "Python 3.12 (tormenta)", `FAST = False`, Run All. It takes **~30–60 min**, so close other heavy apps first.
+- **Result:** ⏳ *pending the full run.* These notes will be filled in from the saved tables and figures.

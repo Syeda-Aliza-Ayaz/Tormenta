@@ -7,7 +7,7 @@
 
 > This document is the single source of truth for the build. Follow the phases in order. The constraints in §0 are non-negotiable — violating any of them breaks the project, usually silently.
 >
-> **Team:** Aliza, HRK. Notebooks are run in Anaconda Jupyter with the "Python 3.12 (tormenta)" kernel. After every phase, update `docs/PROJECT_NOTES.md` and `docs/report_notes.tex`.
+> **Team:** Alizeh, HRK. Notebooks are run in Anaconda Jupyter with the "Python 3.12 (tormenta)" kernel. After every phase, update `docs/PROJECT_NOTES.md` and `docs/report_notes.tex`.
 
 ---
 
@@ -37,12 +37,12 @@ Dropped: columns 11–15 (recomputed instead, §0.2) and sunspot number (no clea
 ### Serving tier (live) — NOAA SWPC, no auth (`https://services.swpc.noaa.gov`)
 | Data | Endpoint |
 |---|---|
-| IMF (Bt, Bx/By/Bz GSM) | `/products/solar-wind/mag-1-day.json` (fallback `mag-3-day.json`) |
-| Plasma (density, speed, temperature) | `/products/solar-wind/plasma-1-day.json` (fallback `plasma-3-day.json`) |
+| IMF (Bt, Bx/By/Bz GSM) | `/products/solar-wind/mag-3-day.json` (fallback `mag-7-day.json`) |
+| Plasma (density, speed, temperature) | `/products/solar-wind/plasma-3-day.json` (fallback `plasma-7-day.json`) |
 | Estimated Kp (3-hourly, for comparison only) | `/products/noaa-planetary-k-index.json` |
 | F10.7 | `/products/summary/10cm-flux.json` for the latest daily value; trailing 81-day mean read from `data/f107_history.csv` (built from GFZ `F10.7obs`, refreshed by the slow loop — no 81-day fetch at inference) |
 
-Feature windows need ≥ ~21 h of history (9 h lags + 9 h rolling + margin), hence the 1-day products. Verify endpoint shapes in Phase 4.
+Feature windows need ≥ 24 h of history (24 h trailing speed mean), hence the 3-day products. Verify endpoint shapes in Phase 4.
 
 ---
 
@@ -277,20 +277,21 @@ jobs:
 - [x] Extra: gap-length analysis, lag correlation, solar-cycle split view, extreme-value check (figures in `reports/figures/`)
 
 ### Phase 3 — Features & modeling
-- [ ] **EDA follow-ups:** decide 12 h / 24 h trailing speed means (needs SWPC 3-day feed live); clean F10.7 flare spikes (7 days > 400 sfu); model selection must not rely on val alone (2017–2019 is solar minimum: 0.09% G3+ hours) — also use CV + storm-level errors
-- [ ] `features.py` pure function of hourly frame; derived fields recomputed; OMNI cols 11–15 unused
-- [ ] One-off check: recomputed β, M_A ≈ OMNI cols 13–14; P / OMNI col 11 ≈ constant ratio
-- [ ] All rolling windows trailing (incl. F10.7 81-day); F10.7 uses previous day
-- [ ] Unit test: features at *t* unchanged when future rows are appended (causality check)
-- [ ] Feature count > 15
-- [ ] Split 1998–2016 / 2017–2019 / 2020+; `TimeSeriesSplit(5)` within train
-- [ ] Baselines: persistence, Linear Regression
-- [ ] KNN + SVR (strided subsample), RF, HistGB tuned
-- [ ] Model selection on val; refit train+val; single test evaluation
-- [ ] Weighting ablation `1 + Kp/3`
-- [ ] Quantile HistGB for interval; band widened to include point estimate
-- [ ] Plots: residuals, error by storm level, feature importance; comparison table
-- [ ] Save versioned model, `current.joblib`, `models/metrics_history.json`
+- [x] **EDA follow-ups:** 12 h / 24 h speed means added (live needs SWPC 3-day feed); F10.7 flare spikes masked (> 2× trailing 27-day median); selection reads CV + val + storm RMSE together
+- [x] `features.py` pure function of hourly frame; derived fields recomputed; OMNI cols 11–15 unused
+- [x] One-off check: recomputed β, M_A ≈ OMNI cols 13–14; P / OMNI col 11 ≈ constant ratio
+- [x] All rolling windows trailing (incl. F10.7 81-day); F10.7 uses previous day
+- [x] Unit test: features at *t* unchanged when future rows are appended (causality check)
+- [x] Feature count > 15
+- [x] Split 1998–2016 / 2017–2019 / 2020+; `TimeSeriesSplit(5)` within train
+- [x] Baselines: persistence, Linear Regression
+- [x] KNN + SVR (strided subsample), RF, HistGB tuned
+- [x] Model selection on val; refit train+val; single test evaluation
+- [x] Weighting ablation `1 + Kp/3`
+- [x] Quantile HistGB for interval; band widened to include point estimate
+- [x] Plots: residuals, error by storm level, feature importance; comparison table
+- [x] Save versioned model, `current.joblib`, `models/metrics_history.json`
+- [ ] **Full training run** of `03_modeling.ipynb` (FAST = False) by the team → results into docs; check 80% interval coverage (fast run: ~69%)
 
 ### Phase 4 — Live nowcast
 - [ ] Verify SWPC 1-day endpoint shapes
