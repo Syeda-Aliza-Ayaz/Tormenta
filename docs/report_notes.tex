@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: Phase 3 (v1) complete; v2 improvement round in progress}
+\date{Last updated: v2 adopted on CV and validation; v2 test run pending}
 
 \begin{document}
 \maketitle
@@ -715,7 +715,39 @@ This quantifies what autoregression would add on top of solar-wind inputs. Note 
 which is not available in real time (operationally only NOAA's estimated Kp is), so it is an optimistic upper
 bound.
 
-\paragraph{Results.} \textit{Pending the runs of \code{04\_improvements.ipynb} and \code{03\_modeling.ipynb}.}
+\paragraph{Results (\code{04\_improvements.ipynb}, validation 2017--2019, no test data used).}
+Table~\ref{tab:v1v2} compares the two feature sets under the same 20-setting search.
+
+\begin{table}[H]\centering
+\caption{HistGB v1 vs v2 on CV (training years) and validation. RMSE and MAE are in Kp units.}\label{tab:v1v2}
+\begin{tabular}{lcccccc}\toprule
+ & CV RMSE & val RMSE & val MAE & val $R^2$ & storm RMSE & storm MAE\\midrule
+v1 (56 features) & 0.572 & 0.529 & 0.409 & 0.809 & 0.889 & 0.710\
+v2 (66 features) & \textbf{0.561} & \textbf{0.522} & \textbf{0.404} & \textbf{0.814} & \textbf{0.853} & \textbf{0.674}\\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]\centering
+\caption{Validation RMSE by position inside the 3-h Kp block.}\label{tab:v1v2pos}
+\begin{tabular}{lccc}\toprule
+ & hour 1 & hour 2 & hour 3\\midrule
+v1, all hours & 0.564 & 0.508 & 0.514\
+v2, all hours & 0.556 & 0.508 & 0.500\
+v1, storm hours & 1.020 & 0.843 & 0.789\
+v2, storm hours & 0.982 & 0.819 & 0.740\\bottomrule
+\end{tabular}
+\end{table}
+
+Both CV and validation improve, so v2 is adopted by the pre-set rule. The overall gain is small, but storm RMSE
+falls by about 4\% (0.889 to 0.853), and storm errors fall in every block position. Hour 1 remains hardest,
+because the solar wind that drives the rest of the block has not yet been observed.
+
+\paragraph{Past-Kp ablation result.} Adding Kp history lowers validation RMSE only from 0.522 to 0.512 (storm RMSE
+0.853 to 0.832); persistence scores 0.819. The solar-wind-only model is therefore within about 0.01 Kp of an
+autoregressive upper bound, so excluding geomagnetic inputs costs very little accuracy while keeping the model
+free of leakage and usable when Kp itself is delayed.
+
+\paragraph{Test results.} \textit{Pending the re-run of \code{03\_modeling.ipynb} with v2 features.}
 
 %=====================================================================
 \section{Key design decisions (for the viva)}

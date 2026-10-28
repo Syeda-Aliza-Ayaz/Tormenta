@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b 🟡 (improvement round: code done, runs pending) · Phase 4–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b 🟡 (v2 adopted on CV + validation; 03 re-run pending) · Phase 4–7 ⬜
 
 ---
 
@@ -281,4 +281,26 @@ Also new in `src/train.py`:
 - `04_improvements.ipynb` (~15–20 min): v1 vs v2 on CV + validation, error by block hour, the decision, and the past-Kp comparison.
 - Then re-run `03_modeling.ipynb` (~30–40 min): all models with v2 features, the single test evaluation, the gate against v1, and promotion if v2 is better.
 
-**Result:** ⏳ pending the team's runs.
+**Result of `04_improvements.ipynb` (2026-10-29), validation 2017–2019, no test data used:**
+
+| HistGB | CV RMSE | val RMSE | val MAE | val R² | storm RMSE | storm MAE |
+|---|---|---|---|---|---|---|
+| v1 (56 features) | 0.572 | 0.529 | 0.409 | 0.809 | 0.889 | 0.710 |
+| v2 (66 features) | **0.561** | **0.522** | **0.404** | **0.814** | **0.853** | **0.674** |
+
+Validation RMSE by position inside the 3-h block:
+
+| | hour 1 | hour 2 | hour 3 |
+|---|---|---|---|
+| v1 all | 0.564 | 0.508 | 0.514 |
+| v2 all | 0.556 | 0.508 | 0.500 |
+| v1 storm | 1.020 | 0.843 | 0.789 |
+| v2 storm | **0.982** | 0.819 | **0.740** |
+
+- **Decision:** CV improves ✅, validation improves ✅ → **adopt v2** (rule fixed in advance).
+- The overall gain is small (−0.011 CV, −0.007 val), but **storm RMSE drops by 4%** (0.889 → 0.853). Storms are the cases that matter most for warnings.
+- Hour 1 of a block got better, as intended, but it is still the hardest hour: the solar wind that drives the rest of the block hasn't arrived yet.
+- Best v2 settings: learning rate 0.039, 700 trees, 31 leaves, min 50 samples per leaf, L2 0.28.
+- **Past-Kp ablation (validation, not production):** adding Kp from previous blocks only improves RMSE from 0.522 to 0.512 (storm 0.853 → 0.832). **Our solar-wind-only model is within 0.01 of a model that cheats with past Kp**, so excluding geomagnetic inputs costs us almost nothing. Persistence scores 0.819 here.
+
+**Still pending:** the 03 re-run (v2 test results next to v1, and the gate decision).
