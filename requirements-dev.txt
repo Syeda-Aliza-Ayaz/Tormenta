@@ -1,0 +1,4 @@
+# Local development only (notebooks + tests); not installed by deployments.
+-r requirements.txt
+ipykernel==7.4.0
+pytest==9.2.0

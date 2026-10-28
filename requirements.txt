@@ -1,0 +1,10 @@
+# Runtime dependencies — exact pins. Python 3.12.
+# scikit-learn MUST be identical in training and every deployment (joblib pickles).
+numpy==2.5.4
+pandas==3.1.0
+scipy==1.18.1
+scikit-learn==1.9.1
+joblib==1.6.0
+matplotlib==3.11.2
+requests==2.34.2
+# Phase 5 (added when installed): streamlit, gradio, flask, huggingface_hub

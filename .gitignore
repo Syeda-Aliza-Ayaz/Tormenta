@@ -1,0 +1,16 @@
+# Environment
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.pytest_cache/
+
+# Data: raw is re-downloadable, processed is rebuilt by src/update.py
+data/raw/
+data/processed/*
+!data/processed/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
