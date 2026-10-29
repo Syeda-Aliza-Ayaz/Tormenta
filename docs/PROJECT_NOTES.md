@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b 🟡 (v2 adopted on CV + validation; 03 re-run pending) · Phase 4–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 4–7 ⬜
 
 ---
 
@@ -303,4 +303,34 @@ Validation RMSE by position inside the 3-h block:
 - Best v2 settings: learning rate 0.039, 700 trees, 31 leaves, min 50 samples per leaf, L2 0.28.
 - **Past-Kp ablation (validation, not production):** adding Kp from previous blocks only improves RMSE from 0.522 to 0.512 (storm 0.853 → 0.832). **Our solar-wind-only model is within 0.01 of a model that cheats with past Kp**, so excluding geomagnetic inputs costs us almost nothing. Persistence scores 0.819 here.
 
-**Still pending:** the 03 re-run (v2 test results next to v1, and the gate decision).
+**Result of the `03_modeling.ipynb` re-run with v2 features (2026-10-29), test 2020 → 2026-01, evaluated once:**
+
+| Model | v1 RMSE | v2 RMSE | v1 storm RMSE | v2 storm RMSE | v2 R² |
+|---|---|---|---|---|---|
+| Persistence | 0.862 | 0.862 | 1.368 | 1.368 | 0.566 |
+| Linear Regression | 0.671 | 0.665 | 1.489 | 1.470 | 0.742 |
+| KNN | 0.674 | 0.657 | 1.408 | 1.337 | 0.748 |
+| SVR | 0.609 | 0.605 | 1.101 | 1.079 | 0.786 |
+| Random Forest | 0.612 | 0.606 | 1.006 | 0.972 | 0.785 |
+| **HistGB** | 0.585 | **0.573** | 0.876 | **0.846** | 0.808 |
+| Ensemble (HistGB+RF+SVR) | – | 0.571 | – | 0.910 | 0.809 |
+
+- **Every model improved**, so the gain comes from the new features, not tuning luck. CV even picked the same HistGB settings as for v1.
+- **HistGB:** RMSE −2%, storm RMSE −3.4%, MAE 0.445 → 0.437. It is 34% better than persistence overall and 38% better on storms.
+- **The ensemble** is a hair better overall (0.571) but much worse on storms (0.910), because SVR and RF under-predict big storms. HistGB stays the production model.
+- **Storm under-prediction** shrank (G3+ bias −0.63 → −0.57) but is still the main limitation.
+- **Weighting ablation (v2):** storm RMSE 0.829 vs 0.846, overall 0.584 vs 0.573. Same trade-off as v1, so production stays unweighted.
+- **Block hour (test, HistGB):** 0.614 / 0.559 / 0.543. Hour 1 is still the hardest.
+- **Feature importance:** the new `newell_block_max` is now #1 by far, and the new `pressure_max3h` is #2. The model now uses "the strongest coupling so far in this block", which matches how Kp is defined (the biggest disturbance in the 3 h).
+- **May 2024 storm:** predicted peak 8.6 vs observed 9. **80% interval coverage on test is 75.7%** (v1: 77.0%): slightly narrow. This number was recomputed separately because that notebook cell's printout wasn't saved.
+
+**Gate (same 6-month holdout, both scored in this run, neither trained on it):**
+
+| | RMSE | storm RMSE | coverage |
+|---|---|---|---|
+| v1 (incumbent) | 0.581 | 0.702 | 78.3% |
+| v2 (candidate) | **0.580** | **0.695** | 77.4% |
+
+0.580 ≤ 1.02 × 0.581, so **v2 was promoted**: `models/tormenta_v20261029_1003.joblib` → `models/current.joblib`. v1 is kept for rollback. The two are nearly tied on this holdout because late 2025 had few big storms, and v2's edge is mainly on storms.
+
+**Figures:** `reports/figures/09–14` are now v2. The v1 versions are in `reports/v1/figures/`, and the tex Phase 3 section points there.

@@ -299,7 +299,7 @@ jobs:
 - [x] Wider HistGB search (20); equal-weight ensemble; fair gate (both models on same holdout, same run, asserted unseen)
 - [x] Past-Kp ablation (validation only, never production)
 - [x] Team runs `04_improvements.ipynb` → adopt v2 only if CV **and** val improve (rule fixed in advance)
-- [ ] Team re-runs `03_modeling.ipynb` → v2 test once; gate vs v1; docs updated with v1 vs v2
+- [x] Team re-runs `03_modeling.ipynb` → v2 test once; gate vs v1; docs updated with v1 vs v2
 
 ### Phase 4 — Live nowcast
 - [ ] Verify SWPC 1-day endpoint shapes

@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: v2 adopted on CV and validation; v2 test run pending}
+\date{Last updated: Phase 3b complete (v2 promoted to production)}
 
 \begin{document}
 \maketitle
@@ -511,7 +511,8 @@ one-day spikes caused by solar flares contaminating the noon measurement, and th
 \end{itemize}
 
 %=====================================================================
-\section{Modelling results (Phase 3)}\label{sec:results}
+\section{Modelling results (Phase 3, v1)}\label{sec:results}
+\textit{This section reports the first model (v1, 56 features). Its figures are archived in \code{reports/v1/figures/}; Section~\ref{sec:v2} reports the improved v2 model, which replaced it.}
 %=====================================================================
 \subsection{Tuned hyperparameters}
 \begin{table}[H]\centering\small
@@ -527,7 +528,7 @@ HistGB & 700 iterations, learning rate 0.039, 31 leaves, min leaf 50, L2 0.28 & 
 
 \subsection{Fitting diagnosis: over- and underfitting}
 \begin{figure}[H]\centering
-\includegraphics[width=0.8\textwidth]{09_overfitting.png}
+\includegraphics[width=0.8\textwidth]{../reports/v1/figures/09_overfitting.png}
 \caption{RMSE on training data (strided sample), in time-series CV, and on the validation years. KNN's
 training bar is invisible because its training RMSE is $\approx0$.}
 \end{figure}
@@ -558,7 +559,7 @@ Random Forest & 0.612 & 0.473 & 0.781 & 1.006 & 0.766\\
 \textbf{HistGB} & \textbf{0.585} & \textbf{0.445} & \textbf{0.800} & \textbf{0.876} & \textbf{0.650}\\\bottomrule
 \end{tabular}\end{table}
 \begin{figure}[H]\centering
-\includegraphics[width=\textwidth]{10_model_comparison.png}
+\includegraphics[width=\textwidth]{../reports/v1/figures/10_model_comparison.png}
 \caption{Test RMSE on all hours (left) and on storm hours (right).}
 \end{figure}
 \begin{itemize}
@@ -574,7 +575,7 @@ so the model selection is robust despite the quiet validation period.
 
 \subsection{Errors by storm level}
 \begin{figure}[H]\centering
-\includegraphics[width=\textwidth]{11_error_by_level.png}
+\includegraphics[width=\textwidth]{../reports/v1/figures/11_error_by_level.png}
 \caption{Test MAE (left) and mean bias (right; prediction minus observation) per observed Kp level.}
 \end{figure}
 \begin{itemize}
@@ -588,7 +589,7 @@ bound, whereas tree models saturate.
 \end{itemize}
 
 \begin{figure}[H]\centering
-\includegraphics[width=\textwidth]{12_pred_vs_actual.png}
+\includegraphics[width=\textwidth]{../reports/v1/figures/12_pred_vs_actual.png}
 \caption{HistGB on the test set: predicted vs observed Kp (left) and residuals vs observed Kp (right), log colour
 scale.}
 \end{figure}
@@ -617,7 +618,7 @@ operator who cares only about storm warnings could prefer the weighted variant.
 
 \subsection{What the model relies on}
 \begin{figure}[H]\centering
-\includegraphics[width=0.75\textwidth]{13_feature_importance.png}
+\includegraphics[width=0.75\textwidth]{../reports/v1/figures/13_feature_importance.png}
 \caption{Permutation importance of the train-only HistGB on the validation years: RMSE increase when one feature
 is randomly shuffled.}
 \end{figure}
@@ -637,7 +638,7 @@ the quantities physics says should matter.}
 
 \subsection{Case study: the May 2024 storm, unseen in training}
 \begin{figure}[H]\centering
-\includegraphics[width=\textwidth]{14_may2024_nowcast.png}
+\includegraphics[width=\textwidth]{../reports/v1/figures/14_may2024_nowcast.png}
 \caption{HistGB nowcast with 80\% interval vs observed Kp, 9--15 May 2024. The model was trained on 1998--2019
 only.}
 \end{figure}
@@ -747,7 +748,94 @@ because the solar wind that drives the rest of the block has not yet been observ
 autoregressive upper bound, so excluding geomagnetic inputs costs very little accuracy while keeping the model
 free of leakage and usable when Kp itself is delayed.
 
-\paragraph{Test results.} \textit{Pending the re-run of \code{03\_modeling.ipynb} with v2 features.}
+\subsection{v2 test results (2020 to 2026-01, evaluated once)}
+\code{03\_modeling.ipynb} was re-run with the v2 features: all model families were re-tuned, refit on
+train+validation and scored once on the test years. CV picked the same HistGB settings as for v1.
+
+\begin{table}[H]\centering\small
+\caption{Test set, v1 vs v2 (52{,}848 hours). Lower RMSE is better.}\label{tab:v1v2test}
+\begin{tabular}{lcccccc}\toprule
+ & \multicolumn{3}{c}{v1 (56 features)} & \multicolumn{3}{c}{v2 (66 features)}\\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+Model & RMSE & $R^2$ & storm RMSE & RMSE & $R^2$ & storm RMSE\\\midrule
+Persistence (baseline) & 0.862 & 0.566 & 1.368 & 0.862 & 0.566 & 1.368\\
+Linear Regression & 0.671 & 0.737 & 1.489 & 0.665 & 0.742 & 1.470\\
+KNN & 0.674 & 0.734 & 1.408 & 0.657 & 0.748 & 1.337\\
+SVR & 0.609 & 0.784 & 1.101 & 0.605 & 0.786 & 1.079\\
+Random Forest & 0.612 & 0.781 & 1.006 & 0.606 & 0.785 & 0.972\\
+HistGB & 0.585 & 0.800 & 0.876 & \textbf{0.573} & 0.808 & \textbf{0.846}\\
+Ensemble (HistGB+RF+SVR) & -- & -- & -- & 0.571 & \textbf{0.809} & 0.910\\\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+\item \textbf{Every model family improved} with the v2 features, so the gain comes from the features rather than
+from tuning luck. HistGB: RMSE 0.585 to 0.573 (2\%), MAE 0.445 to 0.437, storm RMSE 0.876 to 0.846 (3.4\%).
+\item The test gains match the validation gains in size and direction. This suggests the improvement is real and
+that the test set has not been over-used.
+\item HistGB is 34\% better than persistence (0.573 vs 0.862), and 38\% better on storm hours.
+\item \textbf{The ensemble} has marginally lower overall RMSE (0.571) but clearly worse storm RMSE (0.910). SVR and
+RF under-predict big storms (G3+ bias $-1.65$ and $-0.73$) and pull the average down, so HistGB alone stays the
+production model.
+\item \textbf{Storm bias shrank.} HistGB's bias on G3+ hours went from $-0.63$ to $-0.57$, and at G2 from $-0.60$
+to $-0.57$. Under-predicting the largest storms remains the main limitation (Figure~\ref{fig:v2level}).
+\item \textbf{Storm-weighting ablation (v2).} Weighting gives storm RMSE 0.829 vs 0.846, but overall RMSE 0.584 vs
+0.573. This is the same trade-off as in v1, so production stays unweighted.
+\item HistGB test RMSE by block hour is 0.614, 0.559 and 0.543 for hours 1, 2 and 3 (storm hours: 0.940, 0.821
+and 0.768).
+\end{itemize}
+
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{10_model_comparison.png}
+\caption{v2 test RMSE per model: all hours (left) and storm hours (right).}
+\end{figure}
+
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{11_error_by_level.png}
+\caption{v2 test MAE and bias by observed storm level. All models over-predict slightly in quiet times and
+under-predict in storms (regression to the mean); HistGB has the smallest storm bias.}\label{fig:v2level}
+\end{figure}
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.75\textwidth]{13_feature_importance.png}
+\caption{v2 permutation importance on the validation years. The new block-so-far feature
+\code{newell\_block\_max} is now the most important input, followed by the new \code{pressure\_max3h}.}
+\end{figure}
+\textbf{Reading the importance plot.} The two top-ranked features are both new, and \code{block\_hour},
+\code{pressure\_change1h} and \code{bz\_block\_min} are also in the top 20. The model now uses ``the strongest
+coupling seen so far in this block'' rather than only the current hour. That matches how Kp is defined: the
+largest disturbance within the 3-h block. Raw \code{pressure} dropped in rank because \code{pressure\_max3h}
+carries the same information more usefully. Importance is shared between correlated features, so individual
+ranks should not be over-interpreted.
+
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{14_may2024_nowcast.png}
+\caption{v2 nowcast of the May 2024 storm (model trained on 1998--2019 only).}
+\end{figure}
+\begin{itemize}
+\item The main phase peaks at a predicted 8.6 vs an observed 9, and the upper interval bound reaches 8.97.
+\item The 1--2\,h onset lag is still visible, as expected from the 3-h label.
+\item 80\% interval coverage on test: \textbf{75.7\%} (v1: 77.0\%). The interval is still slightly narrow, and
+conformal calibration remains future work.
+\end{itemize}
+
+\subsection{Gate decision and promotion}
+Both models were scored in the same run, on the same holdout (2025-07-10 to 2026-01-10, 4{,}417 hours), and
+neither had been trained on it.
+
+\begin{table}[H]\centering
+\caption{Validation gate.}\label{tab:gate}
+\begin{tabular}{lccccc}\toprule
+ & RMSE & MAE & $R^2$ & storm RMSE & 80\% coverage\\\midrule
+v1 (incumbent) & 0.581 & 0.455 & 0.817 & 0.702 & 78.3\%\\
+v2 (candidate) & \textbf{0.580} & 0.456 & \textbf{0.818} & \textbf{0.695} & 77.4\%\\\bottomrule
+\end{tabular}
+\end{table}
+Rule: promote if the candidate's RMSE is at most $1.02\times$ the incumbent's ($0.580 \le 0.593$).
+\textbf{v2 was promoted}: \code{models/tormenta\_v20261029\_1003.joblib} is now \code{models/current.joblib}, and v1
+is kept for rollback. The two models are nearly tied on this recent holdout. That is expected: late 2025 had few
+large storms, and v2's advantage is mainly on storms. The 2\% tolerance stops such near-ties from triggering a
+swap in either direction.
 
 %=====================================================================
 \section{Key design decisions (for the viva)}
