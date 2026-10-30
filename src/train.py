@@ -27,7 +27,7 @@ from sklearn.svm import SVR
 
 from src import config
 from src.evaluate import metrics, metrics_table
-from src.features import build_features
+from src.features import build_features, monotonic_cst
 from src.preprocessing import load_processed
 
 
@@ -91,6 +91,12 @@ def model_specs() -> dict:
     }
 
 
+def _constrain(est, columns, monotonic=None):
+    """Apply (or clear) the physics monotonic constraints on a HistGB pipeline."""
+    use = config.USE_MONOTONIC if monotonic is None else monotonic
+    return est.set_params(model__monotonic_cst=monotonic_cst(columns) if use else None)
+
+
 def _rows(mask, stride, fast):
     idx = np.flatnonzero(mask)
     return idx[:: stride * (6 if fast else 1)]
@@ -106,11 +112,14 @@ def tune_models(X, y, masks, fast=False, log=print, names=None) -> dict:
         t0 = time.time()
         rows = _rows(masks["train"], spec["tune_stride"], fast)
         Xt, yt = X.iloc[rows], y.iloc[rows]
+        base = clone(spec["est"])
+        if name == "HistGB":
+            _constrain(base, X.columns)
         if spec["params"] is None:
-            scores = cross_val_score(clone(spec["est"]), Xt, yt, cv=cv, scoring="neg_root_mean_squared_error")
+            scores = cross_val_score(base, Xt, yt, cv=cv, scoring="neg_root_mean_squared_error")
             best, cv_rmse = {}, -scores.mean()
         else:
-            search = RandomizedSearchCV(clone(spec["est"]), spec["params"], n_iter=2 if fast else spec["n_iter"],
+            search = RandomizedSearchCV(base, spec["params"], n_iter=2 if fast else spec["n_iter"],
                                         cv=cv, scoring="neg_root_mean_squared_error", n_jobs=spec["n_jobs"],
                                         random_state=config.RANDOM_STATE, refit=False)
             search.fit(Xt, yt)
@@ -121,13 +130,15 @@ def tune_models(X, y, masks, fast=False, log=print, names=None) -> dict:
     return out
 
 
-def fit_model(name, params, X, y, mask, fast=False, sample_weight=None):
+def fit_model(name, params, X, y, mask, fast=False, sample_weight=None, monotonic=None):
     """Fit one family with given params on the rows of `mask` (at that family's fit stride)."""
     spec = model_specs()[name]
     rows = _rows(mask, spec["fit_stride"], fast)
     est = clone(spec["est"]).set_params(**params)
     if name == "Random Forest":
         est.set_params(model__n_jobs=config.N_JOBS)
+    if name == "HistGB":
+        _constrain(est, X.columns, monotonic)
     kw = {} if sample_weight is None else {"model__sample_weight": sample_weight.iloc[rows].to_numpy()}
     return est.fit(X.iloc[rows], y.iloc[rows], **kw)
 
@@ -187,22 +198,102 @@ def weighting_ablation(best_params, X, y, masks, fast=False):
     return metrics_table(y[test], preds), preds
 
 
+# ── Final round (v3): variants, diagnostics, interval calibration ───────────────
+def compare_variant(best_params, X, y, masks, cols, monotonic, fast=False) -> dict:
+    """HistGB with FIXED params on a column subset: CV RMSE (train years) + validation metrics."""
+    Xc = X[cols]
+    rows = _rows(masks["train"], 1, fast)
+    est = _constrain(clone(model_specs()["HistGB"]["est"]).set_params(**best_params), cols, monotonic)
+    cv = TimeSeriesSplit(n_splits=3 if fast else config.CV_SPLITS)
+    cv_rmse = -cross_val_score(est, Xc.iloc[rows], y.iloc[rows], cv=cv, n_jobs=1,
+                               scoring="neg_root_mean_squared_error").mean()
+    model = fit_model("HistGB", best_params, Xc, y, masks["train"], fast, monotonic=monotonic)
+    return {"cv_rmse": cv_rmse, **metrics(y[masks["val"]], model.predict(Xc[masks["val"]]))}
+
+
+def learning_curve(best_params, X, y, masks, strides=(32, 16, 8, 4, 2, 1), monotonic=False, fast=False):
+    """Train on every k-th training hour (less data); score train and validation RMSE."""
+    out = {}
+    for k in strides:
+        rows = _rows(masks["train"], k, fast)
+        est = fit_model("HistGB", best_params, X.iloc[rows], y.iloc[rows], np.ones(len(rows), bool),
+                        monotonic=monotonic)
+        out[len(rows)] = {"train_rmse": metrics(y.iloc[rows], est.predict(X.iloc[rows]))["rmse"],
+                          "val_rmse": metrics(y[masks["val"]], est.predict(X[masks["val"]]))["rmse"]}
+    return pd.DataFrame(out).T.rename_axis("training hours")
+
+
+def complexity_curve(best_params, X, y, masks, leaves=(7, 15, 31, 63, 127, 255), monotonic=False, fast=False):
+    """Vary tree size with everything else fixed: does a more complex model help validation?"""
+    tr = _rows(masks["train"], config.SUBSAMPLE_STRIDE, False)
+    out = {}
+    for n in leaves:
+        est = fit_model("HistGB", {**best_params, "model__max_leaf_nodes": n}, X, y, masks["train"], fast,
+                        monotonic=monotonic)
+        out[n] = {"train_rmse": metrics(y.iloc[tr], est.predict(X.iloc[tr]))["rmse"],
+                  "val_rmse": metrics(y[masks["val"]], est.predict(X[masks["val"]]))["rmse"]}
+    return pd.DataFrame(out).T.rename_axis("max_leaf_nodes")
+
+
+def conformal_margin(best_params, X, y, masks, fast=False, log=print) -> tuple[float, pd.DataFrame]:
+    """Conformalized quantile regression (CQR) margin for the q10-q90 band.
+
+    Conformity score = how far y falls outside the band (negative if inside). Scores come only from
+    predictions on data the quantile models did NOT train on: out-of-fold TimeSeriesSplit folds of
+    the training years (skipping the first, tiny-training fold) plus the validation years (models
+    trained on the training years). The margin is the 80% conformal quantile of those scores and is
+    added to both sides of the band. Test and gate-holdout data are never used.
+    """
+    params = {k.removeprefix("model__"): v for k, v in best_params.items()}
+    cst = monotonic_cst(X.columns) if config.USE_MONOTONIC else None
+
+    def band(fit_idx, pred_idx):
+        return [HistGradientBoostingRegressor(loss="quantile", quantile=q, early_stopping=False,
+                                              random_state=config.RANDOM_STATE, monotonic_cst=cst, **params)
+                .fit(X.iloc[fit_idx], y.iloc[fit_idx]).predict(X.iloc[pred_idx]) for q in config.QUANTILES]
+
+    train_idx = _rows(masks["train"], 1, fast)
+    folds = list(TimeSeriesSplit(n_splits=3 if fast else config.CV_SPLITS).split(train_idx))
+    pieces = [(train_idx[a], train_idx[b]) for a, b in folds[config.CONFORMAL_SKIP_FOLDS:]]
+    pieces.append((train_idx, _rows(masks["val"], 1, fast)))
+    scores, rows = [], {}
+    for fit_idx, pred_idx in pieces:
+        t0 = time.time()
+        lo, hi = band(fit_idx, pred_idx)
+        yt = y.iloc[pred_idx].to_numpy()
+        s = np.maximum(lo - yt, yt - hi)
+        scores.append(s)
+        idx = y.index[pred_idx]
+        label = f"{idx.min():%Y-%m} to {idx.max():%Y-%m}"
+        rows[label] = {"raw_coverage": float((s <= 0).mean()), "n": len(s)}
+        log(f"calibration block {label}: raw coverage {(s <= 0).mean():.1%} ({time.time() - t0:.0f} s)")
+    all_scores = np.concatenate(scores)
+    level = config.QUANTILES[1] - config.QUANTILES[0]
+    margin = float(np.quantile(all_scores, min(1.0, np.ceil((len(all_scores) + 1) * level) / len(all_scores))))
+    table = pd.DataFrame(rows).T
+    table["calibrated_coverage"] = [float((s <= margin).mean()) for s in scores]
+    return margin, table
+
+
 # ── Production model ─────────────────────────────────────────────────────────
-def fit_bundle(best_params, X, y, mask, fast=False, sample_weight=None) -> dict:
-    """Point + q10/q90 HistGB trained on the rows of `mask`, packaged for predict.py."""
+def fit_bundle(best_params, X, y, mask, fast=False, sample_weight=None, margin=0.0) -> dict:
+    """Point + q10/q90 HistGB trained on the rows of `mask` (+ conformal margin), packaged for predict.py."""
     params = {k.removeprefix("model__"): v for k, v in best_params.items()}
     rows = _rows(mask, 1, fast)
     Xf, yf = X.iloc[rows], y.iloc[rows]
     w = None if sample_weight is None else sample_weight.iloc[rows].to_numpy()
 
     rs = config.RANDOM_STATE
-    point = HistGradientBoostingRegressor(early_stopping=False, random_state=rs, **params).fit(Xf, yf, sample_weight=w)
+    cst = monotonic_cst(X.columns) if config.USE_MONOTONIC else None
+    point = HistGradientBoostingRegressor(early_stopping=False, random_state=rs, monotonic_cst=cst,
+                                          **params).fit(Xf, yf, sample_weight=w)
     q_lo, q_hi = (HistGradientBoostingRegressor(loss="quantile", quantile=q, early_stopping=False,
-                                                random_state=rs, **params).fit(Xf, yf)
+                                                random_state=rs, monotonic_cst=cst, **params).fit(Xf, yf)
                   for q in config.QUANTILES)
     return {
         "point": point, "q_lo": q_lo, "q_hi": q_hi,
         "features": list(X.columns), "params": params, "weighted": sample_weight is not None,
+        "monotonic": cst is not None, "interval_margin": float(margin),
         "trained_until": str(y.index[rows].max()), "sklearn_version": sklearn.__version__,
         "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
@@ -223,9 +314,9 @@ def gate_metrics(bundle, X, y) -> dict:
     return gate
 
 
-def fit_production(best_params, X, y, fast=False, sample_weight=None):
+def fit_production(best_params, X, y, fast=False, sample_weight=None, margin=0.0):
     """Bundle trained up to the gate-holdout start (no refit-on-all); gate metrics on the holdout."""
-    bundle = fit_bundle(best_params, X, y, ~_holdout_mask(y), fast, sample_weight)
+    bundle = fit_bundle(best_params, X, y, ~_holdout_mask(y), fast, sample_weight, margin)
     return bundle, gate_metrics(bundle, X, y)
 
 
@@ -277,7 +368,8 @@ def run(fast=False):
     test_table, _, _ = test_evaluation(tuned, X, y, masks, persistence, fast)
     print(test_table.round(3))
     best = tuned["HistGB"]["best_params"]
-    bundle, gate = fit_production(best, X, y, fast)
+    margin, _ = conformal_margin(best, X, y, masks, fast)
+    bundle, gate = fit_production(best, X, y, fast, margin=margin)
     promote, incumbent = gate_decision(gate, X, y)
     version = save_bundle(bundle, test_table.loc["HistGB"].to_dict(), gate, promote, incumbent)
     print(f"Saved {version} (promoted={promote}); gate: {gate}; incumbent: {incumbent}")

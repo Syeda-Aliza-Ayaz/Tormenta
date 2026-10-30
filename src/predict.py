@@ -14,10 +14,11 @@ def load_bundle(path=config.CURRENT_MODEL) -> dict:
 
 
 def predict_with_interval(bundle: dict, X: pd.DataFrame) -> pd.DataFrame:
-    """Point (squared-error HistGB) + q10/q90 band, widened to always contain the point."""
+    """Point (squared-error HistGB) + q10/q90 band (+ conformal margin), widened to contain the point."""
     X = X[bundle["features"]]
     point = bundle["point"].predict(X)
-    lo = np.minimum(bundle["q_lo"].predict(X), point)
-    hi = np.maximum(bundle["q_hi"].predict(X), point)
+    margin = bundle.get("interval_margin", 0.0)       # v1/v2 bundles have no margin
+    lo = np.minimum(bundle["q_lo"].predict(X) - margin, point)
+    hi = np.maximum(bundle["q_hi"].predict(X) + margin, point)
     clip = lambda a: np.clip(a, 0, 9)
     return pd.DataFrame({"kp_pred": clip(point), "kp_lo": clip(lo), "kp_hi": clip(hi)}, index=X.index)

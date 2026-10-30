@@ -78,10 +78,16 @@ ROLL_WINDOWS = [3, 6, 9]
 LONG_SPEED_WINDOWS = [12, 24]  # EDA: speed keeps ~a day of memory
 LONG_NEWELL_WINDOWS = [12, 24] # v2: coupling memory beyond 9 h
 BLOCK_SO_FAR_MEAN = ["newell", "vbs"]  # v2: running stats since the current Kp block started
+# v3 storm memory: exponentially decaying mean of energy input over a FIXED trailing window,
+# so the live path (SWPC 3-day feed) computes exactly what training computed
+USE_MEMORY_FEATURES = True     # set by 05_final_round.ipynb's decision
+MEMORY_COLUMNS = ["newell", "vbs"]
+MEMORY_HALFLIVES = [6, 24]     # hours
+MEMORY_WINDOW_HOURS = 48
 F107_TRAILING_DAYS = 81
 F107_SPIKE_WINDOW_DAYS = 27    # flare-spike check against the trailing median
 F107_SPIKE_RATIO = 2.0         # value > 2× trailing median → treated as flare-contaminated
-MIN_HISTORY_HOURS = 24         # live window needed for the longest trailing window (SWPC 3-day feed)
+MIN_HISTORY_HOURS = 48         # live window needed for the longest trailing window (SWPC 3-day feed)
 
 # ── Split & training ─────────────────────────────────────────────────────────
 TRAIN_YEARS = (1998, 2016)
@@ -96,6 +102,13 @@ RANDOM_STATE = 42
 QUANTILES = (0.1, 0.9)
 N_JOBS = 4                   # 7.4 GB RAM laptop: keep parallel workers modest
 SAMPLE_WEIGHT = lambda kp: 1 + kp / 3   # storm-weighting ablation
+# v3 physics constraints for HistGB: Kp may only rise (+1) / fall (-1) as these rise
+USE_MONOTONIC = True         # set by 05_final_round.ipynb's decision
+MONOTONIC_INCREASING = ["speed", "vbs", "newell", "newell_mean3h", "newell_mean6h", "newell_mean9h",
+                        "newell_mean12h", "newell_mean24h", "newell_block_mean", "newell_block_max",
+                        "vbs_block_mean", "newell_decay6h", "newell_decay24h", "vbs_decay6h", "vbs_decay24h"]
+MONOTONIC_DECREASING = ["bz_gsm", "bz_min3h", "bz_block_min"]
+CONFORMAL_SKIP_FOLDS = 1     # first CV fold trains on only ~3 years → too pessimistic for calibration
 
 REPORTS_DIR = ROOT / "reports"
 FIGURES_DIR = REPORTS_DIR / "figures"

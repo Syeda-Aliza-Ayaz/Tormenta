@@ -249,6 +249,9 @@ jobs:
 | 22 | Point model can fall outside separately-fit quantile band | Band widened to include point; noted in report |
 | 23 | Recomputed derived fields unverified | One-off comparison against OMNI cols 11, 13, 14 before dropping them |
 | 24 | OMNI `f107` column vs live SWPC observed flux | Use GFZ `F10.7obs` (observed Penticton flux, same quantity SWPC serves) for training and the history file |
+| 25 | Interval coverage 75.7% < 80% | CQR margin from out-of-fold train years + validation, stored in the bundle |
+| 26 | Exponential storm memory over all history would differ live (3-day feed) | Fixed 48 h window; `MIN_HISTORY_HOURS` = 48 |
+| 27 | Repeated test evaluation erodes trust | v3 is the last round; decisions on CV + val only; then freeze |
 
 ---
 
@@ -300,6 +303,13 @@ jobs:
 - [x] Past-Kp ablation (validation only, never production)
 - [x] Team runs `04_improvements.ipynb` → adopt v2 only if CV **and** val improve (rule fixed in advance)
 - [x] Team re-runs `03_modeling.ipynb` → v2 test once; gate vs v1; docs updated with v1 vs v2
+
+### Phase 3c — Final round (v2 → v3), then freeze
+- [x] Archive v2 results (`reports/v2/`)
+- [x] Storm-memory features (fixed 48 h decay window, train = live), monotonic constraints, CQR conformal margin
+- [x] Learning + complexity curves (underfitting check); 2 new tests (9 total)
+- [ ] Team runs `05_final_round.ipynb` → adopt each change only if CV **and** val improve; config flags match
+- [ ] Team re-runs `03_modeling.ipynb` → v3 test once; conformal coverage; gate vs v2; docs updated; **model frozen**
 
 ### Phase 4 — Live nowcast
 - [ ] Verify SWPC 1-day endpoint shapes

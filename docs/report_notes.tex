@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: Phase 3b complete (v2 promoted to production)}
+\date{Last updated: Phase 3b complete (v2 in production); final round (v3) in progress}
 
 \begin{document}
 \maketitle
@@ -201,6 +201,8 @@ v2: block position (1) & -- & \code{block\_hour} = hour mod 3 & Which hour of th
 v2: block-so-far (4) & -- & Cumulative mean of Newell and $VB_s$, cumulative max Newell, cumulative min $B_z$ since the block start & What the wind has done so far in this block\\
 v2: pressure dynamics (3) & nPa & 3-h trailing mean and max of $P$; $P_t-P_{t-1}$ & Sudden compression marks a shock arriving\\
 v2: long coupling (2) & -- & 12/24-h trailing mean of Newell coupling & Longer memory of energy input\\
+v3: storm memory (4) & -- & \code{newell\_decay6h/24h}, \code{vbs\_decay6h/24h}: exponentially weighted mean over the last 48\,h, half-life 6 or 24\,h & A ``charge level'': how much energy has been pumped in recently, fading with time\\
+\code{interval\_margin} & Kp & Conformal (CQR) margin added to both sides of the q10--q90 band & Correction that makes the 80\% range really contain the truth 80\% of the time\\
 F10.7 features (2) & sfu & Previous day's value; trailing 81-day mean. Days $>2\times$ the trailing 27-day median are treated as flare-contaminated (missing) & Solar background without peeking at the future\\
 Cyclical time & -- & $\sin/\cos$ of hour-of-day and day-of-year & Time of day and season, as circles not lines\\\bottomrule
 \end{longtable}
@@ -786,18 +788,18 @@ and 0.768).
 \end{itemize}
 
 \begin{figure}[H]\centering
-\includegraphics[width=\textwidth]{10_model_comparison.png}
+\includegraphics[width=\textwidth]{../reports/v2/figures/10_model_comparison.png}
 \caption{v2 test RMSE per model: all hours (left) and storm hours (right).}
 \end{figure}
 
 \begin{figure}[H]\centering
-\includegraphics[width=\textwidth]{11_error_by_level.png}
+\includegraphics[width=\textwidth]{../reports/v2/figures/11_error_by_level.png}
 \caption{v2 test MAE and bias by observed storm level. All models over-predict slightly in quiet times and
 under-predict in storms (regression to the mean); HistGB has the smallest storm bias.}\label{fig:v2level}
 \end{figure}
 
 \begin{figure}[H]\centering
-\includegraphics[width=0.75\textwidth]{13_feature_importance.png}
+\includegraphics[width=0.75\textwidth]{../reports/v2/figures/13_feature_importance.png}
 \caption{v2 permutation importance on the validation years. The new block-so-far feature
 \code{newell\_block\_max} is now the most important input, followed by the new \code{pressure\_max3h}.}
 \end{figure}
@@ -809,7 +811,7 @@ carries the same information more usefully. Importance is shared between correla
 ranks should not be over-interpreted.
 
 \begin{figure}[H]\centering
-\includegraphics[width=\textwidth]{14_may2024_nowcast.png}
+\includegraphics[width=\textwidth]{../reports/v2/figures/14_may2024_nowcast.png}
 \caption{v2 nowcast of the May 2024 storm (model trained on 1998--2019 only).}
 \end{figure}
 \begin{itemize}
@@ -836,6 +838,58 @@ Rule: promote if the candidate's RMSE is at most $1.02\times$ the incumbent's ($
 is kept for rollback. The two models are nearly tied on this recent holdout. That is expected: late 2025 had few
 large storms, and v2's advantage is mainly on storms. The 2\% tolerance stops such near-ties from triggering a
 swap in either direction.
+
+%=====================================================================
+\section{Final round: v2 to v3 (Phase 3c)}\label{sec:v3}
+%=====================================================================
+\paragraph{Motivation.} With train, CV, validation and test RMSE at 0.534, 0.561, 0.522 and 0.573, the model is not
+overfitting, and larger trees did not improve CV during tuning. This round asks whether the remaining error is
+\emph{underfitting} (fixable with a bigger model or more data) or an information limit of the inputs. It also tests
+two physics-motivated ideas and calibrates the prediction interval. It is the last modelling round; afterwards the
+model is frozen so that the test set is not reused further.
+
+\paragraph{Diagnostics.}
+\begin{itemize}
+\item \textbf{Learning curve:} HistGB trained on every $k$-th training hour ($k = 32, 16, \dots, 1$), with train
+and validation RMSE plotted against training size. If validation error is still falling steeply at full size,
+more data would help.
+\item \textbf{Complexity curve:} maximum leaves per tree varied from 7 to 255 with all else fixed. Classical
+underfitting shows as validation error that keeps falling as complexity grows; if it flattens or rises, model
+size is not the bottleneck.
+\end{itemize}
+
+\paragraph{Storm memory features.} For $x \in \{\text{Newell}, VB_s\}$ and half-life $h \in \{6, 24\}$ hours:
+\[
+x^{\mathrm{decay}}_{h}(t) = \frac{\sum_{k=0}^{47} w_k\, x(t-k)\,\mathbb{1}[x(t-k)\text{ present}]}
+{\sum_{k=0}^{47} w_k\,\mathbb{1}[x(t-k)\text{ present}]},\qquad w_k = 0.5^{k/h},
+\]
+set to missing if less than half the total weight is present. This is a crude analogue of the ring-current
+energy budget (Burton-type models): energy is injected by coupling and decays over hours to days. The window is
+fixed at 48\,h, not an exponential average over all history, so the live path (SWPC 3-day feed) computes exactly
+the same value as training. A unit test checks that data older than 48\,h has no effect.
+
+\paragraph{Monotonic constraints.} HistGB supports per-feature monotonic constraints. We impose that the
+prediction is non-decreasing in speed, $VB_s$, Newell coupling and their rolling, block-so-far and decay
+versions, and non-increasing in $B_z$, $\min B_z$ (3\,h) and $\min B_z$ (block). This encodes known physics and
+should make behaviour on rare extreme inputs more sensible. It may cost a little accuracy if the true relation
+is not perfectly monotonic once other features are fixed.
+
+\paragraph{Conformalized quantile regression (CQR).} For the q10--q90 band $[\hat q_{lo}, \hat q_{hi}]$, the
+conformity score of an observation is $s = \max(\hat q_{lo} - y,\; y - \hat q_{hi})$, which is negative inside
+the band. Scores are collected only where the quantile models did not see the data: out-of-fold
+\code{TimeSeriesSplit} folds of 1998--2016 (the first fold is skipped because it trains on only about 3 years)
+and the validation years (models trained on 1998--2016). The margin is the
+$\lceil (n+1)\,0.8\rceil / n$ empirical quantile of $s$, and the final band is
+$[\hat q_{lo} - m,\; \hat q_{hi} + m]$. Split-conformal theory gives about 80\% coverage on new data from the
+same distribution. Solar-cycle drift weakens that guarantee, so coverage is re-checked on test and on the gate
+holdout.
+
+\paragraph{Leakage protocol.} Comparisons use fixed v2 hyperparameters, CV within the training years and the
+validation years only. The pre-set rule is to adopt each change only if both CV and validation RMSE improve,
+tested sequentially (storm memory first, then constraints on top of the winner). The test years and the gate
+holdout are not touched until the single re-run of \code{03\_modeling.ipynb}.
+
+\paragraph{Results.} \textit{Pending the runs of \code{05\_final\_round.ipynb} and \code{03\_modeling.ipynb}.}
 
 %=====================================================================
 \section{Key design decisions (for the viva)}

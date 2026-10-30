@@ -124,6 +124,21 @@ def plot_permutation_importance(model, X, y, name: str, top: int = 20, n_rows: i
     return fig, imp.sort_values(ascending=False)
 
 
+def plot_diagnostic_curves(learning: pd.DataFrame, complexity: pd.DataFrame, name: str):
+    """Learning curve (more data) and complexity curve (bigger trees): train vs validation RMSE."""
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4))
+    for ax, df, xlabel, title in [
+            (axes[0], learning, "training hours (log scale)", "Learning curve: more data"),
+            (axes[1], complexity, "max_leaf_nodes per tree (log scale)", "Complexity curve: bigger trees")]:
+        ax.plot(df.index, df["train_rmse"], "o-", label="train")
+        ax.plot(df.index, df["val_rmse"], "s-", label="validation (2017–2019)")
+        ax.set(xscale="log", xlabel=xlabel, ylabel="RMSE (Kp units)", title=title)
+        ax.legend()
+    fig.tight_layout()
+    _save(fig, name)
+    return fig
+
+
 def plot_storm_case(y, pred, lo, hi, start: str, end: str, title: str, name: str):
     s = pd.DataFrame({"obs": y, "pred": pred, "lo": lo, "hi": hi}).loc[start:end]
     fig, ax = plt.subplots(figsize=(12, 4))

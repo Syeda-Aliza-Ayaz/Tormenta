@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 4–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c 🟡 (final round: code done, runs pending) · Phase 4–7 ⬜
 
 ---
 
@@ -333,4 +333,34 @@ Validation RMSE by position inside the 3-h block:
 
 0.580 ≤ 1.02 × 0.581, so **v2 was promoted**: `models/tormenta_v20261029_1003.joblib` → `models/current.joblib`. v1 is kept for rollback. The two are nearly tied on this holdout because late 2025 had few big storms, and v2's edge is mainly on storms.
 
-**Figures:** `reports/figures/09–14` are now v2. The v1 versions are in `reports/v1/figures/`, and the tex Phase 3 section points there.
+**Figures:** `reports/figures/09–14` are now v2. The v1 versions are in `reports/v1/figures/`, and the tex Phase 3 section points there. The v2 versions are archived in `reports/v2/` before the v3 run.
+
+## Phase 3c — Final round (v2 → v3): underfitting check, physics ideas, interval calibration
+
+**Why:** after v2 we asked "is the model underfitting, and can it generalise better?" The train / CV / val / test RMSEs (0.534 / 0.561 / 0.522 / 0.573) are close together, so it is not overfitting. Earlier searches over bigger trees didn't improve CV, which suggests the limit is the *information in the inputs*, not model size. This round tests that directly and tries the remaining leakage-safe ideas. **It is the last modelling round**: afterwards the model is frozen, so the test set isn't reused again.
+
+### What was added (code)
+| Change | File | What / why |
+|---|---|---|
+| **Storm memory** (4 features) | `features.storm_memory` | `newell_decay6h/24h`, `vbs_decay6h/24h`: a decaying average of energy input (weights halve every 6 h or 24 h), a rough "charge level" of Earth's magnetic field. Storms build up and recover slowly; plain windows only capture that coarsely. |
+| Fixed 48 h window | same | Pandas `ewm` would use *all* history, but the live app only has ~3 days of SWPC data, which would cause train/serve skew. So the decay is computed over exactly the last 48 h in both paths. `MIN_HISTORY_HOURS` was raised from 24 to 48. |
+| **Monotonic constraints** | `config.MONOTONIC_*`, `features.monotonic_cst`, `train._constrain` | Tells HistGB that Kp may only go **up** as speed, V·Bs or Newell coupling go up, and only **up** as Bz goes more negative. This is physics knowledge, so storms bigger than most of the training data behave sensibly. |
+| **Conformal interval (CQR)** | `train.conformal_margin`, `predict.py` | Measures how far observed Kp falls outside the q10–q90 band on data the quantile models **did not train on** (out-of-fold CV years 2007–2016 + validation 2017–2019). One margin is then added to both sides so coverage is 80% there. It is stored in the model bundle as `interval_margin`; v1/v2 bundles default to 0. |
+| **Learning + complexity curves** | `train.learning_curve`, `train.complexity_curve`, `evaluate.plot_diagnostic_curves` | They show whether more data or bigger trees would help: the textbook underfitting test. |
+| Flags | `config.USE_MEMORY_FEATURES`, `config.USE_MONOTONIC` | Set according to 05's decision. Both are `True` now and get switched off if 05 rejects them. |
+| 2 new tests (9 total) | `tests/test_features.py` | Storm memory ignores data older than its 48 h window; the monotonic constraint names are real feature columns. |
+
+### Leakage protocol
+1. All comparisons use the **fixed v2 HistGB settings**, `TimeSeriesSplit(5)` CV inside 1998–2016, and validation 2017–2019. **No test, no gate holdout.**
+2. Rule fixed in advance, step by step: storm memory vs v2, then monotonic on top of the winner. Each is adopted only if **both** CV and val RMSE improve.
+3. The conformal margin uses only predictions on unseen data from the training/validation years (never test, never the gate holdout). It is applied in 03 regardless of the outcome, because it is a calibration rather than a model change.
+4. Test is then used **once** in 03, with v1 → v2 → v3 shown side by side. v2 is archived in `reports/v2/`.
+
+### Notebooks
+- `05_final_round.ipynb` (~20–25 min): learning/complexity curves (figure 15), the variants table, the conformal check, and the decision. It also says whether `src/config.py` matches the decision.
+- Then re-run `03_modeling.ipynb` (~35–45 min). It now adds a conformal step, a v1/v2/v3 test table, raw vs conformal coverage, and complete feature groups.
+
+Both notebooks were smoke-tested in fast mode without errors. In fast mode the conformal step took test coverage from 69% to 80.5%.
+
+**Result:** ⏳ pending the team's runs.
+

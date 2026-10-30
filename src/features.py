@@ -85,6 +85,26 @@ def block_so_far(base: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(cols, index=base.index)
 
 
+def storm_memory(base: pd.DataFrame) -> pd.DataFrame:
+    """Exponentially decaying mean of energy input: a crude 'charge level' of the magnetosphere.
+
+    Storms build up and recover over many hours, which fixed windows capture only coarsely.
+    Weights 0.5^(k/half-life) for k = 0 … window-1 hours back, normalised over the hours that are
+    present. The window is fixed (unlike pandas ewm over all history), so live serving with a
+    few days of data computes exactly the same value as training. Needs ≥ half the weight present.
+    """
+    lags = np.arange(config.MEMORY_WINDOW_HOURS)
+    cols = {}
+    for c in config.MEMORY_COLUMNS:
+        shifted = [base[c].shift(k) for k in lags]
+        for hl in config.MEMORY_HALFLIVES:
+            w = 0.5 ** (lags / hl)
+            num = sum(wk * s.fillna(0) for wk, s in zip(w, shifted))
+            den = sum(wk * s.notna() for wk, s in zip(w, shifted))
+            cols[f"{c}_decay{hl}h"] = (num / den).where(den >= 0.5 * w.sum())
+    return pd.DataFrame(cols, index=base.index)
+
+
 def f107_daily_features(f107_daily: pd.Series) -> pd.DataFrame:
     """Daily F10.7 features usable on day D: previous day's value and trailing 81-day mean.
 
@@ -117,7 +137,17 @@ def build_features(hourly: pd.DataFrame, f107_daily: pd.Series) -> pd.DataFrame:
     f107 = f107_daily_features(f107_daily).reindex(sw.index.normalize())
     f107.index = sw.index
 
-    return pd.concat([base, history(base), block_so_far(base), f107, time_features(sw.index)], axis=1)
+    parts = [base, history(base), block_so_far(base)]
+    if config.USE_MEMORY_FEATURES:
+        parts.append(storm_memory(base))
+    return pd.concat(parts + [f107, time_features(sw.index)], axis=1)
+
+
+def monotonic_cst(columns) -> dict:
+    """HistGB monotonic constraints for the columns present (+1 increasing, -1 decreasing)."""
+    cst = {c: 1 for c in config.MONOTONIC_INCREASING}
+    cst.update({c: -1 for c in config.MONOTONIC_DECREASING})
+    return {c: v for c, v in cst.items() if c in set(columns)}
 
 
 def kp_history_features(kp_hourly: pd.Series, index: pd.DatetimeIndex) -> pd.DataFrame:
