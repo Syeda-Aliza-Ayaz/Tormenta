@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: Phase 4 complete (live nowcast)}
+\date{Last updated: Phase 5 in progress (Flask app done)}
 
 \begin{document}
 \maketitle
@@ -1098,6 +1098,29 @@ matches training. NOAA's estimate runs about 0.2 Kp above GFZ's for these days, 
 magnetometer networks and methods; this accounts for most of the larger error against NOAA. The model is
 slightly low in the quietest hours. Five quiet days are a small sample, so this is a sanity check, not a new
 generalisation estimate.
+
+%=====================================================================
+\section{Deployment (Phase 5)}\label{sec:deploy}
+%=====================================================================
+All three apps load the same \code{models/current.joblib}, pin the same scikit-learn version (pickled models are
+not portable across versions), and call the same \code{src/predict.py} functions, so they cannot disagree.
+
+\paragraph{Manual input.} The model uses lags of up to 9\,h and trailing means of up to 24\,h, which one set of
+form values cannot supply. \code{predict\_steady} therefore repeats the entered values over the previous 72\,h and
+runs the shared feature code: the result answers ``what Kp would these conditions give if they had been
+steady?''. The apps state this assumption next to the result. As a sanity check, quiet inputs give Kp $\approx 0.6$,
+and $|B| = 40$\,nT, $B_z = -35$\,nT, $V = 800$\,km/s give Kp $\approx 8.2$.
+
+\paragraph{Input validation.} Each field must be numeric and within physical limits (for example speed
+200--3000\,km/s, density 0.01--200\,cm$^{-3}$). $|B|$ must not be smaller than the magnitude of its components
+(with a small tolerance). Errors are returned per field: HTTP 400 with a JSON object in the API, or red
+messages under each field in the web form.
+
+\paragraph{Flask (localhost).} Routes: \code{GET /} (form plus a ``Use live data'' button), \code{GET /live}
+(live nowcast, which also pre-fills the form with the latest hourly values), \code{POST /predict} (JSON API),
+\code{GET /api/live} (JSON live nowcast, HTTP 503 if NOAA is unreachable), and \code{GET /health}. Live results
+are cached for 5 minutes. Nine tests cover validation, error messages, the offline case and response shapes, with
+the network mocked.
 
 %=====================================================================
 \section{Limitations and future work}

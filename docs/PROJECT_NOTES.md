@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4 ✅ (live nowcast) · Phase 5–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4 ✅ (live nowcast) · Phase 5 🟡 (Flask ✅; Streamlit, HF Space pending) · Phase 6–7 ⬜
 
 ---
 
@@ -458,4 +458,33 @@ The spacecraft sits ~1.5 million km upstream, so the solar wind it measures reac
 - Figure `16_live_nowcast.png`. Numbers are in `reports/metrics/live_snapshot.csv`; each run gives a new snapshot.
 
 **Next:** Phase 5, the three deployments (Streamlit, Hugging Face Space, Flask), all calling `nowcast()`.
+
+---
+
+## Phase 5 — Deployments
+
+### 5a. Flask app (localhost) ✅
+**Run:** from the project folder, `.venv\Scripts\python app\flask_app\app.py`, then open http://127.0.0.1:5000.
+
+| Route | What it does |
+|---|---|
+| `GET /` | Web page with a form for the 8 inputs (|B|, Bx, By, Bz, speed, density, temperature, F10.7) and a **"Use live data"** button |
+| `POST /` | Form submit → Kp, 80% range and storm level, or the form again with a red message under each bad field |
+| `GET /live` | Live nowcast from NOAA (Kp now, next hour, last 24 h table), and **fills the form with the latest live values** so you can tweak them |
+| `POST /predict` | JSON API: send the 8 fields, get `kp_pred`, `kp_lo`, `kp_hi`, `level`. Bad input → HTTP 400 with an error per field and the allowed ranges |
+| `GET /api/live` | JSON live nowcast; HTTP 503 with a clear message if NOAA is unreachable |
+| `GET /health` | Model version and training cutoff |
+
+**Manual input, and why "steady for 3 days":** the model also uses lags (1–9 h ago) and 6–24 h averages, which a single set of numbers can't supply. `predict.predict_steady` repeats the entered values for the past 3 days, i.e. it answers *"what Kp would these conditions give if they had been steady?"*, and still runs the shared `build_features`. The page says this explicitly. Example: quiet inputs → Kp 0.6; |B| 40, Bz −35, 800 km/s → Kp 8.2.
+
+**Validation** (`predict.validate_inputs`, shared by all apps):
+- Every field must be present and numeric.
+- Each value must fall within physical limits, e.g. speed 200–3000 km/s and density 0.01–200 cm⁻³.
+- |B| can't be smaller than the size of its own components.
+
+**Other details:**
+- Live results are cached for 5 minutes (NOAA updates every minute; no need to download on every click).
+- Works in light and dark mode.
+- `tests/test_flask_app.py` has 9 tests with the network mocked: valid/invalid JSON, a per-field error message, the |B| consistency check, a non-object JSON body, HTML error display, the NOAA-offline case (503), and the live JSON shape. **23 tests total, all passing.**
+- `flask==3.1.3` is pinned in `requirements.txt`.
 

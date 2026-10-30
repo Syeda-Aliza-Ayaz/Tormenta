@@ -50,3 +50,59 @@ def nowcast(bundle: dict | None = None, now=None) -> tuple[pd.DataFrame, pd.Data
     bundle = load_bundle() if bundle is None else bundle
     hourly = fetch_live.fetch_solar_wind()
     return predict_hourly(bundle, hourly, fetch_live.fetch_f107(), now), hourly
+
+
+# ── Manual input (all three apps) ────────────────────────────────────────────
+# Physical limits for a single hourly value; anything outside is almost certainly a typo.
+INPUT_LIMITS = {
+    "b_scalar": (0.1, 200.0, "|B| (nT)"), "bx": (-200.0, 200.0, "Bx GSM (nT)"),
+    "by_gsm": (-200.0, 200.0, "By GSM (nT)"), "bz_gsm": (-200.0, 200.0, "Bz GSM (nT)"),
+    "speed": (200.0, 3000.0, "speed (km/s)"), "density": (0.01, 200.0, "density (cm⁻³)"),
+    "temperature": (1e3, 1e8, "temperature (K)"), "f107": (50.0, 500.0, "F10.7 (sfu)"),
+}
+
+
+def validate_inputs(raw: dict) -> tuple[dict, dict]:
+    """Parse and check manual inputs → (values, errors). Errors map field → message."""
+    values, errors = {}, {}
+    for field, (lo, hi, label) in INPUT_LIMITS.items():
+        text = str(raw.get(field, "")).strip()
+        if not text:
+            errors[field] = f"{label} is required."
+            continue
+        try:
+            v = float(text)
+        except ValueError:
+            errors[field] = f"{label} must be a number."
+            continue
+        if not np.isfinite(v) or not lo <= v <= hi:
+            errors[field] = f"{label} must be between {lo:g} and {hi:g}."
+        else:
+            values[field] = v
+    if not errors:
+        vector = np.sqrt(values["bx"] ** 2 + values["by_gsm"] ** 2 + values["bz_gsm"] ** 2)
+        if vector > 1.05 * values["b_scalar"] + 0.5:
+            errors["b_scalar"] = (f"|B| ({values['b_scalar']:g} nT) cannot be smaller than the size of its "
+                                  f"components ({vector:.1f} nT).")
+    return values, errors
+
+
+def predict_steady(bundle: dict, values: dict, when=None) -> dict:
+    """Kp for manually entered values, assuming they held steady for the past 3 days.
+
+    The model also uses lags and 24-h averages, which one set of numbers cannot provide; repeating the
+    values gives them a defined meaning (steady conditions) and still runs the shared build_features.
+    """
+    when = (pd.Timestamp.now("UTC").tz_localize(None) if when is None else pd.Timestamp(when)).floor("h")
+    hours = pd.date_range(when - pd.Timedelta(hours=72), when, freq="h")
+    hourly = pd.DataFrame({c: values[c] for c in config.SW_FEATURES}, index=hours)
+    days = pd.date_range(when.normalize() - pd.Timedelta(days=120), when.normalize(), freq="D")
+    f107 = pd.Series(values["f107"], index=days)
+    row = predict_with_interval(bundle, build_features(hourly, f107).iloc[[-1]]).iloc[0]
+    return {"time": f"{when:%Y-%m-%d %H:00} UTC", **{k: round(float(row[k]), 2) for k in row.index},
+            "level": storm_level(row["kp_pred"])}
+
+
+def storm_level(kp: float) -> str:
+    """NOAA level label for a Kp value (0-3, 4, 5 (G1), …)."""
+    return str(pd.cut([kp], config.KP_BINS, labels=config.KP_BIN_LABELS, right=False)[0])

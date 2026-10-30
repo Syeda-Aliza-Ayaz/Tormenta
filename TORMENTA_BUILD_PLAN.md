@@ -328,7 +328,7 @@ jobs:
 ### Phase 5 — Deployments
 - [ ] Streamlit: manual input, live data, interval, predicted-vs-SWPC timeline → public URL
 - [ ] HF Space: Gradio demo + model card → public URL
-- [ ] Flask: `/predict` + HTML form + validation/error messages → localhost
+- [x] Flask: `/predict` + HTML form + validation/error messages + `/live`, `/api/live`, `/health` → localhost (9 tests)
 - [ ] All three load the same `current.joblib` with the same pinned sklearn
 
 ### Phase 6 — Slow loop
