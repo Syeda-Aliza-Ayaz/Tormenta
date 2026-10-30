@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: Phase 3b complete (v2 in production); final round (v3) in progress}
+\date{Last updated: final round decided on CV and validation; final 03 run pending}
 
 \begin{document}
 \maketitle
@@ -889,7 +889,54 @@ validation years only. The pre-set rule is to adopt each change only if both CV 
 tested sequentially (storm memory first, then constraints on top of the winner). The test years and the gate
 holdout are not touched until the single re-run of \code{03\_modeling.ipynb}.
 
-\paragraph{Results.} \textit{Pending the runs of \code{05\_final\_round.ipynb} and \code{03\_modeling.ipynb}.}
+\paragraph{Results (\code{05\_final\_round.ipynb}, CV and validation only).}
+
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{15_learning_complexity.png}
+\caption{Left: learning curve (HistGB trained on every $k$-th training hour). Right: complexity curve (maximum
+leaves per tree). Train RMSE in blue, validation RMSE (2017--2019) in orange.}\label{fig:curves}
+\end{figure}
+
+\textbf{Reading Figure~\ref{fig:curves}.} On the left, the train/validation gap narrows as data grows, and
+validation error flattens: going from 83k to 167k hours improves it only from 0.525 to 0.522. On the right, larger
+trees keep reducing train error (0.591 to 0.339) while validation error is flat from 31 leaves (0.522) and rises
+slightly at 255 (0.523), the onset of overfitting. Neither more data nor more capacity helps, so \textbf{the model
+is not underfitting}: the remaining error is an information limit of the inputs. Solar wind measured at a single
+point (L1) cannot fully determine a global ground-based index. Unmeasured internal magnetospheric state, small-scale
+structure missed by the spacecraft, and the 3-hour, one-third-step quantisation of Kp itself all contribute.
+
+\begin{table}[H]\centering
+\caption{v3 candidates with fixed v2 hyperparameters (CV on 1998--2016; validation 2017--2019).}\label{tab:v3var}
+\begin{tabular}{lcccc}\toprule
+Variant & CV RMSE & val RMSE & val storm RMSE & Decision\\\midrule
+A: v2 & 0.5609 & 0.5219 & 0.853 & baseline\\
+B: v2 + storm memory & \textbf{0.5594} & 0.5229 & 0.854 & rejected (val worse)\\
+C: v2 + monotonic constraints & 0.5659 & 0.5275 & 0.859 & rejected\\\bottomrule
+\end{tabular}
+\end{table}
+
+Both ideas were rejected by the pre-set rule, so the final feature set equals v2's (66 features). Storm memory
+is redundant with the 12/24-h Newell means and block-so-far features already present. Monotonic constraints cost
+accuracy because, with correlated inputs, the partial effect of a single feature need not be monotonic even when the
+physics is. Reporting rejected ideas is part of the method: it shows the decision rule was applied as stated, not
+only when convenient.
+
+\begin{table}[H]\centering
+\caption{Coverage of the nominal 80\% band on data the quantile models did not train on.}\label{tab:cqr}
+\begin{tabular}{lcc}\toprule
+Calibration block & Raw coverage & After CQR margin\\\midrule
+2004-05 to 2007-07 & 70.4\% & 76.1\%\\
+2007-07 to 2010-09 & 74.9\% & 81.8\%\\
+2010-09 to 2013-11 & 73.4\% & 79.6\%\\
+2013-11 to 2016-12 & 75.2\% & 80.7\%\\
+2017-01 to 2019-12 (validation) & 76.0\% & 81.9\%\\\bottomrule
+\end{tabular}
+\end{table}
+The raw quantile band is consistently too narrow (70--76\%), the same pattern seen on test for v1 and v2. A single
+margin brings every period close to 80\%, so it is adopted. Its effect on test and on the gate holdout is reported
+after the final \code{03\_modeling.ipynb} run.
+
+\paragraph{Final test results.} \textit{Pending the re-run of \code{03\_modeling.ipynb}.}
 
 %=====================================================================
 \section{Key design decisions (for the viva)}

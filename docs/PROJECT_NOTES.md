@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c 🟡 (final round: code done, runs pending) · Phase 4–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c 🟡 (05 done; 03 re-run pending) · Phase 4–7 ⬜
 
 ---
 
@@ -347,7 +347,7 @@ Validation RMSE by position inside the 3-h block:
 | **Monotonic constraints** | `config.MONOTONIC_*`, `features.monotonic_cst`, `train._constrain` | Tells HistGB that Kp may only go **up** as speed, V·Bs or Newell coupling go up, and only **up** as Bz goes more negative. This is physics knowledge, so storms bigger than most of the training data behave sensibly. |
 | **Conformal interval (CQR)** | `train.conformal_margin`, `predict.py` | Measures how far observed Kp falls outside the q10–q90 band on data the quantile models **did not train on** (out-of-fold CV years 2007–2016 + validation 2017–2019). One margin is then added to both sides so coverage is 80% there. It is stored in the model bundle as `interval_margin`; v1/v2 bundles default to 0. |
 | **Learning + complexity curves** | `train.learning_curve`, `train.complexity_curve`, `evaluate.plot_diagnostic_curves` | They show whether more data or bigger trees would help: the textbook underfitting test. |
-| Flags | `config.USE_MEMORY_FEATURES`, `config.USE_MONOTONIC` | Set according to 05's decision. Both are `True` now and get switched off if 05 rejects them. |
+| Flags | `config.USE_MEMORY_FEATURES`, `config.USE_MONOTONIC` | Set according to 05's decision. **Both are now `False`** (rejected). The code stays, so the report can show what was tried. |
 | 2 new tests (9 total) | `tests/test_features.py` | Storm memory ignores data older than its 48 h window; the monotonic constraint names are real feature columns. |
 
 ### Leakage protocol
@@ -362,5 +362,42 @@ Validation RMSE by position inside the 3-h block:
 
 Both notebooks were smoke-tested in fast mode without errors. In fast mode the conformal step took test coverage from 69% to 80.5%.
 
-**Result:** ⏳ pending the team's runs.
+**Result of `05_final_round.ipynb` (2026-10-30), CV + validation only.** The browser stopped updating mid-run, but every cell finished and saved its CSV/figure, so the numbers below come from `reports/metrics/*.csv`.
+
+**1. Not underfitting** (figure `15_learning_complexity.png`):
+
+| max leaves per tree | 7 | 15 | **31** | 63 | 127 | 255 |
+|---|---|---|---|---|---|---|
+| train RMSE | 0.591 | 0.565 | 0.534 | 0.490 | 0.427 | 0.339 |
+| val RMSE | 0.535 | 0.527 | **0.522** | 0.521 | 0.522 | 0.523 |
+
+- Bigger trees keep lowering *train* error, but *validation* error is flat from 31 leaves on and starts rising at 255 (overfitting). So the model is complex enough.
+- Learning curve: val RMSE goes 0.578 (5k hours) → 0.537 (42k) → 0.525 (83k) → 0.522 (167k). Doubling the data at the end gains only 0.003, so more data of the same kind won't help much.
+- **Conclusion:** the remaining error is an *information limit*. The solar wind measured at one point (L1) can't fully determine a ground-based index, so it isn't a modelling flaw.
+
+**2. Variants** (fixed v2 settings):
+
+| | CV RMSE | val RMSE | storm RMSE | decision |
+|---|---|---|---|---|
+| A: v2 | 0.5609 | 0.5219 | 0.853 | baseline |
+| B: + storm memory | 0.5594 ✅ | 0.5229 ❌ | 0.854 | **rejected** (CV better, val worse) |
+| C: v2 + monotonic | 0.5659 ❌ | 0.5275 ❌ | 0.859 | **rejected** |
+
+- **Storm memory** adds nothing beyond the 12/24 h Newell means and block-so-far features v2 already has.
+- **Monotonic constraints** cost accuracy: once other features are fixed, Kp isn't strictly monotonic in each input (e.g. correlated features share the effect). Physics-plausible, but the data says no.
+- Both stay switched off. The model's features are identical to v2's (66 columns).
+
+**3. Conformal calibration works:**
+
+| calibration block (unseen by the model) | raw coverage | calibrated coverage |
+|---|---|---|
+| 2004-05 → 2007-07 | 70.4% | 76.1% |
+| 2007-07 → 2010-09 | 74.9% | 81.8% |
+| 2010-09 → 2013-11 | 73.4% | 79.6% |
+| 2013-11 → 2016-12 | 75.2% | 80.7% |
+| 2017 → 2019 (validation) | 76.0% | 81.9% |
+
+The raw band is consistently too narrow (70–76%). One margin brings every period close to 80%, and it is applied in 03.
+
+**Still pending:** the 03 re-run. The point model will match v2, but the intervals become calibrated; then the gate runs and the model is frozen.
 

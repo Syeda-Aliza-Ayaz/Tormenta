@@ -80,7 +80,7 @@ LONG_NEWELL_WINDOWS = [12, 24] # v2: coupling memory beyond 9 h
 BLOCK_SO_FAR_MEAN = ["newell", "vbs"]  # v2: running stats since the current Kp block started
 # v3 storm memory: exponentially decaying mean of energy input over a FIXED trailing window,
 # so the live path (SWPC 3-day feed) computes exactly what training computed
-USE_MEMORY_FEATURES = True     # set by 05_final_round.ipynb's decision
+USE_MEMORY_FEATURES = False    # 05_final_round: rejected (CV better, validation worse)
 MEMORY_COLUMNS = ["newell", "vbs"]
 MEMORY_HALFLIVES = [6, 24]     # hours
 MEMORY_WINDOW_HOURS = 48
@@ -103,7 +103,7 @@ QUANTILES = (0.1, 0.9)
 N_JOBS = 4                   # 7.4 GB RAM laptop: keep parallel workers modest
 SAMPLE_WEIGHT = lambda kp: 1 + kp / 3   # storm-weighting ablation
 # v3 physics constraints for HistGB: Kp may only rise (+1) / fall (-1) as these rise
-USE_MONOTONIC = True         # set by 05_final_round.ipynb's decision
+USE_MONOTONIC = False        # 05_final_round: rejected (CV and validation worse)
 MONOTONIC_INCREASING = ["speed", "vbs", "newell", "newell_mean3h", "newell_mean6h", "newell_mean9h",
                         "newell_mean12h", "newell_mean24h", "newell_block_mean", "newell_block_max",
                         "vbs_block_mean", "newell_decay6h", "newell_decay24h", "vbs_decay6h", "vbs_decay24h"]

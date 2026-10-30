@@ -308,7 +308,7 @@ jobs:
 - [x] Archive v2 results (`reports/v2/`)
 - [x] Storm-memory features (fixed 48 h decay window, train = live), monotonic constraints, CQR conformal margin
 - [x] Learning + complexity curves (underfitting check); 2 new tests (9 total)
-- [ ] Team runs `05_final_round.ipynb` → adopt each change only if CV **and** val improve; config flags match
+- [x] Team runs `05_final_round.ipynb` → storm memory and monotonic both rejected (flags off); not underfitting; CQR adopted
 - [ ] Team re-runs `03_modeling.ipynb` → v3 test once; conformal coverage; gate vs v2; docs updated; **model frozen**
 
 ### Phase 4 — Live nowcast

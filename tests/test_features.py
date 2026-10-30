@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from src import config
-from src.features import build_features, kp_history_features, monotonic_cst
+from src.features import build_features, derived, kp_history_features, monotonic_cst, storm_memory
 
 GEOMAGNETIC = ("kp", "ap", "dst", "ae", "al", "au", "pcn")
 
@@ -95,21 +95,22 @@ def test_kp_history_ablation_uses_only_previous_blocks():
 
 def test_storm_memory_uses_only_fixed_trailing_window(synthetic):
     """Live serving only has a few days of data: storm memory must ignore anything older than its window."""
-    hourly, f107 = synthetic
+    hourly, _ = synthetic
+    memory = lambda h: storm_memory(pd.concat([h, derived(h)], axis=1))
     t = hourly.index[80 * 24 + 7]
-    cols = [c for c in build_features(hourly, f107).columns if "_decay" in c]
-    assert cols
     old = hourly.copy()
     old.loc[:t - pd.Timedelta(hours=config.MEMORY_WINDOW_HOURS), ["bz_gsm", "speed"]] = [-40.0, 1200.0]
-    pd.testing.assert_series_equal(build_features(hourly, f107).loc[t, cols], build_features(old, f107).loc[t, cols])
+    pd.testing.assert_series_equal(memory(hourly).loc[t], memory(old).loc[t])
     assert config.MIN_HISTORY_HOURS >= config.MEMORY_WINDOW_HOURS
 
 
 def test_monotonic_constraints_name_real_features(synthetic):
     hourly, f107 = synthetic
-    cols = build_features(hourly, f107).columns
+    cols = set(build_features(hourly, f107).columns)
+    base = pd.concat([hourly, derived(hourly)], axis=1)
+    cols |= set(storm_memory(base).columns)          # storm memory is switched off in production
     cst = monotonic_cst(cols)
-    assert set(config.MONOTONIC_INCREASING + config.MONOTONIC_DECREASING) <= set(cols)
+    assert set(config.MONOTONIC_INCREASING + config.MONOTONIC_DECREASING) <= cols
     assert cst["newell"] == 1 and cst["bz_gsm"] == -1
 
 
