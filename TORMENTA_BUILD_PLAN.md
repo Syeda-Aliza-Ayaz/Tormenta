@@ -37,12 +37,16 @@ Dropped: columns 11–15 (recomputed instead, §0.2) and sunspot number (no clea
 ### Serving tier (live) — NOAA SWPC, no auth (`https://services.swpc.noaa.gov`)
 | Data | Endpoint |
 |---|---|
-| IMF (Bt, Bx/By/Bz GSM) | `/products/solar-wind/mag-3-day.json` (fallback `mag-7-day.json`) |
-| Plasma (density, speed, temperature) | `/products/solar-wind/plasma-3-day.json` (fallback `plasma-7-day.json`) |
-| Estimated Kp (3-hourly, for comparison only) | `/products/noaa-planetary-k-index.json` |
-| F10.7 | `/products/summary/10cm-flux.json` for the latest daily value; trailing 81-day mean read from `data/f107_history.csv` (built from GFZ `F10.7obs`, refreshed by the slow loop — no 81-day fetch at inference) |
+**Verified 2026-10-30.** The `products/solar-wind/{mag,plasma}-N-day.json` feeds originally planned here return **404** (retired), and `json/rtsw/*` only holds 24 h.
 
-Feature windows need ≥ 24 h of history (24 h trailing speed mean), hence the 3-day products. Verify endpoint shapes in Phase 4.
+| Data | Endpoint |
+|---|---|
+| IMF (Bt, Bx/By/Bz **GSM**) + plasma (speed, density, temperature), 1-min | `/products/geospace/propagated-solar-wind.json`: **7 days**, active L1 spacecraft, **already propagated to Earth** (~50–75 min, field `propagated_time_tag`); values identical to the active source in `json/rtsw/` |
+| Estimated Kp (3-hourly, comparison only) | `/products/noaa-planetary-k-index.json` (list of `{time_tag, Kp, …}`) |
+| GFZ quick-look Kp (comparison; same producer as labels) | `https://kp.gfz.de/app/files/Kp_ap_nowcast.txt` |
+| F10.7 | `/products/10cm-flux-30-day.json` (observed flux, matches GFZ `F10.7obs` within 0.5) on top of `data/f107_history.csv` (GFZ, refreshed by the slow loop) |
+
+7 days of history comfortably covers the 24 h trailing windows plus a 48 h warm-up.
 
 ---
 
@@ -59,7 +63,7 @@ Feature windows need ≥ 24 h of history (24 h trailing speed mean), hence the 3
               update.py: fetch → preprocess → features →        │
               retrain → VALIDATION GATE ────────────────────────┘
                                                                 │ loads
-   NOAA SWPC 1-day feeds ──► fetch_live.py ──► resample hourly ──► features.py ──► predict
+   SWPC propagated solar wind (7 d) ──► fetch_live.py ──► hourly means ──► features.py ──► predict
               FAST LOOP (minutes, inference only): predicted Kp vs SWPC estimated Kp + chart
 ```
 
@@ -209,7 +213,7 @@ jobs:
 ---
 
 ## 6. Notes & report/viva points
-- **Propagation offset:** OMNI is time-shifted to the bow-shock nose; live SWPC data is raw L1. We accept this ~30–60 min offset as the effective nowcast horizon (a mild, documented train/serve inconsistency). Optional fix: ballistic delay Δt = distance/V on the live feed.
+- **Propagation offset:** resolved in Phase 4. SWPC's propagated product is already shifted to Earth, like OMNI, so live and training timing match. Because L1 data arrives ~1 h before it hits Earth, the newest live hour is a short-range forecast (flagged `ahead`).
 - **Label non-independence:** ~245k hourly rows, ~82k independent Kp labels.
 - **Storm imbalance:** Kp ≥ 5 is a few percent of rows; report error by storm level and the weighting ablation.
 - **Deliberate held-out extreme:** the May 2024 (Gannon, G5) storm falls in the 2020+ test set — an honest test of extreme-event generalization. Expect and discuss under-prediction at Kp 8–9.
@@ -226,7 +230,7 @@ jobs:
 | # | Issue in v1 | Decision in v2 |
 |---|---|---|
 | 1 | 3-h block aggregation used in-block (future) data unavailable mid-block live | Hourly cadence, trailing windows ending at *h*, label = Kp of block containing *h* |
-| 2 | OMNI (bow-shock-shifted, hourly) ≠ SWPC (raw L1, 1–5 min) | Resample live to hourly; accept ~30–60 min offset as nowcast horizon, documented |
+| 2 | OMNI (bow-shock-shifted, hourly) ≠ SWPC (raw L1, 1–5 min) | Phase 4: use SWPC's *propagated* 1-min feed (Earth-shifted) and average to OMNI-style hourly means |
 | 3 | Derived fields taken from OMNI precomputed columns | Recompute P, E, β, M_A from raw fields on both sides; no alpha correction |
 | 4 | `*-5-minute.json` too short for 9 h lags + rolling | Use `*-1-day.json` (3-day fallback) |
 | 5 | Sunspot number had no live source; CC BY-NC | Dropped; F10.7 kept |
@@ -252,6 +256,8 @@ jobs:
 | 25 | Interval coverage 75.7% < 80% | CQR margin from out-of-fold train years + validation, stored in the bundle |
 | 26 | Exponential storm memory over all history would differ live (3-day feed) | Fixed 48 h window; `MIN_HISTORY_HOURS` = 48 |
 | 27 | Repeated test evaluation erodes trust | v3 is the last round; decisions on CV + val only; then freeze |
+| 28 | Planned SWPC 3-day solar-wind feeds retired (404); RTSW only 24 h | `products/geospace/propagated-solar-wind.json` (7 d, Earth-propagated, GSM) |
+| 29 | NOAA estimated Kp differs from our label source | Compare live against GFZ quick-look Kp too (same producer as labels) |
 
 ---
 
@@ -312,11 +318,12 @@ jobs:
 - [x] Team re-runs `03_modeling.ipynb` → v3 test once (= v2 metrics); coverage 75.7% → 80.8%; promoted; **model frozen**
 
 ### Phase 4 — Live nowcast
-- [ ] Verify SWPC 1-day endpoint shapes
-- [ ] `fetch_live.py` → hourly frame with training's raw columns
-- [ ] Build `data/f107_history.csv` from GFZ `F10.7obs`; app reads it for the trailing 81-day mean
-- [ ] `predict.py` returns Kp + interval
-- [ ] Parity test: same hourly input via training path and live path → identical feature vectors
+- [x] Verify SWPC endpoint shapes → old 3-day feeds retired; switched to the propagated 7-day feed (decision 28)
+- [x] `fetch_live.py` → hourly frame with training's raw columns (OMNI-style hourly means, ≥ 20 min per hour)
+- [x] `data/f107_history.csv` from GFZ `F10.7obs` + SWPC 30-day feed for the newest days
+- [x] `predict.py`: `predict_hourly` / `nowcast()` return Kp + interval + `ahead` flag
+- [x] Parity test: SWPC-shaped minutes → live path gives identical features to the training path (14 tests)
+- [x] `06_live_nowcast.ipynb`: live snapshot vs GFZ quick-look and NOAA estimated Kp (figure 16)
 
 ### Phase 5 — Deployments
 - [ ] Streamlit: manual input, live data, interval, predicted-vs-SWPC timeline → public URL

@@ -22,13 +22,15 @@ OMNI_SPDF_URL = "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2_{ye
 GFZ_URL = "https://kp.gfz.de/app/files/Kp_ap_Ap_SN_F107_since_1932.txt"
 
 SWPC_BASE = "https://services.swpc.noaa.gov"
-# 3-day products: features need >= 24 h of history (24 h trailing speed mean)
-SWPC_MAG = SWPC_BASE + "/products/solar-wind/mag-3-day.json"
-SWPC_MAG_FALLBACK = SWPC_BASE + "/products/solar-wind/mag-7-day.json"
-SWPC_PLASMA = SWPC_BASE + "/products/solar-wind/plasma-3-day.json"
-SWPC_PLASMA_FALLBACK = SWPC_BASE + "/products/solar-wind/plasma-7-day.json"
-SWPC_KP = SWPC_BASE + "/products/noaa-planetary-k-index.json"
-SWPC_F107 = SWPC_BASE + "/products/summary/10cm-flux.json"
+# Checked 2026-10-30: the old products/solar-wind/{mag,plasma}-N-day.json feeds are gone (404).
+# Propagated solar wind: 7 days of 1-min IMF (GSM) + plasma from the active L1 spacecraft,
+# already time-shifted to Earth (~50–75 min), like OMNI's bow-shock shift.
+SWPC_SOLAR_WIND = SWPC_BASE + "/products/geospace/propagated-solar-wind.json"
+SWPC_KP = SWPC_BASE + "/products/noaa-planetary-k-index.json"        # estimated Kp, comparison only
+GFZ_NOWCAST_URL = "https://kp.gfz.de/app/files/Kp_ap_nowcast.txt"   # GFZ quick-look Kp (same producer as labels)
+SWPC_F107 = SWPC_BASE + "/products/10cm-flux-30-day.json"           # observed Penticton flux, daily
+LIVE_MIN_MINUTES = 20        # an hour needs >= 20 one-minute samples, else that column is NaN
+REQUEST_TIMEOUT = 60         # seconds (slow connections)
 
 # ── OMNI subset (.lst) columns, in .fmt order ────────────────────────────────
 OMNI_LST_COLUMNS = [
@@ -87,7 +89,7 @@ MEMORY_WINDOW_HOURS = 48
 F107_TRAILING_DAYS = 81
 F107_SPIKE_WINDOW_DAYS = 27    # flare-spike check against the trailing median
 F107_SPIKE_RATIO = 2.0         # value > 2× trailing median → treated as flare-contaminated
-MIN_HISTORY_HOURS = 48         # live window needed for the longest trailing window (SWPC 3-day feed)
+MIN_HISTORY_HOURS = 48         # live warm-up: hours dropped before the first prediction (>= longest window; feed has 7 days)
 
 # ── Split & training ─────────────────────────────────────────────────────────
 TRAIN_YEARS = (1998, 2016)

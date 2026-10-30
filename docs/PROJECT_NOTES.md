@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4 ✅ (live nowcast) · Phase 5–7 ⬜
 
 ---
 
@@ -415,4 +415,47 @@ The raw band is consistently too narrow (70–76%). One margin brings every peri
 
 ### 🧊 Model frozen
 No more modelling rounds. The test set has been used once per version (v1, v2, v3), and further tuning against it would make it less trustworthy. Next is Phase 4 (live nowcast).
+
+---
+
+## Phase 4 — Live nowcast
+
+**Goal:** predict Kp *right now* from NOAA's real-time data, using exactly the same feature code and model as training.
+
+### Surprise: the planned live feeds no longer exist
+We checked every endpoint before writing code. SWPC has **retired** the `products/solar-wind/mag-3-day.json` and `plasma-3-day.json` feeds in the plan (404), and the new `json/rtsw/` feeds only keep 24 hours. We found a better replacement:
+
+**`products/geospace/propagated-solar-wind.json`**
+- **7 days** of 1-minute IMF + plasma from whichever L1 spacecraft is active (now "SOLAR1"; ACE and IMAP are backups).
+- **Already time-shifted to Earth** (delay 50–75 min), just like OMNI. This *fixes* the "propagation offset" problem in the original plan: live and training timing now match.
+- Checked: Bx/By/Bz are **GSM** (identical to RTSW's `*_gsm` columns), and `bt` is the field magnitude, like OMNI's scalar B.
+
+Also checked:
+- **F10.7:** SWPC's 30-day feed matches GFZ's observed F10.7 within 0.5 (rounding), so it's the same measurement.
+- **NOAA Kp feed:** its format has changed (now a list of `{time_tag, Kp, …}`); the parser handles the new format.
+
+### Files
+| File | What it does | Why |
+|---|---|---|
+| `src/ingest/fetch_live.py` | Downloads the feeds, renames SWPC fields to our training column names, averages 1-min data into **OMNI-style hours** (hour HH = mean of HH:00–HH:59). An hour needs ≥ 20 minutes of data per column, else NaN. Merges F10.7: GFZ history file first, SWPC only for newer days. Also parses NOAA estimated Kp and GFZ quick-look Kp. | The live data must look exactly like training data before it reaches `features.py`. |
+| `src/predict.py` → `predict_hourly`, `nowcast()` | Builds features with the **same** `build_features`, drops the first 48 h (warm-up for trailing windows), skips hours with no current Bz/speed, predicts Kp + 80% range, and flags `ahead` hours. | One code path for everything; no train/serve skew. |
+| `src/evaluate.py` → `attach_block_kp`, `plot_live` | Matches each hour to its 3-h Kp block; plots the nowcast vs GFZ and NOAA Kp. | Live sanity check. |
+| `tests/test_live.py` (5 tests, 14 total) | **Parity test:** fake SWPC 1-min data built from an hourly frame goes through the live path and gives *identical* features to the training path. Also: partial hours → NaN, F10.7 merge order, feed formats. | Proves no train/serve skew. |
+| `notebooks/06_live_nowcast.ipynb` | Live snapshot: inputs, Kp now, comparison table, figure 16. | Demo + report evidence. |
+
+### Why "ahead"?
+The spacecraft sits ~1.5 million km upstream, so the solar wind it measures reaches Earth about an hour later. The newest propagated hour is therefore slightly **in the future**: a free ~1 h forecast, which we label separately from the nowcast.
+
+### What we got (snapshot 2026-10-30, 25–30 Oct, quiet conditions)
+| compared with | hours | RMSE | MAE | bias | 80% coverage |
+|---|---|---|---|---|---|
+| **GFZ quick-look Kp** (our label source) | 121 | **0.59** | 0.41 | −0.25 | **88%** |
+| NOAA estimated Kp | 118 | 0.70 | 0.56 | −0.47 | 75% |
+
+- Against GFZ, the live error (0.59) is about the same as our test error (0.573). **The model works on real-time data as well as on the archive**, which is the main evidence that there's no train/serve skew.
+- NOAA's estimate runs ~0.2 higher than GFZ this week (they use different station sets and methods), which explains most of the worse NOAA numbers.
+- A slight under-prediction in very quiet hours (e.g. 30 Oct: slow wind ~315 km/s, density ~2): Kp ~1.5 observed vs ~0.3 predicted. Five quiet days is a small sample, so it's a sanity check, not a new test score.
+- Figure `16_live_nowcast.png`. Numbers are in `reports/metrics/live_snapshot.csv`; each run gives a new snapshot.
+
+**Next:** Phase 5, the three deployments (Streamlit, Hugging Face Space, Flask), all calling `nowcast()`.
 

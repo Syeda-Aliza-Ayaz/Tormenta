@@ -52,6 +52,12 @@ def rmse_by_block_hour(y, preds: dict) -> pd.DataFrame:
     return out
 
 
+def attach_block_kp(pred: pd.DataFrame, kp_blocks: pd.Series, name: str) -> pd.DataFrame:
+    """Add the Kp of the 3-h block containing each hour (e.g. NOAA estimated or GFZ Kp)."""
+    block = pred.index.floor(f"{config.KP_BLOCK_HOURS}h")
+    return pred.assign(**{name: kp_blocks.reindex(block).to_numpy()})
+
+
 def _save(fig, name):
     config.FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     fig.savefig(config.FIGURES_DIR / f"{name}.png", bbox_inches="tight")
@@ -136,6 +142,25 @@ def plot_diagnostic_curves(learning: pd.DataFrame, complexity: pd.DataFrame, nam
         ax.legend()
     fig.tight_layout()
     _save(fig, name)
+    return fig
+
+
+def plot_live(live: pd.DataFrame, name: str | None = None):
+    """Live nowcast with interval vs GFZ / NOAA Kp; hours ahead of the clock are shaded."""
+    fig, ax = plt.subplots(figsize=(12, 4))
+    ax.fill_between(live.index, live["kp_lo"], live["kp_hi"], alpha=0.25, label="80% interval")
+    ax.plot(live.index, live["kp_pred"], label="Tormenta nowcast")
+    for col, color, label in [("kp_gfz", "crimson", "GFZ quick-look Kp"), ("kp_swpc", "darkorange", "NOAA estimated Kp")]:
+        if col in live:
+            ax.step(live.index, live[col], where="post", color=color, label=label)
+    if live["ahead"].any():
+        ax.axvspan(live.index[live["ahead"]].min(), live.index.max(), color="grey", alpha=0.15,
+                   label="ahead of now (propagated data)")
+    ax.axhline(config.STORM_THRESHOLD, color="grey", ls="--", lw=1)
+    ax.set(title="Live nowcast vs observed Kp", ylabel="Kp", ylim=(0, 9.3))
+    ax.legend(loc="upper left")
+    if name:
+        _save(fig, name)
     return fig
 
 

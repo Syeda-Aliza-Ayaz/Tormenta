@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: Phase 3 complete; final model (v3) frozen}
+\date{Last updated: Phase 4 complete (live nowcast)}
 
 \begin{document}
 \maketitle
@@ -143,8 +143,8 @@ observed and adjusted F10.7. &
 \url{https://kp.gfz.de} &
 CC BY 4.0 (sunspot numbers CC BY-NC, not used)\\\addlinespace
 NOAA SWPC real-time &
-Features (live serving only). Real-time L1 IMF and plasma (DSCOVR/ACE), estimated Kp for comparison, daily
-F10.7. &
+Features (live serving only). 1-min IMF (GSM) and plasma from the active L1 spacecraft, already propagated to
+Earth (7 days); daily F10.7; NOAA estimated Kp for comparison. &
 \url{https://services.swpc.noaa.gov} (JSON, no authentication) &
 US Government public domain\\\bottomrule
 \end{tabularx}\end{table}
@@ -152,10 +152,11 @@ US Government public domain\\\bottomrule
 \paragraph{Two-tier design.} OMNI is definitive but delayed, so it is used for (re)training. SWPC is real-time
 but raw, so it is used for live inference. The archive and the live feed differ in two documented ways:
 \begin{itemize}
-\item \textbf{Cadence:} OMNI is hourly and SWPC is 1--5 min. Live data is resampled to hourly means before
-feature engineering.
-\item \textbf{Propagation:} OMNI is time-shifted to the bow-shock nose, while SWPC is at L1. We accept this
-$\sim$30--60 min offset as the nowcast horizon.
+\item \textbf{Cadence:} OMNI is hourly and SWPC is 1-min. Live data is averaged into OMNI-style hourly means
+before feature engineering.
+\item \textbf{Propagation:} OMNI is time-shifted to the bow-shock nose. The live feed we use
+(\code{propagated-solar-wind.json}) is also time-shifted to Earth by SWPC, so the timing of the two matches
+(Section~\ref{sec:live}).
 \end{itemize}
 
 \paragraph{Suggested data acknowledgements for the report.}
@@ -459,8 +460,8 @@ magnetospheric response time. It decays to 0.25 at 6\,h and 0.20 at 9\,h.
 \item \textit{Implication:}
   \begin{itemize}
   \item This justifies the 1/3/6/9\,h lags and the trailing windows.
-  \item It suggests adding 12--24\,h trailing speed means. That requires $\geq$33\,h of live history, so the live
-  app would use SWPC's 3-day products.
+  \item It suggests adding 12--24\,h trailing speed means. These need more than a day of live history, which
+  the 7-day propagated feed provides (Section~\ref{sec:live}).
   \end{itemize}
 \end{itemize}
 \easy{Earth reacts to the solar wind with about an hour's delay, and a fast wind stream keeps things stirred up
@@ -865,7 +866,7 @@ x^{\mathrm{decay}}_{h}(t) = \frac{\sum_{k=0}^{47} w_k\, x(t-k)\,\mathbb{1}[x(t-k
 \]
 set to missing if less than half the total weight is present. This is a crude analogue of the ring-current
 energy budget (Burton-type models): energy is injected by coupling and decays over hours to days. The window is
-fixed at 48\,h, not an exponential average over all history, so the live path (SWPC 3-day feed) computes exactly
+fixed at 48\,h, not an exponential average over all history, so the live path (SWPC 7-day feed) computes exactly
 the same value as training. A unit test checks that data older than 48\,h has no effect.
 
 \paragraph{Monotonic constraints.} HistGB supports per-feature monotonic constraints. We impose that the
@@ -1045,14 +1046,69 @@ run a parity test.
 \end{description}
 
 %=====================================================================
+\section{Live nowcast (Phase 4)}\label{sec:live}
+%=====================================================================
+\paragraph{Endpoint verification.} Before coding, every planned endpoint was fetched. The SWPC
+\code{products/solar-wind/\{mag,plasma\}-3-day.json} feeds named in the original plan have been retired (HTTP
+404), and the replacement \code{json/rtsw/} feeds keep only 24\,h. We use
+\code{products/geospace/propagated-solar-wind.json} instead:
+\begin{itemize}
+\item 7 days of 1-min data from the active L1 spacecraft (SOLAR1 at the time of writing, with ACE and IMAP as
+backups);
+\item already propagated to Earth, with delays of 50--73\,min in the sample, the same kind of shift OMNI applies;
+\item IMF verified to be in GSM (identical to the \code{*\_gsm} columns of the raw feed), and plasma values
+identical to the raw feed.
+\end{itemize}
+SWPC's daily F10.7 matched GFZ's observed flux to within 0.5\,sfu on 26 overlapping days, confirming they are the
+same measurement.
+
+\paragraph{Pipeline.} \code{fetch\_live.py} maps SWPC fields to the training column names and averages the
+1-min values into hourly means labelled by the hour start, like OMNI. An hour needs at least 20 samples per
+column, otherwise that value is missing. F10.7 comes from the GFZ history file, with SWPC filling only days not yet
+in it. \code{predict.nowcast()} then calls the \emph{same} \code{build\_features} as training. It discards the
+first 48\,h as warm-up for the trailing windows, skips hours without current $B_z$ or speed, and returns Kp with
+the calibrated 80\% interval.
+
+\paragraph{Parity test.} An hourly frame is expanded into SWPC-formatted 1-min records (JSON-style header and rows,
+\code{propagated\_time\_tag} strings, \code{null} for gaps), passed through the live path, and compared with the
+training path. The feature matrices are identical, which demonstrates that there is no train/serve skew in the
+code.
+
+\paragraph{Short-range forecast for free.} Because L1 data reaches Earth about an hour after it is measured, the
+newest propagated hour lies after the current UTC hour. Such hours are flagged \code{ahead} and shown separately
+as a $\sim$1-h forecast.
+
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{16_live_nowcast.png}
+\caption{Live snapshot (25--30 Oct 2026): Tormenta nowcast with 80\% interval vs GFZ quick-look Kp and NOAA
+estimated Kp.}
+\end{figure}
+
+\begin{table}[H]\centering
+\caption{Live snapshot, past hours only, quiet conditions (Kp $\le 3$).}\label{tab:live}
+\begin{tabular}{lcccccc}\toprule
+Reference & Hours & RMSE & MAE & Bias & 80\% coverage & Mean ref Kp\\\midrule
+GFZ quick-look Kp & 121 & 0.59 & 0.41 & $-0.25$ & 88\% & 1.17\\
+NOAA estimated Kp & 118 & 0.70 & 0.56 & $-0.47$ & 75\% & 1.39\\\bottomrule
+\end{tabular}
+\end{table}
+Against GFZ quick-look Kp (the producer of our training labels), the live error of 0.59 is in line with the test
+RMSE of 0.573. Real-time inputs therefore give archive-level accuracy, the practical evidence that the live path
+matches training. NOAA's estimate runs about 0.2 Kp above GFZ's for these days, because the two use different
+magnetometer networks and methods; this accounts for most of the larger error against NOAA. The model is
+slightly low in the quietest hours. Five quiet days are a small sample, so this is a sanity check, not a new
+generalisation estimate.
+
+%=====================================================================
 \section{Limitations and future work}
 %=====================================================================
 \begin{itemize}
 \item The horizon is limited to L1 transit time (about 1\,h). Longer lead times need solar imagery and CME
 propagation models.
-\item There is a propagation offset between OMNI (bow shock) and SWPC (L1); an optional ballistic delay
-correction is possible.
-\item Extreme storms are rare, so storms are systematically under-predicted (HistGB G3+ bias $-0.63$ Kp).
+\item SWPC's propagation to Earth is a model (ballistic, from L1); errors of tens of minutes are possible
+and are not represented in OMNI's own shift method. The live feed could also change format or be retired again,
+as the originally planned feeds were.
+\item Extreme storms are rare, so storms are systematically under-predicted (final HistGB G3+ bias $-0.57$ Kp on test).
 \item Sudden storm onsets are caught 1--2\,h late within a 3-h Kp block.
 \item The 80\% interval is slightly narrow (77--78\% coverage); conformal calibration is a possible fix.
 \item Future work: MLflow/Airflow orchestration, sequence models, CME/coronal-hole inputs.
