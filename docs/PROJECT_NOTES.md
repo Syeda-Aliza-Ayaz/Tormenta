@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c 🟡 (05 done; 03 re-run pending) · Phase 4–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4–7 ⬜
 
 ---
 
@@ -399,5 +399,20 @@ Both notebooks were smoke-tested in fast mode without errors. In fast mode the c
 
 The raw band is consistently too narrow (70–76%). One margin brings every period close to 80%, and it is applied in 03.
 
-**Still pending:** the 03 re-run. The point model will match v2, but the intervals become calibrated; then the gate runs and the model is frozen.
+**Result of the final `03_modeling.ipynb` run (2026-10-30):**
+- Features (66) and tuned settings are identical to v2, so **point predictions and test metrics are exactly v2's**: HistGB test RMSE 0.573, MAE 0.437, R² 0.808, storm RMSE 0.846. Every model's test numbers matched v2 to the last digit, a good reproducibility check.
+- **Conformal margin = +0.062 Kp** on each side of the band.
+
+| 80% interval | raw (v2) | conformal (v3) |
+|---|---|---|
+| test 2020 → 2026-01 coverage | 75.7% | **80.8%** |
+| gate holdout (last 6 months) coverage | 77.4% | **82.0%** |
+| mean width on test | 1.29 Kp | 1.41 Kp |
+
+  The band is now honest: it contains the truth about 80% of the time, at the cost of being 0.12 Kp wider.
+- **Gate:** same RMSE as v2 (0.580 vs 0.580 ≤ 1.02×), so **v3 promoted**: `models/tormenta_v20261030_0737.joblib` → `current.joblib`. v1 and v2 are kept for rollback.
+- The browser lost its connection again mid-run, so the saved notebook is missing the printed tables for sections 2–5. All results are in `reports/metrics/*.csv` and `reports/figures/`.
+
+### 🧊 Model frozen
+No more modelling rounds. The test set has been used once per version (v1, v2, v3), and further tuning against it would make it less trustworthy. Next is Phase 4 (live nowcast).
 

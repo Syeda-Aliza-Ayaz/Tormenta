@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: final round decided on CV and validation; final 03 run pending}
+\date{Last updated: Phase 3 complete; final model (v3) frozen}
 
 \begin{document}
 \maketitle
@@ -936,7 +936,47 @@ The raw quantile band is consistently too narrow (70--76\%), the same pattern se
 margin brings every period close to 80\%, so it is adopted. Its effect on test and on the gate holdout is reported
 after the final \code{03\_modeling.ipynb} run.
 
-\paragraph{Final test results.} \textit{Pending the re-run of \code{03\_modeling.ipynb}.}
+\subsection{Final model (v3) and freeze}
+The final \code{03\_modeling.ipynb} run used the v2 features (66) and re-tuned all families. CV chose the same
+settings as before, so every model's test metrics reproduced the v2 values exactly (HistGB: RMSE 0.573, MAE 0.437,
+$R^2$ 0.808, storm RMSE 0.846). The only change is the calibrated interval, with a CQR margin $m = +0.062$\,Kp.
+
+\begin{table}[H]\centering
+\caption{Effect of conformal calibration on the nominal 80\% interval.}\label{tab:cqrfinal}
+\begin{tabular}{lcc}\toprule
+ & Raw quantile band (v2) & Conformal band (v3)\\\midrule
+Coverage, test 2020--2026-01 & 75.7\% & \textbf{80.8\%}\\
+Coverage, gate holdout (2025-07 to 2026-01) & 77.4\% & \textbf{82.0\%}\\
+Mean width on test & 1.29 Kp & 1.41 Kp\\\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{14_may2024_nowcast.png}
+\caption{Final model (v3) on the May 2024 storm, with the conformally calibrated 80\% band. The model was trained
+on 1998--2019 only.}
+\end{figure}
+
+The margin was estimated only from training and validation years, yet it lifts coverage to the nominal level on
+both later periods. This is evidence that the calibration transfers across the solar cycle. On the gate holdout,
+v3 matches v2's RMSE (0.580), so it was promoted
+(\code{models/tormenta\_v20261030\_0737.joblib}).
+
+\paragraph{Freeze.} Modelling ends here. Each version (v1, v2, v3) was evaluated on the test set exactly once,
+and every adoption decision was made on CV and validation by a rule fixed in advance. Further rounds would make
+the test estimate optimistic, so the reported test error of 0.573 RMSE stands as the final estimate of
+generalisation error.
+
+\paragraph{Summary of the improvement rounds.}
+\begin{table}[H]\centering\small
+\caption{HistGB across versions (test 2020 to 2026-01, 52{,}848 hours).}\label{tab:versions}
+\begin{tabular}{lccccc}\toprule
+Version & Features & Test RMSE & Storm RMSE & 80\% coverage & Change\\\midrule
+v1 & 56 & 0.585 & 0.876 & 77.0\% & baseline model\\
+v2 & 66 & 0.573 & 0.846 & 75.7\% & block-so-far, pressure dynamics, 12/24-h coupling\\
+v3 (final) & 66 & 0.573 & 0.846 & \textbf{80.8\%} & conformal interval; storm memory and constraints rejected\\\bottomrule
+\end{tabular}
+\end{table}
 
 %=====================================================================
 \section{Key design decisions (for the viva)}
