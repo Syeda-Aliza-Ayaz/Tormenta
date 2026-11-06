@@ -116,5 +116,42 @@
       "holdout": "2025-07-10 23:00:00 \u2192 2026-01-10 23:00:00"
     },
     "promoted": true
+  },
+  {
+    "version": "tormenta_v20261106_1027",
+    "created_utc": "2026-11-06T10:27:42+00:00",
+    "trained_until": "2025-12-30 22:00:00",
+    "params": {
+      "l2_regularization": 0.2801635158716261,
+      "learning_rate": 0.039088721491346144,
+      "max_iter": 700,
+      "max_leaf_nodes": 31,
+      "min_samples_leaf": 50
+    },
+    "weighted": false,
+    "n_features": 66,
+    "test": {},
+    "gate": {
+      "rmse": 0.5800634055419213,
+      "mae": 0.44730908295056293,
+      "r2": 0.8246010957768029,
+      "storm_rmse": 0.8975422995407082,
+      "storm_mae": 0.7029879564924401,
+      "n": 4369.0,
+      "coverage_80": 0.823071641107805,
+      "holdout": "2025-12-30 23:00:00 \u2192 2026-06-30 23:00:00"
+    },
+    "incumbent_gate": {
+      "rmse": 0.5790777453762079,
+      "mae": 0.4458681393607481,
+      "r2": 0.8251966749045386,
+      "storm_rmse": 0.87493844107941,
+      "storm_mae": 0.6790040547061352,
+      "n": 4369.0,
+      "coverage_80": 0.8226138704509041,
+      "holdout": "2025-12-30 23:00:00 \u2192 2026-06-30 23:00:00"
+    },
+    "promoted": true,
+    "note": "weekly retrain (frozen configuration; test set not re-scored)"
   }
 ]
