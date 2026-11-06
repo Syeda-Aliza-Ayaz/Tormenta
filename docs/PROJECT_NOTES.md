@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4 ✅ (live nowcast) · Phase 5 🟡 (Flask ✅; Streamlit, HF Space pending) · Phase 6–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4 ✅ (live nowcast) · Phase 5 🟡 (Flask ✅, Streamlit + HF Space built and tested; cloud deploy pending) · Phase 6–7 ⬜
 
 ---
 
@@ -487,4 +487,42 @@ The spacecraft sits ~1.5 million km upstream, so the solar wind it measures reac
 - Works in light and dark mode.
 - `tests/test_flask_app.py` has 9 tests with the network mocked: valid/invalid JSON, a per-field error message, the |B| consistency check, a non-object JSON body, HTML error display, the NOAA-offline case (503), and the live JSON shape. **23 tests total, all passing.**
 - `flask==3.1.3` is pinned in `requirements.txt`.
+
+### 5b. Code on GitHub ✅
+Public repo: **https://github.com/Syeda-Aliza-Ayaz/Tormenta** (uploaded 2026-11-06). Raw/processed data stay gitignored. Models (~3.5 MB each) and `data/f107_history.csv` are committed because the apps need them.
+
+### 5c. Streamlit dashboard: `app/streamlit_app.py` (built + tested; deploy pending)
+**Run locally:** `.venv\Scripts\streamlit run app\streamlit_app.py`
+
+**Three tabs:**
+- **Live nowcast:** Kp now (+ storm level), next hour if available, and current solar wind; the figure-16-style chart vs GFZ and NOAA Kp; live accuracy vs GFZ quick-look Kp; and the hourly table.
+- **Try your own inputs:** 8 number boxes with physical min/max, a "Fill with the latest live values" button, and Predict. Validation errors are shown in red (e.g. "|B| (5 nT) cannot be smaller than the size of its components (20.1 nT)").
+- **About the model:** test metrics, inputs, limitations and data credits.
+
+**Other details:**
+- Live data is cached for 5 minutes, and there's a Refresh button.
+- If NOAA doesn't answer, the app shows a friendly error instead of crashing. This happened once during testing on our slow connection, and the message appeared correctly.
+- **Tested** with Streamlit's `AppTest` on live data:
+  - no exceptions;
+  - Kp now 1.5 at 323 km/s;
+  - the fill button works;
+  - Bz −20 and 700 km/s with |B| 5 is rejected with the message above;
+  - with |B| 22, the prediction is **Kp 7.3 (G3+)**.
+
+### 5d. Hugging Face Space (Gradio): `app/hf_space/` (built + tested; deploy pending)
+| File | Purpose |
+|---|---|
+| `app.py` | Gradio app with a **Live** tab (button → Kp now, next hour, solar wind, chart) and a **Try your own inputs** tab (8 numbers + 3 examples: quiet, moderate, strong storm). Bad input shows a Gradio error popup. |
+| `README.md` | The Space's **model card**: task, model, inputs, training/selection, test results vs persistence, intended use, limitations, data licences. Its YAML header tells HF to use Gradio 6.31.0 and Python 3.12. |
+| `requirements.txt` | Same exact pins as training (scikit-learn 1.9.1!). Gradio comes from the YAML header. |
+| `sync_hf.py` | Uploads `app.py`, `README.md`, `requirements.txt`, `src/**`, `models/current.joblib` and `data/f107_history.csv` to the Space in one commit (creates the Space on the first run). It will also be used by the weekly retrain (Phase 6). |
+
+**Tested:**
+- moderate-storm example → Kp 7.0 (6.1–8.0);
+- a bad value → error popup;
+- live → Kp 1.5.
+
+`tests/test_hf_space.py` checks that the upload includes every file the app needs (24 tests total).
+
+**Versions:** `streamlit==1.67.0` is in `requirements.txt` (Streamlit Cloud installs it). `gradio==6.31.0` and `huggingface_hub==2.4.0` are in `requirements-dev.txt`, so Streamlit Cloud doesn't download Gradio.
 

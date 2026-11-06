@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: Phase 5 in progress (Flask app done)}
+\date{Last updated: Phase 5 in progress (all three apps built; cloud deployment pending)}
 
 \begin{document}
 \maketitle
@@ -1121,6 +1121,26 @@ messages under each field in the web form.
 \code{GET /api/live} (JSON live nowcast, HTTP 503 if NOAA is unreachable), and \code{GET /health}. Live results
 are cached for 5 minutes. Nine tests cover validation, error messages, the offline case and response shapes, with
 the network mocked.
+
+\paragraph{Streamlit (Streamlit Community Cloud).} The dashboard in \code{app/streamlit\_app.py} has three tabs:
+\begin{itemize}
+\item \emph{Live nowcast:} current Kp with storm level, the next hour when available, the current solar wind, the
+nowcast-versus-observed chart, live accuracy against GFZ quick-look Kp, and an hourly table;
+\item \emph{Try your own inputs:} bounded number inputs, a button that fills them with the latest live values, and
+per-field error messages;
+\item \emph{About the model:} test metrics, inputs, limitations and data credits.
+\end{itemize}
+It was tested with Streamlit's \code{AppTest} on live data. An inconsistent input ($|B| = 5$\,nT with
+$B_z = -20$\,nT) is rejected with an explanation, and a valid strong-driving input ($|B| = 22$\,nT,
+$B_z = -20$\,nT, 700\,km/s) gives Kp 7.3.
+
+\paragraph{Hugging Face Space (Gradio).} \code{app/hf\_space/} holds a Gradio app (live tab and manual tab with
+quiet, moderate and strong-storm examples), the Space's model card (\code{README.md}: task, model, data, test
+results against persistence, intended use, limitations, licences), and pinned requirements. \code{sync\_hf.py}
+uploads the app, \code{src/}, \code{models/current.joblib} and the F10.7 history in a single commit. A test checks
+that the upload includes every file the app imports or loads.
+
+\paragraph{Source code.} Public repository: \url{https://github.com/Syeda-Aliza-Ayaz/Tormenta}.
 
 %=====================================================================
 \section{Limitations and future work}

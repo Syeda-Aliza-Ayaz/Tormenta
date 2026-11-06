@@ -9,4 +9,4 @@ matplotlib==3.11.2
 requests==2.34.2
 # Phase 5 apps
 flask==3.1.3
-# still to add (need a fast connection): streamlit, gradio, huggingface_hub
+streamlit==1.67.0

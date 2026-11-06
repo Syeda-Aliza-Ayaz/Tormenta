@@ -326,7 +326,10 @@ jobs:
 - [x] `06_live_nowcast.ipynb`: live snapshot vs GFZ quick-look and NOAA estimated Kp (figure 16)
 
 ### Phase 5 — Deployments
+- [x] Code on GitHub: https://github.com/Syeda-Aliza-Ayaz/Tormenta (public)
+- [x] Streamlit app built + tested (`AppTest`, live data)
 - [ ] Streamlit: manual input, live data, interval, predicted-vs-SWPC timeline → public URL
+- [x] HF Space files built + tested: `app.py`, model card `README.md`, pinned `requirements.txt`, `sync_hf.py`
 - [ ] HF Space: Gradio demo + model card → public URL
 - [x] Flask: `/predict` + HTML form + validation/error messages + `/live`, `/api/live`, `/health` → localhost (9 tests)
 - [ ] All three load the same `current.joblib` with the same pinned sklearn
