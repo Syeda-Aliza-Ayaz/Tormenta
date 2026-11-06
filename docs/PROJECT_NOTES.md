@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4 ✅ (live nowcast) · Phase 5 ✅ (Flask local · Streamlit https://tormenta.streamlit.app/ · HF model repo + static Space) · Phase 6 ✅ (weekly retrain on GitHub Actions; dry run passed) · Phase 7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4 ✅ (live nowcast) · Phase 5 ✅ (Flask local · Streamlit https://tormenta.streamlit.app/ · HF model repo + static Space) · Phase 6 ✅ (weekly retrain on GitHub Actions; dry run passed) · Phase 7 ✅ (README, final viva material) — only the first real weekly run remains
 
 ---
 
@@ -574,3 +574,16 @@ candidate gate RMSE 0.5794 vs current 0.5791 (tolerance ×1.02) → promote: Tru
 - **The candidate is equally good (0.5794 vs 0.5791)** and within the 2% tolerance, so a real run would promote it. It's trained on 6 more months of data.
 
 **Next real run:** Monday's schedule, or "Run workflow" with dry run unticked. It will commit the new model (v4) and publish it to Hugging Face.
+
+---
+
+## Phase 7 — Wrap-up
+
+| What | Where |
+|---|---|
+| **README** (links, results, how it works, layout, setup, run notebooks/tests/apps, API example, weekly retrain, docs, credits) | `README.md` (shown on the GitHub front page) |
+| **Viva material moved to the end of the tex and updated to the final numbers**: final storm bias −0.57, v2/v3 weighting numbers, the propagated-feed horizon, final train/CV/val/test RMSE | `report_notes.tex` → "Key design decisions" + "Likely viva questions" |
+| **New viva questions**: underfitting (the curves), what didn't work (storm memory, monotonic, weighting, ensemble), cost of excluding past Kp, what the 80% interval means, live performance, drift over time, how weekly retraining avoids leakage | same |
+| **New key decisions**: rules fixed in advance, freezing, CQR, propagated feed, GFZ live check, frozen-config retrain, HF model repo | same |
+| **Limitations updated**: the interval is now calibrated (old "too narrow" point removed); added conformal drift and the small live sample; future work = sub-hourly data, +1–3 h forecasting, sequence models, CME inputs | same |
+| **sklearn safety**: `load_bundle` warns if the running scikit-learn differs from the training one; a test checks that `requirements.txt` and the HF requirements pin it exactly (31 tests total) | `src/predict.py`, `tests/test_hf_space.py` |

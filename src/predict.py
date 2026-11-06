@@ -4,16 +4,29 @@ Two entry points, both through the shared features.build_features:
   predict_with_interval(bundle, X)  — from a feature matrix (training/evaluation)
   nowcast()                         — live: SWPC → hourly → features → Kp + interval
 """
+import warnings
+
 import joblib
 import numpy as np
 import pandas as pd
+import sklearn
 
 from src import config
 from src.features import build_features
 
 
 def load_bundle(path=config.CURRENT_MODEL) -> dict:
-    return joblib.load(path)
+    """Load a model bundle; warn if this scikit-learn differs from the one it was trained with.
+
+    Pickled estimators are only guaranteed to behave identically under the same version, which is why every
+    deployment pins scikit-learn exactly.
+    """
+    bundle = joblib.load(path)
+    trained = bundle.get("sklearn_version")
+    if trained and trained != sklearn.__version__:
+        warnings.warn(f"model trained with scikit-learn {trained} but running {sklearn.__version__}; "
+                      "install the pinned version from requirements.txt", RuntimeWarning, stacklevel=2)
+    return bundle
 
 
 def predict_with_interval(bundle: dict, X: pd.DataFrame) -> pd.DataFrame:

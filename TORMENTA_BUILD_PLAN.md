@@ -336,7 +336,7 @@ jobs:
 - [x] HF Space files built + tested: `app.py`, model card `README.md`, pinned `requirements.txt`, `sync_hf.py`
 - [x] HF: Gradio Spaces now need PRO (402) → free model repo https://huggingface.co/aliza-ayaz/tormenta (model card) + static Space https://huggingface.co/spaces/aliza-ayaz/tormenta; Gradio app runs locally
 - [x] Flask: `/predict` + HTML form + validation/error messages + `/live`, `/api/live`, `/health` → localhost (9 tests)
-- [ ] All three load the same `current.joblib` with the same pinned sklearn
+- [x] All deployments load the same `current.joblib` with the same pinned sklearn (`load_bundle` warns on mismatch; test checks the pins)
 
 ### Phase 6 — Slow loop
 - [x] SPDF `omni2_YYYY.dat` parser → same schema as `.lst` parser (offline test + online test vs real 2024 file, passes in Actions)
@@ -348,6 +348,6 @@ jobs:
 - [ ] First real run (manual or Monday's schedule) → v4 committed + published
 
 ### Phase 7 — Wrap-up
-- [ ] README: setup, run instructions, 3 deployment links
-- [ ] Report assets: comparison table, plots, decision log
-- [ ] Viva points (§6) written up: propagation offset, autoregression vs leakage, label non-independence, weighting ablation
+- [x] README: setup, run instructions, deployment links
+- [x] Report assets: comparison tables (v1/v2/v3), 16 figures, key-decisions table in `report_notes.tex`
+- [x] Viva points written up and updated to final numbers (+ underfitting, rejected ideas, live check, drift, retrain leakage)

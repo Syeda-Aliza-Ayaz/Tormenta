@@ -1,10 +1,13 @@
 """The Hugging Face uploads must contain everything the model code and landing page use."""
 import importlib.util
 import re
+import warnings
 
 import pytest
+import sklearn
 
 from src import config
+from src.predict import load_bundle
 
 pytest.importorskip("huggingface_hub")
 
@@ -31,3 +34,14 @@ def test_space_page_images_are_uploaded(sync_hf):
     assert all(path.exists() for path in files.values())
     page = (config.ROOT / "app" / "hf_space" / "space" / "index.html").read_text(encoding="utf-8")
     assert set(re.findall(r'src="([^"]+)"', page)) <= set(files)
+
+
+def test_every_deployment_pins_the_training_sklearn():
+    """Streamlit (root requirements.txt) and the HF model repo must install the exact training scikit-learn."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        bundle = load_bundle()                          # raises if the local version differs
+    pin = f"scikit-learn=={bundle['sklearn_version']}"
+    assert bundle["sklearn_version"] == sklearn.__version__
+    for req in [config.ROOT / "requirements.txt", config.ROOT / "app" / "hf_space" / "requirements.txt"]:
+        assert pin in req.read_text(encoding="utf-8").splitlines(), req

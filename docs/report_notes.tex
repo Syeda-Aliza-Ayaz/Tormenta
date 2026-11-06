@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: Phase 6 complete (weekly retraining)}
+\date{Last updated: Phase 7 (wrap-up): README, final viva material}
 
 \begin{document}
 \maketitle
@@ -980,72 +980,6 @@ v3 (final) & 66 & 0.573 & 0.846 & \textbf{80.8\%} & conformal interval; storm me
 \end{table}
 
 %=====================================================================
-\section{Key design decisions (for the viva)}
-%=====================================================================
-\begin{longtable}{p{4.6cm}p{11.2cm}}\toprule
-Decision & Reason\\\midrule\endhead
-Regression, not classification & Kp is ordinal and continuous; regression keeps the full information. Storm/no-storm can be derived by thresholding.\\
-No geomagnetic indices as inputs & Same-time indices measure the target itself (leakage). Lagged Kp is technically autoregression, not leakage, but it is excluded by design so the model learns the solar-wind$\rightarrow$Kp physics and needs no live Kp feed. Persistence is still reported as a baseline.\\
-Hourly cadence with trailing windows & Matches what is available live mid-block (no in-block future data).\\
-Complete hourly grid before lags & Row shifts across gaps would silently give wrong lags.\\
-Time-ordered split (1998--2016 / 2017--2019 / 2020--2026) & Neighbouring hours are correlated; random splits leak information. \code{TimeSeriesSplit(5)} for CV within train.\\
-Imputation and scaling inside the Pipeline & Statistics are learned from training data only.\\
-Derived physics recomputed from raw fields & SWPC does not provide OMNI's precomputed columns; one formula is used on both sides.\\
-Trailing (not centred) F10.7 mean; previous-day value & The textbook F10.7a is centred $\pm$40 days (future data). The daily value is measured at about 20\,UT, so the same-day value is unavailable for most of the day.\\
-Train only on definitive Kp ($D=2$) & Preliminary values are revised.\\
-SVR/KNN on a strided subsample & Kernel SVR is $O(n^2$--$n^3)$. Striding keeps chronological order (valid TimeSeriesSplit) and spans both solar cycles.\\
-HistGradientBoosting as production model & Accurate, small file, handles NaN natively, and supports quantile loss for prediction intervals.\\
-Validation gate on a shared unseen holdout & Comparing models on different slices, or on data they trained on, would be meaningless.\\
-\bottomrule
-\end{longtable}
-
-%=====================================================================
-\section{Likely viva questions}
-%=====================================================================
-\begin{description}
-\item[Why is southward $B_z$ so important?] Dayside magnetic reconnection is efficient only when the IMF is
-anti-parallel to Earth's field. Our Fig.~4 shows the asymmetry directly.
-\item[Is using past Kp leakage?] Not strictly; it is autoregression. We exclude it by design and report
-persistence as a baseline to quantify what autoregression alone achieves.
-\item[Why not a random train/test split?] Hours within a storm are strongly correlated, so a random split
-would put near-duplicates in train and test and inflate the scores.
-\item[How many samples do you really have?] 245{,}688 hourly rows, but about 82{,}000 independent Kp labels,
-because three hours share one 3-hourly label.
-\item[What is your nowcast horizon?] About 30--60 minutes: the L1-to-Earth transit time. Training data is
-bow-shock-shifted while live data is raw L1, and we accept and document that offset.
-\item[How do you handle missing data?] NaN-native HistGB in production; median imputation inside the pipeline
-for other models, fitted on training data only. Long outages (>24\,h) are common for plasma data.
-\item[Why keep extreme values?] They coincide with real storms (Table above). Removing them would delete the
-events we care most about.
-\item[Why does the validation period matter?] 2017--2019 is solar minimum with very few large storms, so
-selecting models on it alone would favour quiet-time accuracy.
-\item[Why include hour-of-day and day-of-year?] The angle between Earth's dipole and the IMF (Russell--McPherron
-effect) modulates coupling with season and UT. Sin/cos encoding keeps 23\,h next to 0\,h and Dec~31 next to Jan~1.
-\item[How do you know your features don't leak?] An automated test recomputes features on truncated data and
-checks that past features are identical; every rolling window is trailing.
-\item[Why HistGB in production?] It has the best accuracy for its cost, a small file, native missing-value
-handling (live feeds have gaps) and quantile loss for prediction intervals.
-\item[Why does every model under-predict storms?] Regression toward the mean: storms are 4\% of hours, so
-squared-error training pulls extreme predictions toward typical values. HistGB has the smallest bias (G3+:
-$-0.63$). Sample weighting reduced storm RMSE by 4\% at a 2.5\% overall cost.
-\item[Why is the nowcast late at storm onset?] A Kp block covers 3 hours. In its first hour the model has not yet
-seen the solar wind that drives the rest of that block.
-\item[Is your model overfitting?] HistGB: train 0.548, CV 0.572, validation 0.530 RMSE are all close, so no.
-KNN memorises (train $\approx$0); Linear underfits.
-\item[How did you improve the model without overfitting to the test set?] Every change was judged on CV and the
-validation years by a rule fixed in advance. The test set was evaluated once per version, and both versions are
-reported.
-\item[Isn't ``what happened so far in this block'' leakage?] No. It only uses hours from the block start up to
-now, all of which are known in real time. A unit test changes a later hour of the block and checks that the
-earlier features do not move.
-\item[What is persistence and why compare to it?] ``Kp now = Kp of the previous block.'' It is the simplest
-forecast, and a model must beat it to be useful.
-\item[What is train/serve skew and how do you prevent it?] It is any difference between how features are
-computed in training and in production. We use one shared \code{features.py}, resample live data to hourly, and
-run a parity test.
-\end{description}
-
-%=====================================================================
 \section{Live nowcast (Phase 4)}\label{sec:live}
 %=====================================================================
 \paragraph{Endpoint verification.} Before coding, every planned endpoint was fetched. The SWPC
@@ -1185,6 +1119,100 @@ to July 2025) scored RMSE 0.5791 on this new, unseen half-year, in line with its
 2\% tolerance, so it would be promoted.
 
 %=====================================================================
+\section{Key design decisions (for the viva)}
+%=====================================================================
+\begin{longtable}{p{4.6cm}p{11.2cm}}\toprule
+Decision & Reason\\\midrule\endhead
+Regression, not classification & Kp is ordinal and continuous; regression keeps the full information. Storm/no-storm can be derived by thresholding.\\
+No geomagnetic indices as inputs & Same-time indices measure the target itself (leakage). Lagged Kp is technically autoregression, not leakage, but it is excluded by design so the model learns the solar-wind$\rightarrow$Kp physics and needs no live Kp feed. Persistence is still reported as a baseline.\\
+Hourly cadence with trailing windows & Matches what is available live mid-block (no in-block future data).\\
+Complete hourly grid before lags & Row shifts across gaps would silently give wrong lags.\\
+Time-ordered split (1998--2016 / 2017--2019 / 2020--2026) & Neighbouring hours are correlated; random splits leak information. \code{TimeSeriesSplit(5)} for CV within train.\\
+Imputation and scaling inside the Pipeline & Statistics are learned from training data only.\\
+Derived physics recomputed from raw fields & SWPC does not provide OMNI's precomputed columns; one formula is used on both sides.\\
+Trailing (not centred) F10.7 mean; previous-day value & The textbook F10.7a is centred $\pm$40 days (future data). The daily value is measured at about 20\,UT, so the same-day value is unavailable for most of the day.\\
+Train only on definitive Kp ($D=2$) & Preliminary values are revised.\\
+SVR/KNN on a strided subsample & Kernel SVR is $O(n^2$--$n^3)$. Striding keeps chronological order (valid TimeSeriesSplit) and spans both solar cycles.\\
+HistGradientBoosting as production model & Accurate, small file, handles NaN natively, and supports quantile loss for prediction intervals.\\
+Validation gate on a shared unseen holdout & Comparing models on different slices, or on data they trained on, would be meaningless.\\
+Decisions on CV + validation by rules fixed in advance & Every improvement (v2, v3) was adopted only if both CV and validation RMSE improved; the test set was scored once per version.\\
+Freeze after three versions & Each extra round of ``change, then check test'' makes the test estimate optimistic; the underfitting diagnostics showed little left to gain.\\
+Conformal (CQR) interval margin & The raw quantile band covered only about 75\%; a margin estimated on out-of-sample training/validation years restores 80\% coverage on test and on the gate holdout.\\
+SWPC propagated solar-wind feed & The planned feeds were retired; the propagated feed has 7 days of history and is time-shifted to Earth like OMNI, removing the L1 timing offset.\\
+Live check against GFZ quick-look Kp & Same producer as the training labels; NOAA's estimate uses a different method and runs about 0.2 higher.\\
+Weekly retrain of the frozen configuration & No re-tuning and no re-testing in the automated loop; the gate holdout is the only fair check of a model trained on the test years.\\
+HF model repository + static Space & Gradio Spaces now require a paid account; the Hub model card is the standard way to share a model, and the live app runs on Streamlit.\\
+\bottomrule
+\end{longtable}
+
+%=====================================================================
+\section{Likely viva questions}
+%=====================================================================
+\begin{description}
+\item[Why is southward $B_z$ so important?] Dayside magnetic reconnection is efficient only when the IMF is
+anti-parallel to Earth's field. Our Fig.~4 shows the asymmetry directly.
+\item[Is using past Kp leakage?] Not strictly; it is autoregression. We exclude it by design and report
+persistence as a baseline to quantify what autoregression alone achieves.
+\item[Why not a random train/test split?] Hours within a storm are strongly correlated, so a random split
+would put near-duplicates in train and test and inflate the scores.
+\item[How many samples do you really have?] 245{,}688 hourly rows, but about 82{,}000 independent Kp labels,
+because three hours share one 3-hourly label.
+\item[What is your nowcast horizon?] Kp for the current hour, plus about one hour ahead for free: the live feed
+is already propagated from L1 to Earth (50--75\,min), so the newest hour lies slightly in the future. Training
+data (OMNI) is time-shifted in the same way, so the timing matches.
+\item[How do you handle missing data?] NaN-native HistGB in production; median imputation inside the pipeline
+for other models, fitted on training data only. Long outages (>24\,h) are common for plasma data.
+\item[Why keep extreme values?] They coincide with real storms (Table above). Removing them would delete the
+events we care most about.
+\item[Why does the validation period matter?] 2017--2019 is solar minimum with very few large storms, so
+selecting models on it alone would favour quiet-time accuracy.
+\item[Why include hour-of-day and day-of-year?] The angle between Earth's dipole and the IMF (Russell--McPherron
+effect) modulates coupling with season and UT. Sin/cos encoding keeps 23\,h next to 0\,h and Dec~31 next to Jan~1.
+\item[How do you know your features don't leak?] An automated test recomputes features on truncated data and
+checks that past features are identical; every rolling window is trailing.
+\item[Why HistGB in production?] It has the best accuracy for its cost, a small file, native missing-value
+handling (live feeds have gaps) and quantile loss for prediction intervals.
+\item[Why does every model under-predict storms?] Regression toward the mean: storms are 4\% of hours, so
+squared-error training pulls extreme predictions toward typical values. The final HistGB has the smallest bias
+(G3+: $-0.57$). Sample weighting reduced storm RMSE by 2\% (0.846 to 0.829) at a 2\% overall cost (0.573 to
+0.584), so production stays unweighted.
+\item[Why is the nowcast late at storm onset?] A Kp block covers 3 hours. In its first hour the model has not yet
+seen the solar wind that drives the rest of that block.
+\item[Is your model overfitting?] No. Final HistGB: train 0.534, CV 0.561, validation 0.522, test 0.573 RMSE,
+all close. KNN memorises (train $\approx$0); Linear underfits.
+\item[Is it underfitting? Could a bigger model do better?] No. In the complexity curve, validation RMSE is flat from
+31 to 127 leaves and rises at 255, while train RMSE keeps falling. The learning curve gains only 0.003 from
+doubling the data. The remaining error is an information limit of single-point L1 measurements.
+\item[How did you improve the model without overfitting to the test set?] Every change was judged on CV and the
+validation years by a rule fixed in advance. The test set was evaluated once per version (v1, v2, v3), all
+three are reported, and the model was then frozen.
+\item[Isn't ``what happened so far in this block'' leakage?] No. It only uses hours from the block start up to
+now, all of which are known in real time. A unit test changes a later hour of the block and checks that the
+earlier features do not move.
+\item[What is persistence and why compare to it?] ``Kp now = Kp of the previous block.'' It is the simplest
+forecast, and a model must beat it to be useful.
+\item[What is train/serve skew and how do you prevent it?] It is any difference between how features are
+computed in training and in production. We use one shared \code{features.py}, resample live data to hourly, and
+run a parity test.
+\item[What did you try that did not work?] Storm-memory features (exponentially decaying energy input) improved
+CV but not validation, and monotonic physics constraints made both worse. Both were rejected by the pre-set rule.
+Storm weighting and the ensemble improved storm or overall error, but not both.
+\item[How much does excluding past Kp cost?] Very little: on validation, adding Kp of the previous blocks only
+moves RMSE from 0.522 to 0.512, against 0.819 for persistence.
+\item[What does the 80\% interval mean and is it honest?] It is the q10--q90 band of quantile HistGB, widened by
+a conformal margin of 0.06\,Kp. It contains the observed Kp in 80.8\% of test hours and 82.0\% of the latest
+holdout hours.
+\item[Does it work on real-time data?] Yes. Against GFZ quick-look Kp over five live days the RMSE was 0.59,
+in line with the test RMSE, and the interval covered 88\%. A parity test shows that the live and training paths
+give identical features.
+\item[Does the model get worse over time?] No sign of it. The model trained to July 2025 scored 0.579 on
+January--June 2026, which it had never seen, against 0.573 on the test years.
+\item[How does weekly retraining avoid leakage?] It retrains the frozen configuration only up to the start of a
+six-month holdout of definitive labels. It scores the new and current models on that holdout in the same run,
+asserts the current model never saw it, and promotes only if the new RMSE is at most 1.02 times the current one.
+\end{description}
+
+%=====================================================================
 \section{Limitations and future work}
 %=====================================================================
 \begin{itemize}
@@ -1195,8 +1223,12 @@ and are not represented in OMNI's own shift method. The live feed could also cha
 as the originally planned feeds were.
 \item Extreme storms are rare, so storms are systematically under-predicted (final HistGB G3+ bias $-0.57$ Kp on test).
 \item Sudden storm onsets are caught 1--2\,h late within a 3-h Kp block.
-\item The 80\% interval is slightly narrow (77--78\% coverage); conformal calibration is a possible fix.
-\item Future work: MLflow/Airflow orchestration, sequence models, CME/coronal-hole inputs.
+\item The conformal margin assumes future errors resemble those of 1998--2019; coverage is re-checked on each
+gate holdout (82.0\% on the latest) but carries no hard guarantee under solar-cycle drift.
+\item The live comparison covers only a few quiet days; a storm-time live evaluation will come with the next
+active period.
+\item Future work: sub-hourly solar-wind variability (high-resolution OMNI, too large for our connection), true
+forecasting at +1 to +3\,h, sequence models, CME/coronal-hole inputs, and MLflow-style experiment tracking.
 \end{itemize}
 
 %=====================================================================
