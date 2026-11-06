@@ -258,6 +258,7 @@ jobs:
 | 27 | Repeated test evaluation erodes trust | v3 is the last round; decisions on CV + val only; then freeze |
 | 28 | Planned SWPC 3-day solar-wind feeds retired (404); RTSW only 24 h | `products/geospace/propagated-solar-wind.json` (7 d, Earth-propagated, GSM) |
 | 29 | NOAA estimated Kp differs from our label source | Compare live against GFZ quick-look Kp too (same producer as labels) |
+| 30 | HF Gradio Spaces need PRO (HTTP 402) | Free HF model repo + model card and static landing Space; Gradio local; live app on Streamlit |
 
 ---
 
@@ -328,9 +329,9 @@ jobs:
 ### Phase 5 — Deployments
 - [x] Code on GitHub: https://github.com/Syeda-Aliza-Ayaz/Tormenta (public)
 - [x] Streamlit app built + tested (`AppTest`, live data)
-- [ ] Streamlit: manual input, live data, interval, predicted-vs-SWPC timeline → public URL
+- [x] Streamlit: manual input, live data, interval, predicted-vs-observed timeline → https://tormenta.streamlit.app/
 - [x] HF Space files built + tested: `app.py`, model card `README.md`, pinned `requirements.txt`, `sync_hf.py`
-- [ ] HF Space: Gradio demo + model card → public URL
+- [x] HF: Gradio Spaces now need PRO (402) → free model repo https://huggingface.co/aliza-ayaz/tormenta (model card) + static Space https://huggingface.co/spaces/aliza-ayaz/tormenta; Gradio app runs locally
 - [x] Flask: `/predict` + HTML form + validation/error messages + `/live`, `/api/live`, `/health` → localhost (9 tests)
 - [ ] All three load the same `current.joblib` with the same pinned sklearn
 

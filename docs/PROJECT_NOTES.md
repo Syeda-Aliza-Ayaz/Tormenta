@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4 ✅ (live nowcast) · Phase 5 🟡 (Flask ✅, Streamlit + HF Space built and tested; cloud deploy pending) · Phase 6–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4 ✅ (live nowcast) · Phase 5 ✅ (Flask local · Streamlit https://tormenta.streamlit.app/ · HF model repo + static Space) · Phase 6–7 ⬜
 
 ---
 
@@ -491,7 +491,7 @@ The spacecraft sits ~1.5 million km upstream, so the solar wind it measures reac
 ### 5b. Code on GitHub ✅
 Public repo: **https://github.com/Syeda-Aliza-Ayaz/Tormenta** (uploaded 2026-11-06). Raw/processed data stay gitignored. Models (~3.5 MB each) and `data/f107_history.csv` are committed because the apps need them.
 
-### 5c. Streamlit dashboard: `app/streamlit_app.py` (built + tested; deploy pending)
+### 5c. Streamlit dashboard: `app/streamlit_app.py` ✅ live at https://tormenta.streamlit.app/
 **Run locally:** `.venv\Scripts\streamlit run app\streamlit_app.py`
 
 **Three tabs:**
@@ -509,20 +509,20 @@ Public repo: **https://github.com/Syeda-Aliza-Ayaz/Tormenta** (uploaded 2026-11-
   - Bz −20 and 700 km/s with |B| 5 is rejected with the message above;
   - with |B| 22, the prediction is **Kp 7.3 (G3+)**.
 
-### 5d. Hugging Face Space (Gradio): `app/hf_space/` (built + tested; deploy pending)
-| File | Purpose |
-|---|---|
-| `app.py` | Gradio app with a **Live** tab (button → Kp now, next hour, solar wind, chart) and a **Try your own inputs** tab (8 numbers + 3 examples: quiet, moderate, strong storm). Bad input shows a Gradio error popup. |
-| `README.md` | The Space's **model card**: task, model, inputs, training/selection, test results vs persistence, intended use, limitations, data licences. Its YAML header tells HF to use Gradio 6.31.0 and Python 3.12. |
-| `requirements.txt` | Same exact pins as training (scikit-learn 1.9.1!). Gradio comes from the YAML header. |
-| `sync_hf.py` | Uploads `app.py`, `README.md`, `requirements.txt`, `src/**`, `models/current.joblib` and `data/f107_history.csv` to the Space in one commit (creates the Space on the first run). It will also be used by the weekly retrain (Phase 6). |
+### 5d. Hugging Face ✅ (free model repo + static Space; Gradio runs locally)
+**What happened:** creating a Gradio Space failed with **402 Payment Required**. Hugging Face now only hosts Gradio/Docker Spaces for PRO subscribers (~$9/month); static Spaces and model repos are still free. We chose the free route:
 
-**Tested:**
-- moderate-storm example → Kp 7.0 (6.1–8.0);
-- a bad value → error popup;
-- live → Kp 1.5.
+| Published | URL | What's there |
+|---|---|---|
+| **Model repo** | https://huggingface.co/aliza-ayaz/tormenta | Model card (`app/hf_space/model_card.md` → `README.md`): task, model, inputs, training/selection, test results vs persistence, intended use, limitations, **copy-paste usage code**, licences. Plus `models/current.joblib`, `src/**`, `data/f107_history.csv` and pinned `requirements.txt`, so the model is usable straight from HF. |
+| **Static Space** | https://huggingface.co/spaces/aliza-ayaz/tormenta | Landing page (`app/hf_space/space/index.html`): headline results, the May 2024 storm figure, model comparison, error-by-level figure, live-check figure, limitations, and buttons to the live Streamlit app, the model repo and GitHub. |
+| **Gradio app** | local: `.venv\Scripts\python app\hf_space\app.py` → http://127.0.0.1:7860 | Live tab + manual tab with 3 examples; useful for the viva demo. |
 
-`tests/test_hf_space.py` checks that the upload includes every file the app needs (24 tests total).
+- `sync_hf.py --user aliza-ayaz` publishes both repos in one go. Phase 6's weekly retrain will call it to push the new model.
+- **Verified:** downloading the model repo fresh into an empty folder and running the model card's code works end to end (live Kp 1.46; the manual storm example gives Kp 7.0). The Space status is RUNNING.
+- `tests/test_hf_space.py` checks that the model repo has every file the code needs and that every image the page uses gets uploaded (25 tests total).
+
+**For the report/viva:** "HF Gradio hosting became paid, so we published the model + model card on the HF Hub (the standard way to share ML models) and a static Space as the project page; the live interactive app runs on Streamlit Cloud."
 
 **Versions:** `streamlit==1.67.0` is in `requirements.txt` (Streamlit Cloud installs it). `gradio==6.31.0` and `huggingface_hub==2.4.0` are in `requirements-dev.txt`, so Streamlit Cloud doesn't download Gradio.
 

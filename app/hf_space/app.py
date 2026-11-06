@@ -1,8 +1,9 @@
-"""Tormenta Gradio demo for Hugging Face Spaces.
+"""Tormenta Gradio demo (local). Hosting a Gradio Space now needs HF PRO, so Hugging Face gets the free
+model repo + static landing page instead (sync_hf.py); this app runs on a laptop, e.g. for the viva.
 
-Runs from the repo (app/hf_space/app.py) and from the Space, where sync_hf.py uploads this file to the
-Space root next to src/, models/current.joblib and data/f107_history.csv.
-Local:  .venv\\Scripts\\python app\\hf_space\\app.py   →  http://127.0.0.1:7860
+    .venv\\Scripts\\python app\\hf_space\\app.py   →  http://127.0.0.1:7860
+
+ROOT is found by searching upwards, so the file also works if copied next to src/ (e.g. a PRO Space).
 """
 import sys
 from pathlib import Path

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tormenta Kp Nowcast</title>
+  <style>
+    :root { --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #5d6676; --line: #dfe3ea; --accent: #2f5fb3; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #12151b; --card: #1b2029; --text: #e6e9ef; --muted: #9aa3b2; --line: #2c3340; --accent: #7aa7f0; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, sans-serif; }
+    main { max-width: 920px; margin: 0 auto; padding: 32px 16px 56px; }
+    h1 { margin: 0; font-size: 32px; }
+    h2 { font-size: 20px; margin: 0 0 12px; }
+    .lead { color: var(--muted); margin: 6px 0 22px; font-size: 17px; }
+    .links { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 26px; }
+    .links a { padding: 10px 16px; border-radius: 8px; border: 1px solid var(--accent); color: var(--accent); text-decoration: none; font-weight: 600; }
+    .links a.primary { background: var(--accent); color: #fff; }
+    section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .stat { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+    .stat b { display: block; font-size: 26px; }
+    .stat span { color: var(--muted); font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; }
+    th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+    .scroll { overflow-x: auto; }
+    figure { margin: 16px 0 0; }
+    img { width: 100%; height: auto; border-radius: 8px; background: #fff; }
+    figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+    ul { padding-left: 20px; margin: 0; }
+    footer { color: var(--muted); font-size: 13px; margin-top: 28px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>🧲 Tormenta</h1>
+  <p class="lead">A machine-learning nowcast of the geomagnetic <b>Kp index</b> (0–9) from solar-wind measurements
+    taken about an hour upstream of Earth. CT-378 Machine Learning, NED University, Fall 2026 · Alizeh &amp; HRK.</p>
+
+  <div class="links">
+    <a class="primary" href="https://tormenta.streamlit.app/" target="_blank" rel="noopener">Open the live app</a>
+    <a href="https://huggingface.co/aliza-ayaz/tormenta" target="_blank" rel="noopener">Model &amp; model card</a>
+    <a href="https://github.com/Syeda-Aliza-Ayaz/Tormenta" target="_blank" rel="noopener">Source code</a>
+  </div>
+
+  <section>
+    <h2>Results on unseen years (2020 to Jan 2026)</h2>
+    <div class="stats">
+      <div class="stat"><b>0.573</b><span>RMSE (Kp units)</span></div>
+      <div class="stat"><b>0.808</b><span>R²</span></div>
+      <div class="stat"><b>34%</b><span>lower error than persistence</span></div>
+      <div class="stat"><b>80.8%</b><span>coverage of the 80% range</span></div>
+    </div>
+    <figure>
+      <img src="figures/14_may2024_nowcast.png" alt="Nowcast of the May 2024 storm compared with observed Kp">
+      <figcaption>The May 2024 storm, the strongest in 20 years, which the model never saw in training. Predicted peak 8.6, observed 9.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <ul>
+      <li><b>Inputs:</b> interplanetary magnetic field (|B|, Bx, By, Bz), solar-wind speed, density and temperature, and F10.7 solar flux. No geomagnetic indices are used, so the nowcast does not wait for ground magnetometers.</li>
+      <li><b>Features:</b> 66 physics-based features: coupling functions (Newell, V·Bs, electric field), pressure, lags, 3–24 h trailing statistics, position inside the 3-hour Kp block, and time of day and year.</li>
+      <li><b>Model:</b> scikit-learn HistGradientBoosting, chosen over Linear Regression, KNN, SVR and Random Forest by time-ordered cross-validation. Quantile models with a conformal correction give the 80% range.</li>
+      <li><b>Data:</b> NASA OMNI2 hourly solar wind (1998–2025) with GFZ Potsdam definitive Kp as labels. Live inputs come from NOAA SWPC's propagated real-time solar wind.</li>
+      <li><b>Leakage safeguards:</b> causal features only, the same feature code for training and live use (unit-tested), decisions made on validation years only, and the test years scored once per model version.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Model comparison (test years)</h2>
+    <div class="scroll"><table>
+      <tr><th>Model</th><th>RMSE</th><th>R²</th><th>RMSE on storm hours</th></tr>
+      <tr><td>Persistence (previous Kp)</td><td>0.862</td><td>0.566</td><td>1.368</td></tr>
+      <tr><td>Linear Regression</td><td>0.665</td><td>0.742</td><td>1.470</td></tr>
+      <tr><td>KNN</td><td>0.657</td><td>0.748</td><td>1.337</td></tr>
+      <tr><td>SVR</td><td>0.605</td><td>0.786</td><td>1.079</td></tr>
+      <tr><td>Random Forest</td><td>0.606</td><td>0.785</td><td>0.972</td></tr>
+      <tr><td><b>HistGradientBoosting</b></td><td><b>0.573</b></td><td><b>0.808</b></td><td><b>0.846</b></td></tr>
+    </table></div>
+    <figure>
+      <img src="figures/11_error_by_level.png" alt="Error and bias by storm level for each model">
+      <figcaption>Error by storm level. Every model under-predicts the largest storms, and HistGradientBoosting the least.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Live check</h2>
+    <figure>
+      <img src="figures/16_live_nowcast.png" alt="Live nowcast compared with GFZ and NOAA Kp over five days">
+      <figcaption>Real-time snapshot, 25–30 Oct 2026: RMSE 0.59 against GFZ quick-look Kp, in line with the test error.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Limitations</h2>
+    <ul>
+      <li>The largest storms (G3+) are under-predicted by about 0.6 Kp on average, because they are rare in the training data.</li>
+      <li>Sudden storm onsets show up 1–2 hours late within a 3-hour Kp block.</li>
+      <li>Lead time is at most about 1 hour, the travel time of the solar wind to Earth.</li>
+      <li>For education and awareness only, not an operational warning service. Use NOAA SWPC or GFZ for that.</li>
+    </ul>
+  </section>
+
+  <footer>Data: NASA/GSFC OMNIWeb · GFZ Potsdam Kp and F10.7 (CC BY 4.0) · NOAA SWPC real-time data.</footer>
+</main>
+</body>
+</html>

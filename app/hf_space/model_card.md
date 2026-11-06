@@ -1,14 +1,17 @@
 ---
-title: Tormenta Kp Nowcast
-emoji: 🧲
-colorFrom: indigo
-colorTo: purple
-sdk: gradio
-sdk_version: 6.31.0
-python_version: "3.12"
-app_file: app.py
-pinned: false
-short_description: Nowcast of the geomagnetic Kp index from solar wind
+library_name: sklearn
+pipeline_tag: tabular-regression
+tags:
+- space-weather
+- geomagnetic-storms
+- kp-index
+- solar-wind
+- scikit-learn
+- tabular-regression
+metrics:
+- rmse
+- mae
+- r2
 ---
 
 # Tormenta: geomagnetic Kp nowcast
@@ -46,8 +49,40 @@ disturbance) from the solar wind measured upstream of Earth. It is a CT-378 Mach
   the training data.
 - **Sudden onsets show up 1–2 h late** within a 3-hour Kp block.
 - **Lead time:** at most about 1 h, the travel time of the solar wind from L1 to Earth.
-- **Manual inputs** in this demo are assumed to have held steady for the past 3 days, because the model also
+- **Manual inputs** (`predict_steady`) are assumed to have held steady for the past 3 days, because the model also
   uses lags and 24-h averages.
+
+## Use the model
+
+**Live demo:** <https://tormenta.streamlit.app/>
+
+This repository contains the model (`models/current.joblib`), the feature and prediction code it needs
+(`src/`), and the F10.7 history file used for the trailing solar-flux mean. Requires Python 3.12 and the exact
+package versions in `requirements.txt`; the model is a pickled scikit-learn 1.9.1 object.
+
+```python
+import sys
+from huggingface_hub import snapshot_download
+
+path = snapshot_download("aliza-ayaz/tormenta")
+sys.path.insert(0, path)
+
+from src.predict import load_bundle, nowcast, predict_steady
+
+bundle = load_bundle(f"{path}/models/current.joblib")
+
+# Live: fetch NOAA SWPC real-time solar wind, predict every recent hour
+pred, hourly = nowcast(bundle)
+print(pred.tail(3))            # kp_pred, kp_lo, kp_hi (80% interval), ahead
+
+# Manual: one set of conditions, assumed steady for the past 3 days
+print(predict_steady(bundle, {"b_scalar": 20, "bx": 3, "by_gsm": 5, "bz_gsm": -15, "speed": 600,
+                              "density": 10, "temperature": 2e5, "f107": 150}))
+```
+
+The bundle is a dict with `point`, `q_lo`, `q_hi` (fitted `HistGradientBoostingRegressor`s), `features`
+(the 66 column names), `interval_margin`, `trained_until` and `version`. Build features only with
+`src.features.build_features`, which is the same code used in training.
 
 ### Data and licences
 NASA/GSFC Space Physics Data Facility OMNIWeb; GFZ German Research Centre for Geosciences Kp and F10.7
