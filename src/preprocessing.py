@@ -12,6 +12,9 @@ from src.ingest.fetch_omni import load_omni_lst
 
 
 def build_hourly(omni: pd.DataFrame, gfz_daily: pd.DataFrame) -> pd.DataFrame:
+    # End at the last hour with any solar-wind data: SPDF's current-year file can carry trailing fill
+    # rows, and GFZ labels for those hours must not enter training with empty features
+    omni = omni.loc[: omni[config.SW_FEATURES].dropna(how="all").index.max()]
     # Complete hourly grid so later .shift()/.rolling() never jump across gaps
     grid = pd.date_range(omni.index.min(), omni.index.max(), freq="h", name="time")
     df = omni.reindex(grid).drop(columns=["sunspot_r", "f107"])

@@ -1,0 +1,58 @@
+name: Weekly retrain
+
+# Slow loop: fresh OMNI + GFZ → rebuild → retrain the frozen configuration → validation gate →
+# commit models/ + data/f107_history.csv → publish to Hugging Face. Streamlit Cloud redeploys on the push.
+on:
+  schedule:
+    - cron: "0 3 * * 1"          # Mondays 03:00 UTC (08:00 PKT)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: train and gate, but commit and publish nothing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write                # push the new model back to the repo
+
+concurrency:
+  group: retrain
+  cancel-in-progress: false
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install (exact training pins)
+        run: pip install -r requirements.txt pytest==9.2.0 huggingface_hub==2.4.0
+
+      - name: Tests (leakage, live parity, SPDF parser vs training data, apps)
+        run: python -m pytest -q -rs
+
+      - name: Fetch, rebuild, retrain, gate
+        id: update
+        run: python -m src.update ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Commit model and F10.7 history
+        if: ${{ !inputs.dry_run && steps.update.outputs.status != 'no_new_data' }}
+        run: |
+          git config user.name "tormenta-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models data/f107_history.csv
+          if git diff --cached --quiet; then echo "Nothing to commit."; exit 0; fi
+          git commit -m "Weekly retrain: ${{ steps.update.outputs.status }} ${{ steps.update.outputs.version }}"
+          git push
+
+      - name: Publish to Hugging Face
+        if: ${{ steps.update.outputs.promoted == 'true' }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python app/hf_space/sync_hf.py --user aliza-ayaz --message "Weekly retrain ${{ steps.update.outputs.version }}"

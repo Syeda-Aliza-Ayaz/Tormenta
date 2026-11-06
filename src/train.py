@@ -336,12 +336,16 @@ def gate_decision(candidate_gate: dict, X, y) -> tuple[bool, dict | None]:
 
 
 def save_bundle(bundle, test_metrics: dict, gate_metrics: dict, promote: bool = True,
-                incumbent_gate: dict | None = None) -> str:
-    """Versioned model file (+ current.joblib if promoted) and an entry in metrics_history.json."""
+                incumbent_gate: dict | None = None, keep_rejected: bool = True, note: str | None = None) -> str:
+    """Versioned model file (+ current.joblib if promoted) and an entry in metrics_history.json.
+
+    keep_rejected=False (weekly retrain) logs a rejected candidate without writing its model file.
+    """
     config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
     version = f"tormenta_v{datetime.now(timezone.utc):%Y%m%d_%H%M}"
     bundle["version"] = version
-    joblib.dump(bundle, config.MODELS_DIR / f"{version}.joblib", compress=3)
+    if promote or keep_rejected:
+        joblib.dump(bundle, config.MODELS_DIR / f"{version}.joblib", compress=3)
     if promote:
         joblib.dump(bundle, config.CURRENT_MODEL, compress=3)
 
@@ -352,7 +356,7 @@ def save_bundle(bundle, test_metrics: dict, gate_metrics: dict, promote: bool = 
                     "weighted": bundle["weighted"], "n_features": len(bundle["features"]),
                     "test": clean(test_metrics), "gate": clean(gate_metrics),
                     "incumbent_gate": clean(incumbent_gate) if incumbent_gate else None,
-                    "promoted": promote})
+                    "promoted": promote, **({"note": note} if note else {})})
     config.METRICS_HISTORY.write_text(json.dumps(history, indent=2, default=str))
     return version
 
