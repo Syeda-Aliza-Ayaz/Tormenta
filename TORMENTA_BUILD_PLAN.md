@@ -259,6 +259,9 @@ jobs:
 | 28 | Planned SWPC 3-day solar-wind feeds retired (404); RTSW only 24 h | `products/geospace/propagated-solar-wind.json` (7 d, Earth-propagated, GSM) |
 | 29 | NOAA estimated Kp differs from our label source | Compare live against GFZ quick-look Kp too (same producer as labels) |
 | 30 | HF Gradio Spaces need PRO (HTTP 402) | Free HF model repo + model card and static landing Space; Gradio local; live app on Streamlit |
+| 31 | NASA SPDF unreachable from our network | Parser validated offline against a committed .lst sample, and online in GitHub Actions |
+| 32 | SPDF current-year file has fill rows to Dec 31 | `build_hourly` ends at the last hour with any solar-wind data (else GFZ labels get empty features) |
+| 33 | Weekly retrain must not re-tune or re-test | Retrain the frozen config (same features, params, conformal margin); judge only on the gate holdout |
 
 ---
 
@@ -336,12 +339,13 @@ jobs:
 - [ ] All three load the same `current.joblib` with the same pinned sklearn
 
 ### Phase 6 — Slow loop
-- [ ] SPDF `omni2_YYYY.dat` parser → same schema as `.lst` parser (test on overlapping year)
-- [ ] `update.py`: fetch → rebuild processed from scratch → refresh F10.7 history → retrain to holdout start → gate → promote/log
-- [ ] Gate verified: neither model trained on the holdout; both scored on it in the same run (no cached RMSE)
-- [ ] Workflow commits only `models/` + `data/f107_history.csv`
-- [ ] `sync_hf.py` + `HF_TOKEN` secret
-- [ ] `retrain.yml` with `contents: write`; manual `workflow_dispatch` run succeeds
+- [x] SPDF `omni2_YYYY.dat` parser → same schema as `.lst` parser (offline test + online test vs real 2024 file, passes in Actions)
+- [x] `update.py`: fetch → rebuild processed from scratch → refresh F10.7 history → retrain frozen config to holdout start → gate → promote/log
+- [x] Gate verified: neither model trained on the holdout; both scored on it in the same run (no cached RMSE)
+- [x] Workflow commits only `models/` + `data/f107_history.csv`
+- [x] `sync_hf.py` + `HF_TOKEN` secret
+- [x] `retrain.yml` with `contents: write`; manual `workflow_dispatch` dry run succeeded (2026-11-06, 2.5 min)
+- [ ] First real run (manual or Monday's schedule) → v4 committed + published
 
 ### Phase 7 — Wrap-up
 - [ ] README: setup, run instructions, 3 deployment links

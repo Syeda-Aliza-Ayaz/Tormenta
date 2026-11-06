@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: Phase 5 complete (deployments live)}
+\date{Last updated: Phase 6 complete (weekly retraining)}
 
 \begin{document}
 \maketitle
@@ -1148,6 +1148,41 @@ model card's usage code was verified on a fresh download. Sharing models through
 standard practice for reproducible ML.
 
 \paragraph{Source code.} Public repository: \url{https://github.com/Syeda-Aliza-Ayaz/Tormenta}.
+
+%=====================================================================
+\section{Automated retraining (Phase 6)}\label{sec:retrain}
+%=====================================================================
+\paragraph{Workflow.} A GitHub Actions workflow (\code{.github/workflows/retrain.yml}) runs every Monday at
+03:00\,UTC, and can also be started by hand as a dry run. It installs the exact pinned packages and runs the full
+test suite. It then calls \code{src/update.py}, which:
+\begin{enumerate}
+\item downloads the GFZ Kp file and the SPDF yearly OMNI2 files for 1998 to the present;
+\item rebuilds the hourly table from scratch (it is never committed) and refreshes the F10.7 history;
+\item if new definitive labels exist, retrains the frozen final configuration (same 66 features, hyperparameters
+and conformal margin) up to the start of the gate holdout;
+\item applies the validation gate and saves and logs the result.
+\end{enumerate}
+The workflow commits only \code{models/} and \code{data/f107\_history.csv}, and publishes a promoted model to the
+Hugging Face model repository. Streamlit Cloud redeploys automatically on the push.
+
+\paragraph{Why nothing is re-tuned or re-tested.} Hyperparameters and features were fixed by the CV and validation
+protocol of Section~\ref{sec:v3}. Re-tuning weekly would turn the automated loop into repeated model selection.
+The retrained model is trained on the test years, so they can no longer evaluate it. The gate holdout (the most
+recent six months of definitive Kp, unseen by both models, scored in the same run) is the only fair comparison,
+and the promotion rule is candidate RMSE $\le 1.02\times$ current RMSE.
+
+\paragraph{SPDF parser.} The yearly files contain all 55 OMNI2 words per hour. \code{parse\_spdf} maps them onto
+the same columns as the OMNIWeb subset used for training. It is tested against a three-day sample cut from the
+original training file, offline (lines regenerated from the sample) and online against the real 2024 file. The
+current-year file carries fill rows up to 31 December, so \code{build\_hourly} now ends at the last hour with any
+solar-wind data; otherwise GFZ labels for those hours would enter training with empty features. NASA's SPDF
+server is not reachable from our network, so the online test runs in GitHub Actions, where it passes.
+
+\paragraph{First (dry) run.} On 2026-11-06 the workflow completed in 2.5 minutes. OMNI now extends to 26 Oct
+2026 and definitive Kp to 30 Jun 2026, so the gate holdout moved to January--June 2026. The current model (trained
+to July 2025) scored RMSE 0.5791 on this new, unseen half-year, in line with its test (0.573) and earlier holdout
+(0.580) results: there is no sign of drift. The candidate, trained on six more months, scored 0.5794, within the
+2\% tolerance, so it would be promoted.
 
 %=====================================================================
 \section{Limitations and future work}

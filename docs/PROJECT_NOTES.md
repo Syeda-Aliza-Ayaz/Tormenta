@@ -4,7 +4,7 @@
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4 ✅ (live nowcast) · Phase 5 ✅ (Flask local · Streamlit https://tormenta.streamlit.app/ · HF model repo + static Space) · Phase 6–7 ⬜
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ (v1) · Phase 3b ✅ (v2 promoted to production) · Phase 3c ✅ (final model v3 = v2 + calibrated intervals; **frozen**) · Phase 4 ✅ (live nowcast) · Phase 5 ✅ (Flask local · Streamlit https://tormenta.streamlit.app/ · HF model repo + static Space) · Phase 6 ✅ (weekly retrain on GitHub Actions; dry run passed) · Phase 7 ⬜
 
 ---
 
@@ -526,3 +526,51 @@ Public repo: **https://github.com/Syeda-Aliza-Ayaz/Tormenta** (uploaded 2026-11-
 
 **Versions:** `streamlit==1.67.0` is in `requirements.txt` (Streamlit Cloud installs it). `gradio==6.31.0` and `huggingface_hub==2.4.0` are in `requirements-dev.txt`, so Streamlit Cloud doesn't download Gradio.
 
+
+---
+
+## Phase 6 — Weekly automatic retraining (the "slow loop")
+
+**Goal:** keep the model fresh without anyone touching it. Every Monday 03:00 UTC (08:00 PKT), GitHub Actions downloads the newest data, retrains, and replaces the live model **only if it is at least as good**.
+
+### Files
+| File | What it does | Why |
+|---|---|---|
+| `src/ingest/fetch_omni.py` → `parse_spdf`, `load_omni_spdf` | Reads NASA's yearly files `omni2_YYYY.dat` (55 numbers per line) and returns **exactly the same columns** as our original `.lst` parser. Both parsers now share one cleaning function. | GitHub's servers don't have our 24 MB OMNIWeb file, so they rebuild 1998 → now from the yearly files. |
+| `src/preprocessing.py` (`build_hourly`) | Now stops at the **last hour that has any solar-wind data**. | The current-year file has empty "fill" rows up to 31 December. Without this, GFZ labels for those hours would enter training with empty features. |
+| `src/update.py` | 1) download GFZ + 29 yearly OMNI files; 2) rebuild the hourly table **from scratch**; 3) refresh `data/f107_history.csv`; 4) if there's new definitive data, retrain the **frozen** configuration up to the start of the gate holdout; 5) gate; 6) save + log. `--dry-run` stops after the gate decision. | One script for the whole slow loop. |
+| `src/train.py` (`save_bundle`) | New options: `keep_rejected=False` logs a rejected candidate in `metrics_history.json` without saving its 3.5 MB file; `note` explains the entry. | Keeps the repo from filling up with unused models. |
+| `.github/workflows/retrain.yml` | Weekly schedule + a manual "Run workflow" button with a **dry run** option. Steps: install the exact pins → run all tests → `update.py` → commit `models/` + `data/f107_history.csv` → `sync_hf.py` (uses the `HF_TOKEN` secret). | Automation; Streamlit Cloud redeploys automatically after the push. |
+| Tests | `test_omni_spdf.py`: the SPDF parser vs a 3-day sample cut from our `.lst` (offline), the same vs NASA's real 2024 file (online), and trailing fill hours being dropped. `test_update.py`: "no new data → no retrain", and the workflow output format. **30 tests total.** | |
+
+### Rules the weekly retrain follows (no leakage, no cheating)
+- **No re-tuning, no new features:** it retrains the frozen v3 configuration (same 66 features, HistGB settings and conformal margin). `update.py` stops with an error if the feature list ever differs from the live model's.
+- **The test set is not re-scored.** The new model trains on 2020+ too, so the only fair check is the gate holdout.
+- **The gate:**
+  - the holdout is the last 6 months of definitive Kp;
+  - the candidate is trained only up to the holdout start;
+  - both models are scored on it in the same run;
+  - the code asserts the current model never saw it.
+- **If there's no new definitive data,** the script stops ("nothing to do"), so no pointless new versions.
+
+### NASA's server is blocked from our network
+`spdf.gsfc.nasa.gov` times out from here (OMNIWeb too), but works from GitHub (US). So the parser was checked two ways:
+- offline, against a sample of our original training file;
+- online, inside GitHub Actions, against NASA's real 2024 file.
+
+That online test passed.
+
+### Dry run on GitHub (2026-11-06, 2.5 minutes, nothing saved)
+```
+28 passed, 2 skipped (the 2 local-data tests)
+OMNI 1998-01-01 → 2026-12-31 (file) | hourly table ends 2026-10-26 01:00   ← trailing fill rows dropped ✓
+definitive labels with features end 2026-06-30 | gate holdout starts 2025-12-30
+current model tormenta_v20261030_0737 trained until 2025-07-10
+candidate gate RMSE 0.5794 vs current 0.5791 (tolerance ×1.02) → promote: True
+```
+**What this tells us:**
+- **New data arrived:** OMNI now reaches 26 Oct 2026, and GFZ definitive Kp reaches 30 Jun 2026. The holdout moved forward 6 months, to Jan–Jun 2026.
+- **The current model holds up on data it has never seen:** RMSE 0.579 on the first half of 2026, the same as on its own holdout (0.580) and the test set (0.573). **No sign of drift.**
+- **The candidate is equally good (0.5794 vs 0.5791)** and within the 2% tolerance, so a real run would promote it. It's trained on 6 more months of data.
+
+**Next real run:** Monday's schedule, or "Run workflow" with dry run unticked. It will commit the new model (v4) and publish it to Hugging Face.
