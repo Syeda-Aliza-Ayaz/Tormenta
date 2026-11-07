@@ -1,4 +1,4 @@
-"""Tormenta Streamlit dashboard: live Kp nowcast, manual input, model card.
+"""Tormenta Streamlit dashboard: live Kp nowcast, what-if explorer, model card.
 
 Local:  .venv\\Scripts\\streamlit run app\\streamlit_app.py
 Cloud:  Streamlit Community Cloud, main file app/streamlit_app.py, Python 3.12, requirements.txt at repo root.
@@ -9,23 +9,188 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+import altair as alt  # noqa: E402
+import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import requests  # noqa: E402
 import streamlit as st  # noqa: E402
 
 from src import config, evaluate as ev  # noqa: E402
 from src.ingest import fetch_live  # noqa: E402
-from src.predict import INPUT_LIMITS, load_bundle, nowcast, predict_steady, storm_level, validate_inputs  # noqa: E402
+from src.predict import INPUT_LIMITS, load_bundle, nowcast, predict_steady, validate_inputs  # noqa: E402
 
 st.set_page_config(page_title="Tormenta Kp Nowcast", page_icon="🧲", layout="wide")
 
+# ── Look ─────────────────────────────────────────────────────────────────────
+# Series colours: validated categorical slots 1–3 (light / dark steps). Level colours: fixed status palette,
+# always shown with a label and icon so colour never carries meaning alone.
+MODE = "dark" if st.context.theme.type == "dark" else "light"
+SERIES = ["Tormenta nowcast", "GFZ quick-look Kp", "NOAA estimated Kp"]
+SERIES_COLORS = {"light": ["#2a78d6", "#eb6834", "#1baf7a"], "dark": ["#3987e5", "#d95926", "#199e70"]}[MODE]
+MUTED = {"light": "#8a8985", "dark": "#7d7c77"}[MODE]
+LEVELS = [  # (lower Kp, upper Kp, short, name, colour, icon, what it means)
+    (0, 4, "0–3", "Quiet", "#0ca30c", "🟢",
+     "Quiet to unsettled. Aurora only near the poles; no effect on technology."),
+    (4, 5, "4", "Active", "#fab219", "🟡",
+     "Active. Aurora possible at high latitudes (northern Scandinavia, Alaska, northern Canada)."),
+    (5, 6, "G1", "Minor storm", "#ec835a", "🟠",
+     "Minor storm. Weak power-grid fluctuations possible; aurora visible around 60° geomagnetic latitude."),
+    (6, 7, "G2", "Moderate storm", "#d03b3b", "🔴",
+     "Moderate storm. High-latitude power systems may see voltage alarms; aurora down to about 55°."),
+    (7, 9, "G3+", "Strong to extreme storm", "#d03b3b", "🚨",
+     "Strong to extreme storm. GPS and HF radio disruption and power-grid problems possible; aurora can reach "
+     "mid-latitudes."),
+]
 DEFAULTS = {"b_scalar": 5.0, "bx": 1.0, "by_gsm": 2.0, "bz_gsm": 0.0, "speed": 400.0, "density": 5.0,
             "temperature": 100000.0, "f107": 120.0}
+PRESETS = {
+    "🌤️ Quiet day": DEFAULTS,
+    "💨 Fast solar wind": {**DEFAULTS, "b_scalar": 8.0, "bz_gsm": -4.0, "speed": 650.0, "density": 3.0,
+                          "temperature": 250000.0},
+    "☄️ CME arrival": {"b_scalar": 20.0, "bx": 3.0, "by_gsm": 5.0, "bz_gsm": -15.0, "speed": 600.0,
+                       "density": 10.0, "temperature": 200000.0, "f107": 150.0},
+    "🌌 May 2024 superstorm": {"b_scalar": 70.0, "bx": 3.0, "by_gsm": 20.0, "bz_gsm": -45.0, "speed": 800.0,
+                              "density": 30.0, "temperature": 600000.0, "f107": 200.0},
+}
 STEPS = {"speed": 10.0, "temperature": 10000.0, "f107": 1.0}
-LEVEL_NOTE = {"0-3": "quiet to unsettled", "4": "active", "5 (G1)": "minor storm", "6 (G2)": "moderate storm",
-              "7+ (G3-G5)": "strong to extreme storm"}
+SWEEPS = {"Bz GSM (nT)": ("bz_gsm", np.arange(-40, 15.1, 2.5)), "speed (km/s)": ("speed", np.arange(300, 1001, 50)),
+          "density (cm⁻³)": ("density", np.arange(1, 41, 2))}
+
+st.markdown("""<style>
+.kp-big { font-size: 3.2rem; font-weight: 700; line-height: 1; margin: 0; }
+.kp-chip { display: inline-block; padding: 2px 10px; border-radius: 99px; font-weight: 600; font-size: .9rem;
+           border: 2px solid var(--chip); }
+.kp-gauge { position: relative; margin: 14px 0 4px; }
+.kp-track { display: flex; gap: 2px; height: 16px; }
+.kp-seg { border-radius: 4px; opacity: .45; }
+.kp-band { position: absolute; top: -4px; height: 24px; border: 2px solid currentColor; border-radius: 6px; }
+.kp-mark { position: absolute; top: -8px; width: 4px; height: 32px; margin-left: -2px; background: currentColor;
+           border-radius: 2px; }
+.kp-ticks { display: flex; justify-content: space-between; font-size: .75rem; opacity: .7; margin-top: 6px; }
+.kp-caption { font-size: .85rem; opacity: .8; }
+</style>""", unsafe_allow_html=True)
 
 
+def level_of(kp: float):
+    return next(lv for lv in LEVELS if kp < lv[1] or lv is LEVELS[-1])
+
+
+def kp_card(kp: float, lo: float, hi: float, when: str):
+    """Hero number + storm-level chip + 0–9 gauge with the 80% range + plain-language meaning."""
+    _, _, short, name, colour, icon, meaning = level_of(kp)
+    segs = "".join(f'<div class="kp-seg" style="flex:{b - a};background:{c}" title="{s}: {n}"></div>'
+                   for a, b, s, n, c, *_ in LEVELS)
+    st.markdown(f"""
+<p class="kp-caption">{when}</p>
+<p class="kp-big">Kp {kp:.1f}</p>
+<span class="kp-chip" style="--chip:{colour}">{icon} {short} · {name}</span>
+<div class="kp-gauge">
+  <div class="kp-track">{segs}</div>
+  <div class="kp-band" style="left:{lo / 9:.2%};width:{max(hi - lo, 0.05) / 9:.2%}"
+       title="80% range {lo:.1f}–{hi:.1f}"></div>
+  <div class="kp-mark" style="left:{kp / 9:.2%}"></div>
+  <div class="kp-ticks">{''.join(f'<span>{i}</span>' for i in range(10))}</div>
+</div>
+<p class="kp-caption">80% range <b>{lo:.1f}–{hi:.1f}</b> (the outlined box). {meaning}</p>
+""", unsafe_allow_html=True)
+
+
+def utc(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    out["label"] = out.index.strftime("%d %b %H:00 UTC")
+    out["time"] = out.index.tz_localize("UTC")
+    return out.reset_index(drop=True)
+
+
+def x_time(title=None):
+    return alt.X("time:T", scale=alt.Scale(type="utc"), title=title,
+                 axis=alt.Axis(format="%d %b", labelAngle=0, grid=False, tickCount=6))
+
+
+def live_chart(live: pd.DataFrame) -> alt.LayerChart:
+    """Nowcast line + 80% band vs observed Kp steps, hover crosshair with all values, ahead-of-now shading."""
+    df = utc(live)
+    cols = {"kp_pred": SERIES[0], "kp_gfz": SERIES[1], "kp_swpc": SERIES[2]}
+    present = [c for c in cols if c in df]
+    long = df.melt(id_vars=["time"], value_vars=present, var_name="col", value_name="kp").dropna()
+    long["series"] = long["col"].map(cols)
+    domain = [cols[c] for c in present]
+    colour = alt.Color("series:N", scale=alt.Scale(domain=domain, range=SERIES_COLORS[:len(domain)]),
+                       legend=alt.Legend(orient="top", title=None, symbolStrokeWidth=3))
+    y = alt.Y("kp:Q", scale=alt.Scale(domain=[0, 9]), title="Kp", axis=alt.Axis(tickCount=10))
+
+    band = alt.Chart(df).mark_area(opacity=0.18, color=SERIES_COLORS[0]).encode(
+        x=x_time(), y=alt.Y("kp_lo:Q", scale=alt.Scale(domain=[0, 9])), y2="kp_hi:Q")
+    pred = alt.Chart(long[long["col"] == "kp_pred"]).mark_line(strokeWidth=2).encode(x=x_time(), y=y, color=colour)
+    obs = alt.Chart(long[long["col"] != "kp_pred"]).mark_line(strokeWidth=2, interpolate="step-after").encode(
+        x=x_time(), y=y, color=colour)
+    storm = alt.Chart(pd.DataFrame({"kp": [config.STORM_THRESHOLD], "text": ["storm threshold (G1)"]}))
+    storm_rule = storm.mark_rule(strokeDash=[4, 4], color=MUTED).encode(y="kp:Q")
+    storm_text = storm.mark_text(align="left", dx=4, dy=-7, color=MUTED, fontSize=11).encode(
+        y="kp:Q", text="text:N", x=alt.value(0))
+
+    hover = alt.selection_point(nearest=True, on="pointerover", fields=["time"], empty=False, clear="pointerout")
+    tips = [alt.Tooltip("label:N", title="Hour"), alt.Tooltip("kp_pred:Q", title="Tormenta", format=".1f"),
+            alt.Tooltip("kp_lo:Q", title="80% low", format=".1f"), alt.Tooltip("kp_hi:Q", title="80% high", format=".1f")]
+    tips += [alt.Tooltip(f"{c}:Q", title=cols[c].split(" ")[0], format=".2f") for c in present[1:]]
+    rule = alt.Chart(df).mark_rule(color=MUTED, strokeWidth=1).encode(
+        x=x_time(), opacity=alt.condition(hover, alt.value(0.8), alt.value(0)), tooltip=tips).add_params(hover)
+    dots = alt.Chart(long).mark_point(filled=True, size=70, strokeWidth=2).encode(
+        x=x_time(), y=y, color=colour, opacity=alt.condition(hover, alt.value(1), alt.value(0)))
+
+    layers = [band, storm_rule, storm_text, pred, obs, dots, rule]
+    if df["ahead"].any():
+        ahead = pd.DataFrame({"start": [df.loc[df["ahead"], "time"].min()], "end": [df["time"].max()]})
+        layers.insert(0, alt.Chart(ahead).mark_rect(color=MUTED, opacity=0.12).encode(
+            x=alt.X("start:T", scale=alt.Scale(type="utc")), x2="end:T"))
+    return alt.layer(*layers).properties(height=340)
+
+
+def sparkline(hourly: pd.DataFrame, col: str, unit: str) -> alt.Chart:
+    df = utc(hourly[[col]].dropna().tail(24))
+    base = alt.Chart(df).encode(x=alt.X("time:T", scale=alt.Scale(type="utc"), axis=None),
+                                y=alt.Y(f"{col}:Q", axis=None, scale=alt.Scale(zero=False)))
+    hover = alt.selection_point(nearest=True, on="pointerover", fields=["time"], empty=False, clear="pointerout")
+    line = base.mark_line(strokeWidth=2, color=SERIES_COLORS[0])
+    pts = base.mark_point(filled=True, size=60, color=SERIES_COLORS[0]).encode(
+        opacity=alt.condition(hover, alt.value(1), alt.value(0)),
+        tooltip=[alt.Tooltip("label:N", title="Hour"), alt.Tooltip(f"{col}:Q", title=unit, format=".1f")]
+    ).add_params(hover)
+    layers = [line, pts]
+    if col == "bz_gsm":
+        layers.insert(0, alt.Chart(pd.DataFrame({"z": [0]})).mark_rule(color=MUTED, strokeDash=[3, 3]).encode(
+            y=alt.Y("z:Q", axis=None)))
+    return alt.layer(*layers).properties(height=56).configure_view(strokeWidth=0)
+
+
+def sweep_chart(values: dict, label: str) -> alt.LayerChart:
+    """What-if: Kp (+ 80% range) as one input varies, the others held at the entered values."""
+    col, grid = SWEEPS[label]
+    rows = []
+    for v in grid:
+        x = {**values, col: float(v)}
+        x["b_scalar"] = max(x["b_scalar"], float(np.sqrt(x["bx"] ** 2 + x["by_gsm"] ** 2 + x["bz_gsm"] ** 2)))
+        out = predict_steady(BUNDLE, x)
+        rows.append({"x": float(v), "kp": out["kp_pred"], "lo": out["kp_lo"], "hi": out["kp_hi"]})
+    df = pd.DataFrame(rows)
+    xs = alt.X("x:Q", title=label, axis=alt.Axis(grid=False))
+    ys = alt.Y("kp:Q", scale=alt.Scale(domain=[0, 9]), title="predicted Kp")
+    hover = alt.selection_point(nearest=True, on="pointerover", fields=["x"], empty=False, clear="pointerout")
+    band = alt.Chart(df).mark_area(opacity=0.18, color=SERIES_COLORS[0]).encode(x=xs, y=alt.Y("lo:Q"), y2="hi:Q")
+    line = alt.Chart(df).mark_line(strokeWidth=2, color=SERIES_COLORS[0]).encode(x=xs, y=ys)
+    pts = alt.Chart(df).mark_point(filled=True, size=70, color=SERIES_COLORS[0]).encode(
+        x=xs, y=ys, opacity=alt.condition(hover, alt.value(1), alt.value(0)),
+        tooltip=[alt.Tooltip("x:Q", title=label, format=".1f"), alt.Tooltip("kp:Q", title="Kp", format=".1f"),
+                 alt.Tooltip("lo:Q", title="80% low", format=".1f"), alt.Tooltip("hi:Q", title="80% high", format=".1f")]
+    ).add_params(hover)
+    you = alt.Chart(pd.DataFrame({"x": [values[col]], "t": ["your input"]}))
+    you_rule = you.mark_rule(color=MUTED, strokeDash=[4, 4]).encode(x="x:Q")
+    you_text = you.mark_text(align="left", dx=4, y=8, color=MUTED, fontSize=11).encode(x="x:Q", text="t:N")
+    storm = alt.Chart(pd.DataFrame({"kp": [config.STORM_THRESHOLD]})).mark_rule(strokeDash=[2, 4], color=MUTED).encode(y="kp:Q")
+    return alt.layer(band, storm, you_rule, you_text, line, pts).properties(height=300)
+
+
+# ── Data ─────────────────────────────────────────────────────────────────────
 @st.cache_resource
 def get_bundle():
     return load_bundle()
@@ -40,111 +205,166 @@ def get_live():
             live = ev.attach_block_kp(live, fetch(), name)
         except requests.RequestException:
             pass                                    # comparison only; the nowcast still works
-    return live, hourly, fetch_live.fetch_f107()
+    return live, hourly, fetch_live.fetch_f107(), pd.Timestamp.now("UTC")
 
 
-def show_kp(col, title, row, note=None):
-    level = storm_level(row["kp_pred"])
-    col.metric(title, f"Kp {row['kp_pred']:.1f}", f"{level} · {LEVEL_NOTE[level]}", delta_color="off")
-    col.caption(f"80% range {row['kp_lo']:.1f}–{row['kp_hi']:.1f}" + (f" · {note}" if note else ""))
+def apply_preset(name: str):
+    for k, v in PRESETS[name].items():
+        st.session_state[k] = float(v)
 
 
-bundle = get_bundle()
-st.title("Tormenta: geomagnetic Kp nowcast")
-st.caption("Predicts the planetary Kp index (0–9) from solar-wind conditions with a HistGradientBoosting model "
-           "trained on 1998–2025 NASA OMNI data and GFZ definitive Kp. Live inputs come from NOAA SWPC.")
+def fill_live():
+    try:
+        _, hourly, f107, _ = get_live()
+        latest = hourly.dropna().iloc[-1]
+        for c in config.SW_FEATURES:
+            st.session_state[c] = float(round(latest[c], 2))
+        st.session_state["f107"] = float(f107.dropna().iloc[-1])
+    except (requests.RequestException, ValueError, KeyError, IndexError):
+        st.session_state["fill_error"] = True
 
-live_tab, manual_tab, about_tab = st.tabs(["Live nowcast", "Try your own inputs", "About the model"])
+
+BUNDLE = get_bundle()
+LIVE_ERRORS = (requests.RequestException, ValueError, KeyError, IndexError)
+
+# ── Page ─────────────────────────────────────────────────────────────────────
+st.title("🧲 Tormenta")
+st.caption("Nowcast of the geomagnetic **Kp index** (0–9) from the solar wind measured about an hour upstream of "
+           "Earth. Machine learning on 28 years of NASA OMNI data and GFZ Kp; live inputs from NOAA SWPC.")
+
+live_tab, manual_tab, about_tab = st.tabs(["🛰️ Live nowcast", "🧪 What-if explorer", "📊 About the model"])
 
 with live_tab:
-    if st.button("Refresh live data"):
-        get_live.clear()
     try:
-        live, hourly, f107 = get_live()
-    except (requests.RequestException, ValueError, KeyError, IndexError) as exc:
-        st.error(f"Could not get live data from NOAA SWPC ({type(exc).__name__}). Try again in a minute.")
+        live, hourly, f107, fetched = get_live()
+    except LIVE_ERRORS as exc:
+        st.error(f"Could not get live data from NOAA SWPC ({type(exc).__name__}). Try again in a minute.", icon="📡")
         live = None
     if live is not None and len(live):
         past, ahead = live[~live["ahead"]], live[live["ahead"]]
-        c1, c2, c3 = st.columns(3)
-        show_kp(c1, f"Now ({past.index[-1]:%d %b %H:00} UTC)", past.iloc[-1])
-        if len(ahead):
-            show_kp(c2, f"Next hour ({ahead.index[-1]:%H:00} UTC)", ahead.iloc[-1],
-                    "solar wind already measured at L1, ~1 h before it reaches Earth")
-        latest = hourly.dropna().iloc[-1]
-        c3.metric("Solar wind now", f"{latest['speed']:.0f} km/s", f"Bz {latest['bz_gsm']:+.1f} nT", delta_color="off")
-        c3.caption(f"|B| {latest['b_scalar']:.1f} nT · density {latest['density']:.1f} cm⁻³ · "
-                   f"F10.7 {f107.dropna().iloc[-1]:.0f}")
+        now = past.iloc[-1]
+        if now["kp_pred"] >= config.STORM_THRESHOLD:
+            _, _, short, name, _, icon, meaning = level_of(now["kp_pred"])
+            st.error(f"**Geomagnetic storm in progress: {short} ({name}).** {meaning}", icon=icon)
 
-        st.pyplot(ev.plot_live(live), clear_figure=True)
+        left, right = st.columns([3, 2], gap="large")
+        with left:
+            kp_card(now["kp_pred"], now["kp_lo"], now["kp_hi"], f"Kp now · {past.index[-1]:%d %b %H:00} UTC")
+            if len(ahead):
+                a = ahead.iloc[-1]
+                st.caption(f"⏩ **Next hour ({ahead.index[-1]:%H:00} UTC): Kp {a['kp_pred']:.1f}** "
+                           f"({a['kp_lo']:.1f}–{a['kp_hi']:.1f}). The solar wind for it has already passed the L1 "
+                           "spacecraft and is on its way to Earth.")
+        with right:
+            latest = hourly.dropna().iloc[-1]
+            st.markdown("**Solar wind now** · last 24 h")
+            for col, label, unit, fmt in [("bz_gsm", "Bz (north–south field)", "nT", "{:+.1f}"),
+                                          ("speed", "Speed", "km/s", "{:.0f}"), ("density", "Density", "cm⁻³", "{:.1f}")]:
+                a, b = st.columns([2, 3])
+                a.metric(label, f"{fmt.format(latest[col])} {unit}")
+                b.altair_chart(sparkline(hourly, col, unit), width="stretch")
+            st.caption(f"|B| {latest['b_scalar']:.1f} nT · temperature {latest['temperature']:,.0f} K · "
+                       f"F10.7 {f107.dropna().iloc[-1]:.0f} sfu. **Negative Bz and high speed drive storms.**")
 
+        st.subheader("Last 5 days: nowcast vs observed Kp")
+        st.altair_chart(live_chart(live), width="stretch")
+        notes = ["Hover for values. Shaded blue: 80% range."]
         if "kp_gfz" in past:
             scored = past.dropna(subset=["kp_gfz"])
             if len(scored):
                 m = ev.metrics(scored["kp_gfz"], scored["kp_pred"])
                 cover = ((scored["kp_gfz"] >= scored["kp_lo"]) & (scored["kp_gfz"] <= scored["kp_hi"])).mean()
-                st.caption(f"Last {len(scored)} hours vs GFZ quick-look Kp: RMSE {m['rmse']:.2f}, "
-                           f"MAE {m['mae']:.2f}, 80% range covered {cover:.0%} (test-set RMSE was 0.57).")
-
-        with st.expander("Hourly table (last 24 h)"):
-            table = live.tail(24).iloc[::-1].copy()
-            table["level"] = table["kp_pred"].map(storm_level)
+                notes.append(f"Vs GFZ over these {len(scored)} hours: RMSE **{m['rmse']:.2f}**, 80% range covered "
+                             f"**{cover:.0%}** (test-set RMSE 0.57).")
+        notes.append(f"Data fetched {fetched:%H:%M} UTC; refreshed every 5 minutes.")
+        st.caption(" ".join(notes))
+        c1, c2 = st.columns([1, 5])
+        if c1.button("🔄 Refresh now"):
+            get_live.clear()
+            st.rerun()
+        with c2.expander("Hourly table"):
+            table = live.tail(48).iloc[::-1].copy()
+            table["level"] = table["kp_pred"].map(lambda k: f"{level_of(k)[5]} {level_of(k)[2]}")
             st.dataframe(table.round(2), width="stretch")
 
 with manual_tab:
-    st.write("Enter one set of solar-wind conditions. The model also uses lags and 6–24 h averages, so the "
-             "values are **assumed to have held steady for the past 3 days**.")
-    if st.button("Fill with the latest live values"):
-        try:
-            _, hourly, f107 = get_live()
-            latest = hourly.dropna().iloc[-1]
-            for c in config.SW_FEATURES:
-                st.session_state[c] = float(round(latest[c], 2))
-            st.session_state["f107"] = float(f107.dropna().iloc[-1])
-        except (requests.RequestException, ValueError, KeyError, IndexError):
-            st.error("Live data unavailable right now.")
+    st.markdown("Pick a scenario or type your own conditions. One set of values is **assumed to have held steady "
+                "for the past 3 days**, because the model also uses lags and 6–24 h averages.")
     for name, value in DEFAULTS.items():
         st.session_state.setdefault(name, value)
+    cols = st.columns(len(PRESETS) + 1)
+    for c, name in zip(cols, PRESETS):
+        c.button(name, on_click=apply_preset, args=(name,), width="stretch")
+    cols[-1].button("🛰️ Latest live values", on_click=fill_live, width="stretch")
+    if st.session_state.pop("fill_error", False):
+        st.error("Live data unavailable right now.", icon="📡")
+
     with st.form("manual"):
-        cols = st.columns(4)
-        raw = {}
-        for i, (name, (lo, hi, label)) in enumerate(INPUT_LIMITS.items()):
-            raw[name] = cols[i % 4].number_input(label, min_value=lo, max_value=hi, step=STEPS.get(name, 0.5),
-                                                 key=name)
-        submitted = st.form_submit_button("Predict Kp")
-    st.caption("Southward Bz (negative) and high speed drive storms. Try Bz −20 and speed 700.")
+        fcols = st.columns(4)
+        raw = {name: fcols[i % 4].number_input(label, min_value=lo, max_value=hi, step=STEPS.get(name, 0.5), key=name)
+               for i, (name, (lo, hi, label)) in enumerate(INPUT_LIMITS.items())}
+        submitted = st.form_submit_button("Predict Kp", type="primary")
     if submitted:
         values, errors = validate_inputs(raw)
-        if errors:
-            for msg in errors.values():
-                st.error(msg)
-        else:
-            out = predict_steady(bundle, values)
-            st.metric("Predicted Kp", f"{out['kp_pred']:.1f}",
-                      f"{out['level']} · {LEVEL_NOTE[out['level']]}", delta_color="off")
-            st.caption(f"80% range {out['kp_lo']:.1f}–{out['kp_hi']:.1f}")
+        st.session_state["manual_values"] = None if errors else values
+        for msg in errors.values():
+            st.error(msg)
+    values = st.session_state.get("manual_values")
+    if values:
+        out = predict_steady(BUNDLE, values)
+        left, right = st.columns([2, 3], gap="large")
+        with left:
+            kp_card(out["kp_pred"], out["kp_lo"], out["kp_hi"], "Predicted Kp for your inputs")
+        with right:
+            label = st.radio("How does Kp respond to…", list(SWEEPS), horizontal=True)
+            st.altair_chart(sweep_chart(values, label), width="stretch")
+            st.caption("Each point is a full model prediction with that one input changed and the others held at "
+                       "your values. Hover for the 80% range. Dashed line: storm threshold.")
 
 with about_tab:
+    a, b, c, d = st.columns(4)
+    a.metric("Test RMSE", "0.573 Kp", "−34% vs persistence", delta_color="inverse")
+    b.metric("R²", "0.808")
+    c.metric("Storm-hour RMSE", "0.846 Kp", "−38% vs persistence", delta_color="inverse")
+    d.metric("80% range coverage", "80.8%")
+    st.caption("Test years 2020 → Jan 2026 (52,848 hours), never used for training or model selection.")
+
+    left, right = st.columns(2, gap="large")
+    with left:
+        st.markdown("**Model comparison (test RMSE, lower is better)**")
+        table = pd.read_csv(ROOT / "reports" / "metrics" / "test.csv", index_col=0)
+        table = table.drop(index=[i for i in table.index if i.startswith("Ensemble")], errors="ignore")
+        table = table.assign(model=table.index.str.replace(" (baseline)", "", regex=False),
+                             role=np.where(table.index == "HistGB", "production model", "comparison"))
+        bars = alt.Chart(table).mark_bar(cornerRadiusEnd=4, height=18).encode(
+            x=alt.X("rmse:Q", title="RMSE (Kp units)", scale=alt.Scale(domain=[0, 0.95])),
+            y=alt.Y("model:N", sort="-x", title=None),
+            color=alt.Color("role:N", scale=alt.Scale(domain=["production model", "comparison"],
+                                                      range=[SERIES_COLORS[0], MUTED]),
+                            legend=alt.Legend(orient="bottom", title=None)),
+            tooltip=[alt.Tooltip("model:N", title="Model"), alt.Tooltip("rmse:Q", title="RMSE", format=".3f"),
+                     alt.Tooltip("storm_rmse:Q", title="Storm RMSE", format=".3f"),
+                     alt.Tooltip("r2:Q", title="R²", format=".3f")])
+        labels = bars.mark_text(align="left", dx=4, fontSize=11).encode(
+            text=alt.Text("rmse:Q", format=".3f"), color=alt.value(MUTED))
+        st.altair_chart(alt.layer(bars, labels).properties(height=230), width="stretch")
+    with right:
+        st.markdown("**The May 2024 superstorm (never seen in training)**")
+        st.image(str(ROOT / "reports" / "figures" / "14_may2024_nowcast.png"))
+
     st.markdown(f"""
-**Model:** `{bundle['version']}`, trained on definitive data up to {bundle['trained_until'][:10]}
-({len(bundle['features'])} features; HistGradientBoosting point model + q10/q90 quantile models with a conformal
-margin of {bundle.get('interval_margin', 0):+.3f} Kp).
+**How it works.** 8 inputs (IMF |B|, Bx, By, Bz in GSM; solar-wind speed, density, temperature; F10.7 solar flux)
+become 66 causal features: coupling functions, pressure, lags, 3–24 h trends, position in the 3-hour Kp block, and
+time of day and year. A HistGradientBoosting model predicts Kp; two quantile models plus a conformal correction give
+the 80% range. **No geomagnetic indices are used as inputs.**
 
-| Test set 2020 → 2026-01 (never used for training or selection) | Value |
-|---|---|
-| RMSE | 0.573 Kp |
-| MAE | 0.437 Kp |
-| R² | 0.808 |
-| RMSE on storm hours (Kp ≥ 5−) | 0.846 Kp |
-| 80% range coverage | 80.8% |
-| Persistence baseline RMSE | 0.862 Kp |
+**Model** `{BUNDLE['version']}`, trained on definitive data up to {BUNDLE['trained_until'][:10]} and retrained
+weekly by GitHub Actions behind a validation gate.
 
-**Inputs:** IMF |B|, Bx, By, Bz (GSM), proton speed, density, temperature and F10.7 solar flux. **No geomagnetic
-indices are used as inputs**, so the nowcast does not wait for magnetometer data.
+**Limitations.** The largest storms are under-predicted (about −0.6 Kp for G3+), and sudden onsets show up 1–2 h
+late within a 3-hour block. This is not an operational warning service; for that, use NOAA SWPC or GFZ.
 
-**Limitations:** the largest storms are under-predicted (about −0.6 Kp for G3+), and sudden onsets show up
-1–2 h late within a 3-hour Kp block.
-
-**Data:** NASA/GSFC OMNIWeb (training features), GFZ Potsdam Kp (labels, CC BY 4.0), NOAA SWPC (live inputs).
-Code: [github.com/Syeda-Aliza-Ayaz/Tormenta](https://github.com/Syeda-Aliza-Ayaz/Tormenta)
+**Data.** NASA/GSFC OMNIWeb · GFZ Potsdam Kp (CC BY 4.0) · NOAA SWPC real-time data.
+[Code](https://github.com/Syeda-Aliza-Ayaz/Tormenta) ·
+[Model card](https://huggingface.co/aliza-ayaz/tormenta) · CT-378, NED University · Alizeh & HRK
 """)
