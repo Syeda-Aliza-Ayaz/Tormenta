@@ -587,3 +587,46 @@ candidate gate RMSE 0.5794 vs current 0.5791 (tolerance ×1.02) → promote: Tru
 | **New key decisions**: rules fixed in advance, freezing, CQR, propagated feed, GFZ live check, frozen-config retrain, HF model repo | same |
 | **Limitations updated**: the interval is now calibrated (old "too narrow" point removed); added conformal drift and the small live sample; future work = sub-hourly data, +1–3 h forecasting, sequence models, CME inputs | same |
 | **sklearn safety**: `load_bundle` warns if the running scikit-learn differs from the training one; a test checks that `requirements.txt` and the HF requirements pin it exactly (31 tests total) | `src/predict.py`, `tests/test_hf_space.py` |
+
+---
+
+## After Phase 7 — first real retrain, UI redesign, submission report (2026-11-06/07)
+
+### First real weekly run ✅
+- **Gate:** candidate RMSE **0.5801** vs current 0.5791 on Jan–Jun 2026 (within 2%), so it was promoted.
+- **New model:** `tormenta_v20261106_1027` (**v4**, trained to 2025-12-30) is now `current.joblib`.
+- **Publishing:** the bot committed v4 (`d9862f4`) and published it to Hugging Face. Streamlit redeployed itself.
+- **Remember:** run `git pull` before working locally.
+
+### Streamlit dashboard redesign (`app/streamlit_app.py`)
+**Live tab:**
+- a big **Kp number** with a storm-level chip;
+- a **0–9 gauge** in NOAA level colours showing the 80% range;
+- a **plain-language meaning** (aurora / power grids / GPS);
+- a **storm banner** when Kp ≥ 4.5;
+- solar-wind tiles with 24 h **sparklines**;
+- an **interactive Altair chart** (hover crosshair with every value, the "ahead" hour shaded, a labelled storm line).
+
+**What-if tab:**
+- **presets** (Quiet day, Fast solar wind, CME arrival, May 2024 superstorm, Latest live values);
+- the input form;
+- an **explanatory chart**: predicted Kp (+ 80% range) as Bz, speed or density varies with the other inputs held fixed. That's the Streamlit "explanatory chart" requirement, and it shows the tree model saturating beyond the training range: Kp levels off below Bz ≈ −15 nT.
+
+**About tab:** headline metrics, an RMSE bar chart of all models, the May 2024 figure, how it works, limitations.
+
+**Details:**
+- Level edges come from `config.KP_BINS` (3.5 / 4.5 / 5.5 / 6.5), the same as the reports. A bug where 7.0 showed as G2 is fixed.
+- Chart colours were checked with the palette validator (colour-blind safe in light and dark mode).
+- `altair==6.3.0` is now pinned.
+- **Demo tip:** the free Streamlit app **sleeps after a period with no visitors**. Open https://tormenta.streamlit.app/ about 5 minutes before the demo and click "Yes, get this app back up!" if asked.
+
+### Submission report
+`docs/report/tormenta_report.tex` follows the course template:
+- sections: Abstract · Problem · Data · EDA · Methodology · Results (comparison table + plots) · Deployment (screenshots) · Limitations · References · Contributions;
+- two-column, 10 pt, aiming for 4 pages;
+- figures and cropped deployment screenshots are in `docs/report/figs/`.
+
+To compile, upload `docs/report/overleaf_upload.zip` to Overleaf (New Project → Upload Project). The team still needs to **fill in the individual-contribution table** (marked in red). Screenshots were taken with Playwright driving the installed Edge.
+
+### Hugging Face "live Space" gap
+The guidelines ask for "model card and pipeline on the HF Hub, **plus a live Space (Gradio or Streamlit)**". Our Space is static because hosted Gradio needs PRO. Options: HF PRO for a month (then `sync_hf.py` can host the Gradio app), or try a Streamlit Space if HF still allows it for free.

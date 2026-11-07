@@ -28,7 +28,7 @@ disturbance) from the solar wind measured upstream of Earth. It is a CT-378 Mach
 | **Model** | scikit-learn `HistGradientBoostingRegressor` (point), plus q10/q90 quantile models with a conformal (CQR) margin |
 | **Inputs** | IMF \|B\|, Bx, By, Bz (GSM), proton speed, density, temperature, F10.7 solar flux; 66 engineered features (derived physics, lags, trailing means, position in the 3-h Kp block, time of day/year) |
 | **Not used as inputs** | Any geomagnetic index (Kp, Dst, AE, …), so the nowcast does not wait for magnetometer data |
-| **Training data** | NASA OMNI2 hourly, 1998 to 2025-07; labels are GFZ Potsdam definitive Kp |
+| **Training data** | NASA OMNI2 hourly from 1998, up to 6 months before the newest definitive Kp (retrained weekly; cutoff in `models/metrics_history.json`); labels are GFZ Potsdam definitive Kp |
 | **Selection** | Time-ordered CV in 1998–2016, validation 2017–2019, one final test on 2020 to 2026-01 |
 | **Live inputs** | NOAA SWPC propagated solar wind (1-min, time-shifted to Earth), averaged to hours like OMNI |
 

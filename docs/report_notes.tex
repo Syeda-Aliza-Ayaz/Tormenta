@@ -26,7 +26,7 @@
 \title{\textbf{Tormenta}\\[2pt]\large Nowcasting the Geomagnetic Kp Index from Solar-Wind Data\\[2pt]
 \normalsize Report \& Viva Notes (living document)}
 \author{Alizeh \and HRK\\[2pt]\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026}
-\date{Last updated: Phase 7 (wrap-up): README, final viva material}
+\date{Last updated: after Phase 7 (first real retrain, dashboard redesign, submission report)}
 
 \begin{document}
 \maketitle
@@ -1117,6 +1117,20 @@ server is not reachable from our network, so the online test runs in GitHub Acti
 to July 2025) scored RMSE 0.5791 on this new, unseen half-year, in line with its test (0.573) and earlier holdout
 (0.580) results: there is no sign of drift. The candidate, trained on six more months, scored 0.5794, within the
 2\% tolerance, so it would be promoted.
+
+%=====================================================================
+\section{First real retrain and dashboard redesign}\label{sec:after}
+%=====================================================================
+\paragraph{First real weekly run (2026-11-06).} The candidate scored RMSE 0.5801 against 0.5791 for the current
+model on January--June 2026, within the 2\% tolerance, so \code{tormenta\_v20261106\_1027} (v4, trained to
+2025-12-30) was promoted, committed by the workflow and published to Hugging Face.
+
+\paragraph{Dashboard redesign.} The live tab shows the Kp value with a 0--9 gauge in NOAA level colours, the 80\%
+range, a plain-language meaning, a storm banner, solar-wind sparklines and an interactive chart with a hover
+crosshair. The what-if tab adds presets and an explanatory chart of predicted Kp as one input varies with the
+others held fixed. This chart shows the tree model saturating beyond the range seen in training: predicted Kp
+levels off below $B_z \approx -15$\,nT, the extrapolation limit noted under limitations. Chart colours were checked
+for colour-vision deficiency in both light and dark mode.
 
 %=====================================================================
 \section{Key design decisions (for the viva)}
