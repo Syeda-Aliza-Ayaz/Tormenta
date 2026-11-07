@@ -28,16 +28,17 @@ MODE = "dark" if st.context.theme.type == "dark" else "light"
 SERIES = ["Tormenta nowcast", "GFZ quick-look Kp", "NOAA estimated Kp"]
 SERIES_COLORS = {"light": ["#2a78d6", "#eb6834", "#1baf7a"], "dark": ["#3987e5", "#d95926", "#199e70"]}[MODE]
 MUTED = {"light": "#8a8985", "dark": "#7d7c77"}[MODE]
+_B = config.KP_BINS        # NOAA level edges used everywhere in the project: 3.5, 4.5, 5.5, 6.5
 LEVELS = [  # (lower Kp, upper Kp, short, name, colour, icon, what it means)
-    (0, 4, "0–3", "Quiet", "#0ca30c", "🟢",
+    (_B[0], _B[1], "0–3", "Quiet", "#0ca30c", "🟢",
      "Quiet to unsettled. Aurora only near the poles; no effect on technology."),
-    (4, 5, "4", "Active", "#fab219", "🟡",
+    (_B[1], _B[2], "4", "Active", "#fab219", "🟡",
      "Active. Aurora possible at high latitudes (northern Scandinavia, Alaska, northern Canada)."),
-    (5, 6, "G1", "Minor storm", "#ec835a", "🟠",
+    (_B[2], _B[3], "G1", "Minor storm", "#ec835a", "🟠",
      "Minor storm. Weak power-grid fluctuations possible; aurora visible around 60° geomagnetic latitude."),
-    (6, 7, "G2", "Moderate storm", "#d03b3b", "🔴",
+    (_B[3], _B[4], "G2", "Moderate storm", "#d03b3b", "🔴",
      "Moderate storm. High-latitude power systems may see voltage alarms; aurora down to about 55°."),
-    (7, 9, "G3+", "Strong to extreme storm", "#d03b3b", "🚨",
+    (_B[4], 9, "G3+", "Strong to extreme storm", "#d03b3b", "🚨",
      "Strong to extreme storm. GPS and HF radio disruption and power-grid problems possible; aurora can reach "
      "mid-latitudes."),
 ]
@@ -57,7 +58,6 @@ SWEEPS = {"Bz GSM (nT)": ("bz_gsm", np.arange(-40, 15.1, 2.5)), "speed (km/s)": 
           "density (cm⁻³)": ("density", np.arange(1, 41, 2))}
 
 st.markdown("""<style>
-.kp-big { font-size: 3.2rem; font-weight: 700; line-height: 1; margin: 0; }
 .kp-chip { display: inline-block; padding: 2px 10px; border-radius: 99px; font-weight: 600; font-size: .9rem;
            border: 2px solid var(--chip); }
 .kp-gauge { position: relative; margin: 14px 0 4px; }
@@ -72,6 +72,7 @@ st.markdown("""<style>
 
 
 def level_of(kp: float):
+    kp = round(kp, 1)                                # level of the number shown on screen
     return next(lv for lv in LEVELS if kp < lv[1] or lv is LEVELS[-1])
 
 
@@ -82,7 +83,7 @@ def kp_card(kp: float, lo: float, hi: float, when: str):
                    for a, b, s, n, c, *_ in LEVELS)
     st.markdown(f"""
 <p class="kp-caption">{when}</p>
-<p class="kp-big">Kp {kp:.1f}</p>
+<div style="font-size:3.4rem;font-weight:700;line-height:1.05;margin:2px 0 8px">Kp {kp:.1f}</div>
 <span class="kp-chip" style="--chip:{colour}">{icon} {short} · {name}</span>
 <div class="kp-gauge">
   <div class="kp-track">{segs}</div>
