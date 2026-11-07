@@ -54,9 +54,9 @@ disturbance) from the solar wind measured upstream of Earth. It is a CT-378 Mach
 
 ## Use the model
 
-**Live demo:** <https://tormenta.streamlit.app/>
+**Live demo:** <https://huggingface.co/spaces/aliza-ayaz/tormenta> (runs in your browser) · <https://tormenta.streamlit.app/> (server)
 
-This repository contains the model (`models/current.joblib`), the feature and prediction code it needs
+This repository contains the model (`models/current.joblib`; the same trees as numpy arrays in `models/current_portable.npz`, loadable with `src.portable.load_portable` without scikit-learn), the feature and prediction code it needs
 (`src/`), and the F10.7 history file used for the trailing solar-flux mean. Requires Python 3.12 and the exact
 package versions in `requirements.txt`; the model is a pickled scikit-learn 1.9.1 object.
 

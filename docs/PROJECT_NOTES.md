@@ -628,5 +628,16 @@ candidate gate RMSE 0.5794 vs current 0.5791 (tolerance ×1.02) → promote: Tru
 
 To compile, upload `docs/report/overleaf_upload.zip` to Overleaf (New Project → Upload Project). The team still needs to **fill in the individual-contribution table** (marked in red). Screenshots were taken with Playwright driving the installed Edge.
 
-### Hugging Face "live Space" gap
-The guidelines ask for "model card and pipeline on the HF Hub, **plus a live Space (Gradio or Streamlit)**". Our Space is static because hosted Gradio needs PRO. Options: HF PRO for a month (then `sync_hf.py` can host the Gradio app), or try a Streamlit Space if HF still allows it for free.
+### Hugging Face live Space ✅ (free)
+The guidelines want "a **live** Space (Gradio or Streamlit)". Hosted Gradio/Docker Spaces need PRO, so we use a free **static** Space that runs our Streamlit app **in the visitor's browser** with **stlite** (Streamlit on Pyodide = Python compiled for the browser).
+
+| Problem | Fix |
+|---|---|
+| The browser's Python has a different scikit-learn, and pickles can't move between versions | `src/portable.py`: export the 2,100 fitted trees (3 models × 700) to plain numpy arrays (`current_portable.npz`, 1.4 MB) and walk them with numpy. **Identical predictions:** max difference 0.0 on 3,000 real hours with 617 NaNs (`tests/test_portable.py`). |
+| scikit-learn + matplotlib made the first load slow (89 s) | `src/scoring.py`: numpy-only `metrics` + `attach_block_kp` (`evaluate.py` re-exports them; a test checks they match sklearn). The browser installs only numpy, pandas, altair, requests → **53 s** first load. A test checks nothing the app imports needs heavy packages. |
+| GFZ blocks browser requests (no CORS header) | In the browser the chart compares with NOAA's Kp only (NOAA allows `*`). Browser network errors (`JsException`) are handled like normal ones. |
+| NOAA's line changed colour when GFZ was missing | Colours now follow the series, not its position. |
+
+- `sync_hf.py` now builds the Space (`index.html` loads stlite 1.12.0 with our files) and also uploads `current_portable.npz` to the model repo. `--build-only <dir>` builds locally for testing. The weekly workflow republishes everything after each promotion.
+- **Verified** by opening the real Space in Edge (Playwright): app ready after 53 s, live Kp shown, what-if works. Screenshot: `docs/report/figs/hf_space.png`.
+- The report's Deployment section and figure are updated. The local Gradio app is still there as a backup.

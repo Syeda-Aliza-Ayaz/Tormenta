@@ -15,11 +15,18 @@ import pandas as pd  # noqa: E402
 import requests  # noqa: E402
 import streamlit as st  # noqa: E402
 
-from src import config, evaluate as ev  # noqa: E402
+from src import config, scoring  # noqa: E402  (numpy-only helpers, no scikit-learn)
 from src.ingest import fetch_live  # noqa: E402
 from src.predict import INPUT_LIMITS, load_bundle, nowcast, predict_steady, validate_inputs  # noqa: E402
 
 st.set_page_config(page_title="Tormenta Kp Nowcast", page_icon="🧲", layout="wide")
+
+IN_BROWSER = sys.platform == "emscripten"           # Hugging Face static Space: stlite (Streamlit on Pyodide)
+NETWORK_ERRORS = (requests.RequestException,)
+if IN_BROWSER:
+    from pyodide.ffi import JsException             # browser fetch failures surface as JS exceptions
+    NETWORK_ERRORS += (JsException,)
+LIVE_ERRORS = NETWORK_ERRORS + (ValueError, KeyError, IndexError)
 
 # ── Look ─────────────────────────────────────────────────────────────────────
 # Series colours: validated categorical slots 1–3 (light / dark steps). Level colours: fixed status palette,
@@ -116,7 +123,8 @@ def live_chart(live: pd.DataFrame) -> alt.LayerChart:
     long = df.melt(id_vars=["time"], value_vars=present, var_name="col", value_name="kp").dropna()
     long["series"] = long["col"].map(cols)
     domain = [cols[c] for c in present]
-    colour = alt.Color("series:N", scale=alt.Scale(domain=domain, range=SERIES_COLORS[:len(domain)]),
+    # colour follows the series, not its position: NOAA stays green even when GFZ is absent (browser app)
+    colour = alt.Color("series:N", scale=alt.Scale(domain=domain, range=[SERIES_COLORS[SERIES.index(d)] for d in domain]),
                        legend=alt.Legend(orient="top", title=None, symbolStrokeWidth=3))
     y = alt.Y("kp:Q", scale=alt.Scale(domain=[0, 9]), title="Kp", axis=alt.Axis(tickCount=10))
 
@@ -194,6 +202,11 @@ def sweep_chart(values: dict, label: str) -> alt.LayerChart:
 # ── Data ─────────────────────────────────────────────────────────────────────
 @st.cache_resource
 def get_bundle():
+    # In the browser (Hugging Face static Space via stlite/Pyodide) the scikit-learn pickle cannot be loaded;
+    # the same trees are read from the portable .npz instead (identical predictions, see src/portable.py)
+    if IN_BROWSER:
+        from src.portable import load_portable
+        return load_portable(ROOT / "models" / "current_portable.npz")
     return load_bundle()
 
 
@@ -201,10 +214,13 @@ def get_bundle():
 def get_live():
     pred, hourly = nowcast(get_bundle())
     live = pred
-    for fetch, name in [(fetch_live.fetch_gfz_nowcast, "kp_gfz"), (fetch_live.fetch_swpc_kp, "kp_swpc")]:
+    comparisons = [(fetch_live.fetch_swpc_kp, "kp_swpc")]
+    if not IN_BROWSER:                              # GFZ sends no CORS header, so browsers may not fetch it
+        comparisons.insert(0, (fetch_live.fetch_gfz_nowcast, "kp_gfz"))
+    for fetch, name in comparisons:
         try:
-            live = ev.attach_block_kp(live, fetch(), name)
-        except requests.RequestException:
+            live = scoring.attach_block_kp(live, fetch(), name)
+        except NETWORK_ERRORS:
             pass                                    # comparison only; the nowcast still works
     return live, hourly, fetch_live.fetch_f107(), pd.Timestamp.now("UTC")
 
@@ -221,12 +237,11 @@ def fill_live():
         for c in config.SW_FEATURES:
             st.session_state[c] = float(round(latest[c], 2))
         st.session_state["f107"] = float(f107.dropna().iloc[-1])
-    except (requests.RequestException, ValueError, KeyError, IndexError):
+    except LIVE_ERRORS:
         st.session_state["fill_error"] = True
 
 
 BUNDLE = get_bundle()
-LIVE_ERRORS = (requests.RequestException, ValueError, KeyError, IndexError)
 
 # ── Page ─────────────────────────────────────────────────────────────────────
 st.title("🧲 Tormenta")
@@ -270,13 +285,14 @@ with live_tab:
         st.subheader("Last 5 days: nowcast vs observed Kp")
         st.altair_chart(live_chart(live), width="stretch")
         notes = ["Hover for values. Shaded blue: 80% range."]
-        if "kp_gfz" in past:
-            scored = past.dropna(subset=["kp_gfz"])
+        ref, ref_name = ("kp_gfz", "GFZ") if "kp_gfz" in past else ("kp_swpc", "NOAA's estimate")
+        if ref in past:
+            scored = past.dropna(subset=[ref])
             if len(scored):
-                m = ev.metrics(scored["kp_gfz"], scored["kp_pred"])
-                cover = ((scored["kp_gfz"] >= scored["kp_lo"]) & (scored["kp_gfz"] <= scored["kp_hi"])).mean()
-                notes.append(f"Vs GFZ over these {len(scored)} hours: RMSE **{m['rmse']:.2f}**, 80% range covered "
-                             f"**{cover:.0%}** (test-set RMSE 0.57).")
+                m = scoring.metrics(scored[ref], scored["kp_pred"])
+                cover = ((scored[ref] >= scored["kp_lo"]) & (scored[ref] <= scored["kp_hi"])).mean()
+                notes.append(f"Vs {ref_name} over these {len(scored)} hours: RMSE **{m['rmse']:.2f}**, 80% range "
+                             f"covered **{cover:.0%}** (test-set RMSE 0.57).")
         notes.append(f"Data fetched {fetched:%H:%M} UTC; refreshed every 5 minutes.")
         st.caption(" ".join(notes))
         c1, c2 = st.columns([1, 5])

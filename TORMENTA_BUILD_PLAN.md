@@ -259,6 +259,7 @@ jobs:
 | 28 | Planned SWPC 3-day solar-wind feeds retired (404); RTSW only 24 h | `products/geospace/propagated-solar-wind.json` (7 d, Earth-propagated, GSM) |
 | 29 | NOAA estimated Kp differs from our label source | Compare live against GFZ quick-look Kp too (same producer as labels) |
 | 30 | HF Gradio Spaces need PRO (HTTP 402) | Free HF model repo + model card and static landing Space; Gradio local; live app on Streamlit |
+| 34 | Guidelines need a *live* HF Space | Static Space runs the Streamlit app in the browser (stlite); trees exported to numpy (`src/portable.py`, identical predictions); numpy-only `src/scoring.py` keeps scikit-learn/matplotlib out of the browser |
 | 31 | NASA SPDF unreachable from our network | Parser validated offline against a committed .lst sample, and online in GitHub Actions |
 | 32 | SPDF current-year file has fill rows to Dec 31 | `build_hourly` ends at the last hour with any solar-wind data (else GFZ labels get empty features) |
 | 33 | Weekly retrain must not re-tune or re-test | Retrain the frozen config (same features, params, conformal margin); judge only on the gate holdout |

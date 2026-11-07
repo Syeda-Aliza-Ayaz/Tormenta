@@ -8,7 +8,7 @@ CT-378 Machine Learning, NED University, Fall 2026 · **Alizeh & HRK**.
 |---|---|
 | **Live app (Streamlit)** | <https://tormenta.streamlit.app/> |
 | **Model + model card (Hugging Face)** | <https://huggingface.co/aliza-ayaz/tormenta> |
-| **Project page (Hugging Face Space)** | <https://huggingface.co/spaces/aliza-ayaz/tormenta> |
+| **Live Space (Hugging Face)** | <https://huggingface.co/spaces/aliza-ayaz/tormenta> (the Streamlit app running in your browser; first load ~1 min) |
 | **Flask app** | runs locally (see below) |
 
 ## Results (test years 2020 → Jan 2026, never used for training or model selection)
@@ -49,7 +49,7 @@ NOAA SWPC real-time feeds ──► hourly means ──────────�
 src/            config, ingest (OMNI .lst + SPDF yearly files, GFZ, live SWPC), preprocessing, features,
                 train, evaluate, predict, update (weekly retrain)
 notebooks/      01 preprocessing · 02 EDA · 03 modelling · 04 v1→v2 · 05 final round · 06 live nowcast
-app/            streamlit_app.py · flask_app/ · hf_space/ (Gradio app, model card, landing page, sync_hf.py)
+app/            streamlit_app.py · flask_app/ · hf_space/ (model card, in-browser Space page, sync_hf.py, local Gradio app)
 models/         current.joblib (production) + earlier versions + metrics_history.json
 reports/        figures/ and metrics/ (v1 and v2 archived in reports/v1, reports/v2)
 tests/          leakage, live parity, SPDF parser, apps, retrain guard rails
@@ -134,6 +134,17 @@ What it does:
    repository secret.
 
 Because the bot commits to `main`, run `git pull` before working locally.
+
+## The Hugging Face Space (free, runs in the browser)
+Hugging Face now charges for server-hosted Gradio/Docker Spaces, so the Space is a free **static** Space that runs
+`app/streamlit_app.py` **inside the visitor's browser** with [stlite](https://github.com/whitphx/stlite) (Streamlit on
+Pyodide).
+- The browser's Python can't load our scikit-learn 1.9.1 pickle, so `src/portable.py` exports the fitted trees to
+  `models/current_portable.npz` and predicts with numpy. `tests/test_portable.py` shows the predictions are identical.
+- Live data comes straight from NOAA, which allows browser access. GFZ doesn't, so in the browser the chart compares
+  against NOAA's estimated Kp only.
+- `app/hf_space/sync_hf.py --build-only <dir>` builds the Space locally; serve that folder with
+  `python -m http.server` to test it.
 
 ## Documentation
 - `docs/PROJECT_NOTES.md`: what each file does, how, why, and what we got.

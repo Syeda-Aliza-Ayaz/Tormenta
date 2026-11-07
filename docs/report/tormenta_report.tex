@@ -200,10 +200,15 @@ parity test shows that the live and training paths produce identical features.
   \item a what-if explorer with an input form, presets and an explanatory chart of Kp as one input varies;
   \item a model card.
   \end{itemize}
-\item \textbf{Hugging Face Hub}: the model, pipeline code and model card are at
-\url{https://huggingface.co/aliza-ayaz/tormenta}, with a project Space at
-\url{https://huggingface.co/spaces/aliza-ayaz/tormenta}. The Gradio app runs locally, because hosted Gradio Spaces
-now require a paid account.
+\item \textbf{Hugging Face}:
+  \begin{itemize}
+  \item the model, pipeline code and model card are at \url{https://huggingface.co/aliza-ayaz/tormenta};
+  \item the live Space, \url{https://huggingface.co/spaces/aliza-ayaz/tormenta}, runs the same Streamlit app
+  \emph{in the visitor's browser} (stlite on Pyodide), because server-hosted Gradio and Docker Spaces now require
+  a paid account;
+  \item the browser cannot load a scikit-learn pickle from another version, so the fitted trees are exported to
+  numpy arrays, and a test shows their predictions are identical.
+  \end{itemize}
 \item \textbf{Flask (localhost)}: an HTML form and a \code{/predict} JSON endpoint, plus \code{/api/live} and
 \code{/health}. Each invalid field gets its own error message, returned as HTTP 400.
 \item \textbf{Weekly retraining}: GitHub Actions rebuilds the data from NASA and GFZ and retrains the frozen
@@ -221,7 +226,7 @@ models) is within 2\% of the current model's. The first run promoted v4 (0.580 v
 \begin{subfigure}[b]{0.30\textwidth}\includegraphics[width=\linewidth]{hf_model.png}
 \caption{Hugging Face model card.}\end{subfigure}\hfill
 \begin{subfigure}[b]{0.33\textwidth}\includegraphics[width=\linewidth]{hf_space.png}
-\caption{Hugging Face Space.}\end{subfigure}
+\caption{Hugging Face Space (live, in-browser).}\end{subfigure}
 \caption{Deployments (screenshots, 7 Nov 2026).}\label{fig:deploy}
 \end{figure*}
 

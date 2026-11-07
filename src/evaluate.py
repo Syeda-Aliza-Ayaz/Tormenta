@@ -3,23 +3,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.inspection import permutation_importance
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 from src import config
-
-
-def metrics(y, pred) -> dict:
-    """Overall RMSE/MAE/R² plus RMSE/MAE on storm hours (Kp ≥ 5-)."""
-    y, pred = np.asarray(y), np.asarray(pred)
-    storm = y >= config.STORM_THRESHOLD
-    return {
-        "rmse": mean_squared_error(y, pred) ** 0.5,
-        "mae": mean_absolute_error(y, pred),
-        "r2": r2_score(y, pred),
-        "storm_rmse": mean_squared_error(y[storm], pred[storm]) ** 0.5 if storm.any() else np.nan,
-        "storm_mae": mean_absolute_error(y[storm], pred[storm]) if storm.any() else np.nan,
-        "n": len(y),
-    }
+from src.scoring import attach_block_kp, metrics  # noqa: F401  (re-exported)
 
 
 def metrics_table(y, preds: dict) -> pd.DataFrame:
@@ -50,12 +36,6 @@ def rmse_by_block_hour(y, preds: dict) -> pd.DataFrame:
     out = pd.DataFrame(rows).T
     out.columns = [f"hour {c + 1} of block" for c in out.columns]
     return out
-
-
-def attach_block_kp(pred: pd.DataFrame, kp_blocks: pd.Series, name: str) -> pd.DataFrame:
-    """Add the Kp of the 3-h block containing each hour (e.g. NOAA estimated or GFZ Kp)."""
-    block = pred.index.floor(f"{config.KP_BLOCK_HOURS}h")
-    return pred.assign(**{name: kp_blocks.reindex(block).to_numpy()})
 
 
 def _save(fig, name):

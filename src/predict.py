@@ -6,10 +6,8 @@ Two entry points, both through the shared features.build_features:
 """
 import warnings
 
-import joblib
 import numpy as np
 import pandas as pd
-import sklearn
 
 from src import config
 from src.features import build_features
@@ -21,6 +19,9 @@ def load_bundle(path=config.CURRENT_MODEL) -> dict:
     Pickled estimators are only guaranteed to behave identically under the same version, which is why every
     deployment pins scikit-learn exactly.
     """
+    import joblib                      # imported here so the browser app (portable model, no pickle) never needs it
+    import sklearn
+
     bundle = joblib.load(path)
     trained = bundle.get("sklearn_version")
     if trained and trained != sklearn.__version__:

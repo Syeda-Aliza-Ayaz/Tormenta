@@ -1132,6 +1132,15 @@ others held fixed. This chart shows the tree model saturating beyond the range s
 levels off below $B_z \approx -15$\,nT, the extrapolation limit noted under limitations. Chart colours were checked
 for colour-vision deficiency in both light and dark mode.
 
+\paragraph{Live Hugging Face Space in the browser.} Server-hosted Gradio and Docker Spaces now require a paid
+account, but static Spaces are free. The Space therefore runs the same Streamlit app inside the visitor's browser
+with stlite (Streamlit on Pyodide). Pyodide's scikit-learn differs from 1.9.1, so pickles cannot be loaded; instead
+\code{src/portable.py} exports the 2{,}100 fitted trees to numpy arrays and evaluates them with the same routing
+rule as scikit-learn (NaN goes to the stored side; otherwise $x \le$ threshold goes left). Predictions are identical
+(maximum difference 0.0 on 3{,}000 real hours including 617 missing values). Lightweight numpy scoring helpers keep
+scikit-learn and matplotlib out of the browser, cutting the first load from 89\,s to 53\,s. GFZ sends no CORS
+header, so in the browser the live comparison uses NOAA's estimated Kp only.
+
 %=====================================================================
 \section{Key design decisions (for the viva)}
 %=====================================================================
