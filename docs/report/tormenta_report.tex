@@ -1,7 +1,7 @@
-% Tormenta: CT-378 Machine Learning semester project report (target: 4 pages).
+% Tormenta: CT-378 Machine Learning semester project report (one column, figures stacked full width).
 % Compile on Overleaf (pdfLaTeX). Upload the whole docs/report/ folder; figures are in figs/.
-\documentclass[10pt,a4paper,twocolumn]{article}
-\usepackage[a4paper,margin=1.55cm,columnsep=0.6cm]{geometry}
+\documentclass[11pt,a4paper]{article}
+\usepackage[a4paper,margin=2cm]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{microtype}
@@ -12,14 +12,14 @@
 \usepackage{subcaption}
 \usepackage{enumitem}
 \usepackage{xcolor}
+\usepackage[section]{placeins}   % figures stay inside their own section
 \usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!50!black]{hyperref}
 \graphicspath{{figs/}}
 \captionsetup{font=small,labelfont=bf,skip=3pt}
 \setlist{nosep,leftmargin=*}
 \setlength{\parskip}{0pt}
-\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
-\setlength{\floatsep}{6pt plus 2pt minus 2pt}
-\setlength{\dbltextfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
+\setlength{\floatsep}{10pt plus 2pt minus 2pt}
 \renewcommand{\arraystretch}{1.05}
 \newcommand{\code}[1]{\texttt{\small #1}}
 
@@ -64,9 +64,9 @@ $D=2$), and the observed F10.7 solar flux \cite{gfzkp,tapping2013}. Each hour is
 block containing it, so the 245{,}688 rows hold about 81{,}900 independent labels. NOAA SWPC real-time data \cite{swpc} are
 used only for live serving.
 
-\begin{table}[t]\centering\small
+\begin{table}[htbp]\centering\small
 \caption{Data sources (accessed Oct--Nov 2026).}\label{tab:data}
-\begin{tabular}{@{}p{1.55cm}p{3.05cm}p{2.6cm}@{}}\toprule
+\begin{tabular}{@{}p{2.6cm}p{8.4cm}p{5.6cm}@{}}\toprule
 Source & Content & Access / licence\\\midrule
 NASA OMNI2 hourly & $|B|$, $B_x$, $B_y$, $B_z$ (GSM), speed, density, temperature; 1998-01-01 to 2026-01-10 (training seed), later from SPDF yearly files &
 OMNIWeb subset (26 Oct 2026); SPDF \code{omni2\_YYYY.dat}; public domain\\
@@ -76,7 +76,7 @@ NOAA SWPC & 1-min propagated solar wind (7 days), F10.7, estimated Kp & JSON API
 \end{table}
 
 \section{Exploratory data analysis}
-We produced eight EDA plots; Fig.~\ref{fig:eda} shows two. Key findings:
+We produced eight EDA plots; Figs.~\ref{fig:eda} and \ref{fig:corr} show two of them. Key findings:
 \begin{itemize}
 \item \textbf{Target balance:} Kp is strongly right-skewed. Storm hours (Kp\,$\ge$\,5$-$) are only 4.06\% of the
 data and G3+ about 0.5\%, so squared-error models will tend to under-predict storms. We therefore report storm-hour
@@ -93,11 +93,14 @@ lags and 3--24\,h windows.
 time-ordered and the quiet validation years (2017--2019) must be interpreted with care.
 \end{itemize}
 
-\begin{figure}[t]\centering
-\includegraphics[width=\columnwidth]{04_kp_vs_drivers.png}\\[2pt]
-\includegraphics[width=0.78\columnwidth]{05_correlation.png}
-\caption{EDA. Top: median Kp and interquartile range against $B_z$, speed and $VB_s$ (note the southward-$B_z$ asymmetry).
-Bottom: Spearman correlation of each input with Kp (training years).}\label{fig:eda}
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{04_kp_vs_drivers.png}
+\caption{Median Kp (line) and interquartile range (band) against $B_z$, speed and $VB_s$, training years. Kp rises
+steeply as $B_z$ turns southward but hardly at all for northward $B_z$.}\label{fig:eda}
+\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.7\textwidth]{05_correlation.png}
+\caption{Spearman rank correlation of each input with Kp (training years).}\label{fig:corr}
 \end{figure}
 
 \section{Methodology}
@@ -133,9 +136,9 @@ improved, a rule fixed before looking at the results. The test set was scored on
 reported. The final model is saved with \code{joblib}, and every deployment pins identical package versions.
 
 \section{Results}
-\begin{table}[t]\centering\small
+\begin{table}[htbp]\centering
 \caption{RMSE (Kp units) by model. Storm = hours with observed Kp\,$\ge$\,5$-$. Test = 2020--Jan 2026.}\label{tab:results}
-\setlength{\tabcolsep}{3.6pt}
+\setlength{\tabcolsep}{8pt}
 \begin{tabular}{@{}lcccccc@{}}\toprule
 Model & Train & CV & Val & Test & Test $R^2$ & Test storm\\\midrule
 Persistence & -- & -- & 0.819 & 0.862 & 0.566 & 1.368\\
@@ -147,20 +150,23 @@ Random Forest & 0.545 & 0.644 & 0.564 & 0.606 & 0.785 & 0.972\\
 \end{tabular}
 \end{table}
 
-\begin{figure*}[t]\centering
-\begin{subfigure}[b]{0.53\textwidth}\includegraphics[width=\linewidth]{14_may2024_nowcast.png}
-\caption{May 2024 G5 storm, never seen in training.}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.46\textwidth}\includegraphics[width=\linewidth]{11_error_by_level.png}
-\caption{Test MAE and bias by observed storm level.}\end{subfigure}\\[3pt]
-\begin{subfigure}[b]{0.53\textwidth}\includegraphics[width=\linewidth]{15_learning_complexity.png}
-\caption{Learning curve (left) and complexity curve (right).}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.46\textwidth}\includegraphics[width=\linewidth]{16_live_nowcast.png}
-\caption{Live snapshot vs GFZ and NOAA Kp (25--30 Oct 2026).}\end{subfigure}
-\caption{Results of the final HistGB model.}\label{fig:results}
-\end{figure*}
+\begin{figure}[htbp]\centering
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=0.92\textwidth]{14_may2024_nowcast.png}
+\caption{The May 2024 G5 storm, never seen in training: nowcast with 80\% band vs observed GFZ Kp.}\end{subfigure}\\[6pt]
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{11_error_by_level.png}
+\caption{Test MAE (left) and mean bias (right) by observed storm level, all models.}\end{subfigure}
+\caption{Final HistGB model on the test years.}\label{fig:results}
+\end{figure}
+\begin{figure}[htbp]\centering
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{15_learning_complexity.png}
+\caption{Learning curve (left) and complexity curve (right): train vs validation RMSE.}\end{subfigure}\\[6pt]
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=0.92\textwidth]{16_live_nowcast.png}
+\caption{Live snapshot against GFZ quick-look and NOAA estimated Kp (25--30 Oct 2026).}\end{subfigure}
+\caption{Fitting diagnostics and live behaviour.}\label{fig:results2}
+\end{figure}
 
 HistGB is the best model on every split (Table~\ref{tab:results}): 34\% below persistence overall and 38\% on storm
-hours. Fig.~\ref{fig:results} summarises its behaviour.
+hours. Figs.~\ref{fig:results} and \ref{fig:results2} summarise its behaviour.
 \begin{itemize}
 \item \textbf{Fitting:} HistGB's train, CV and validation RMSE are close (0.534 / 0.561 / 0.522), so it does not
 overfit. KNN memorises the training data (train RMSE $\approx0$), and Linear Regression underfits, with train
@@ -190,7 +196,7 @@ On January--June 2026, unseen by the model, it scored 0.579, so there is no sign
 
 \section{Deployment}
 All apps load the same \code{models/current.joblib} and call the same \code{predict.py}
-(Fig.~\ref{fig:deploy}). Live inputs come from NOAA's propagated solar-wind feed, averaged to OMNI-style hours. A
+(Figs.~\ref{fig:deploy}--\ref{fig:deployflask}). Live inputs come from NOAA's propagated solar-wind feed, averaged to OMNI-style hours. A
 parity test shows that the live and training paths produce identical features.
 \begin{itemize}
 \item \textbf{Streamlit Community Cloud} (\url{https://tormenta.streamlit.app/}) has three tabs:
@@ -216,19 +222,24 @@ configuration. It promotes the new model only if its RMSE on the latest six mont
 models) is within 2\% of the current model's. The first run promoted v4 (0.580 vs 0.579).
 \end{itemize}
 
-\begin{figure*}[t]\centering
-\begin{subfigure}[b]{0.495\textwidth}\includegraphics[width=\linewidth]{streamlit_live.png}
-\caption{Streamlit: live nowcast with storm-level gauge and solar wind.}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.495\textwidth}\includegraphics[width=\linewidth]{streamlit_whatif.png}
-\caption{Streamlit: what-if prediction and explanatory chart.}\end{subfigure}\\[3pt]
-\begin{subfigure}[b]{0.34\textwidth}\includegraphics[width=\linewidth]{flask_errors.png}
-\caption{Flask: per-field validation.}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.30\textwidth}\includegraphics[width=\linewidth]{hf_model.png}
-\caption{Hugging Face model card.}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.33\textwidth}\includegraphics[width=\linewidth]{hf_space.png}
-\caption{Hugging Face Space (live, in-browser).}\end{subfigure}
-\caption{Deployments (screenshots, 7 Nov 2026).}\label{fig:deploy}
-\end{figure*}
+\begin{figure}[htbp]\centering
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{streamlit_live.png}
+\caption{Live nowcast: Kp with storm-level gauge, 80\% range, meaning, and the current solar wind.}\end{subfigure}\\[6pt]
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=\textwidth]{streamlit_whatif.png}
+\caption{What-if explorer: prediction for the ``CME arrival'' preset and the explanatory chart.}\end{subfigure}
+\caption{Streamlit Community Cloud app (\url{https://tormenta.streamlit.app/}).}\label{fig:deploy}
+\end{figure}
+\begin{figure}[htbp]\centering
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=0.9\textwidth]{hf_space.png}
+\caption{Live Space: the same Streamlit app running in the browser.}\end{subfigure}\\[6pt]
+\begin{subfigure}{\textwidth}\centering\includegraphics[width=0.6\textwidth]{hf_model.png}
+\caption{Model repository with the model card.}\end{subfigure}
+\caption{Hugging Face Hub.}\label{fig:deployhf}
+\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.75\textwidth]{flask_errors.png}
+\caption{Flask app on localhost: a non-numeric speed is rejected with a per-field message.}\label{fig:deployflask}
+\end{figure}
 
 \section{Limitations and future work}
 \begin{itemize}
@@ -270,7 +281,7 @@ wind-magnetosphere coupling function inferred from 10 magnetospheric state varia
 
 \section*{Individual contributions}
 {\small\centering
-\begin{tabular}{@{}p{1.2cm}p{6.6cm}@{}}\toprule
+\begin{tabular}{@{}p{2cm}p{14.5cm}@{}}\toprule
 Member & Contribution\\\midrule
 Alizeh & \textcolor{red}{[to be filled in by the team: e.g.\ data pipeline, EDA, modelling, deployments, report]}\\
 HRK & \textcolor{red}{[to be filled in by the team]}\\\bottomrule
