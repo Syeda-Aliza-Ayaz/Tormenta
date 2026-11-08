@@ -260,6 +260,7 @@ jobs:
 | 29 | NOAA estimated Kp differs from our label source | Compare live against GFZ quick-look Kp too (same producer as labels) |
 | 30 | HF Gradio Spaces need PRO (HTTP 402) | Free HF model repo + model card and static landing Space; Gradio local; live app on Streamlit |
 | 34 | Guidelines need a *live* HF Space | Static Space runs the Streamlit app in the browser (stlite); trees exported to numpy (`src/portable.py`, identical predictions); numpy-only `src/scoring.py` keeps scikit-learn/matplotlib out of the browser |
+| 35 | Live F10.7 features were NaN for the current day (series ended at the last measured day) | Extend the daily series 7 days; training features unchanged; test fails on the old code; weekly workflow commits F10.7 history and republishes the Space every week; SWPC-feed fallback; stale warning |
 | 31 | NASA SPDF unreachable from our network | Parser validated offline against a committed .lst sample, and online in GitHub Actions |
 | 32 | SPDF current-year file has fill rows to Dec 31 | `build_hourly` ends at the last hour with any solar-wind data (else GFZ labels get empty features) |
 | 33 | Weekly retrain must not re-tune or re-test | Retrain the frozen config (same features, params, conformal margin); judge only on the gate holdout |

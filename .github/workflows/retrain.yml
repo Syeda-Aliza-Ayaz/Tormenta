@@ -41,18 +41,21 @@ jobs:
         id: update
         run: python -m src.update ${{ inputs.dry_run && '--dry-run' || '' }}
 
+      # Runs every week, even with no new OMNI data: the F10.7 history (used live for the 81-day mean) must stay
+      # fresh, and the weekly commit keeps the repo active so GitHub does not disable the schedule
       - name: Commit model and F10.7 history
-        if: ${{ !inputs.dry_run && steps.update.outputs.status != 'no_new_data' }}
+        if: ${{ !inputs.dry_run }}
         run: |
           git config user.name "tormenta-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add models data/f107_history.csv
           if git diff --cached --quiet; then echo "Nothing to commit."; exit 0; fi
-          git commit -m "Weekly retrain: ${{ steps.update.outputs.status }} ${{ steps.update.outputs.version }}"
+          git commit -m "Weekly update: ${{ steps.update.outputs.status }} ${{ steps.update.outputs.version }}"
           git push
 
+      # Weekly too: the Space carries its own copy of the F10.7 history, which must not go stale
       - name: Publish to Hugging Face
-        if: ${{ steps.update.outputs.promoted == 'true' }}
+        if: ${{ !inputs.dry_run }}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: python app/hf_space/sync_hf.py --user aliza-ayaz --message "Weekly retrain ${{ steps.update.outputs.version }}"
+        run: python app/hf_space/sync_hf.py --user aliza-ayaz --message "Weekly update: ${{ steps.update.outputs.status }} ${{ steps.update.outputs.version }}"

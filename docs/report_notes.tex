@@ -1142,6 +1142,26 @@ scikit-learn and matplotlib out of the browser, cutting the first load from 89\,
 header, so in the browser the live comparison uses NOAA's estimated Kp only.
 
 %=====================================================================
+\section{F10.7 freshness fix}\label{sec:f107fix}
+%=====================================================================
+\paragraph{Bug.} Live, the F10.7 features of the current day's hours were missing. The daily flux is measured at
+about 20\,UT, so the current day's value never exists yet. The features of day $D$ need only day $D-1$, but the
+daily feature frame ended at the last measured day, so day $D$ had no row. The training archive contains every
+day, so training was unaffected and the problem stayed invisible.
+
+\paragraph{Fix and verification.} The daily series is extended seven days past the last value (the same limit as
+the forward fill). All 245{,}688$\times$66 training features are identical before and after the fix, so the
+model needs no retraining. A new test requires the current day's features to be the same whether or not that day's
+value is known; it fails on the old code.
+
+\paragraph{Staleness handling.} With NOAA's 30-day feed available, the previous-day value is always defined and
+the 81-day mean stays defined until the history file is about 70 days old. Without the feed, both are defined for
+up to 7 days. Missing values never stop a prediction, because HistGB routes them down the branch learned in
+training. The weekly workflow now commits the history file every week (previously only when new OMNI data
+arrived) and republishes the browser Space. If the SWPC feed fails, the history file is used alone, and the
+dashboard warns when F10.7 is more than 7 days old.
+
+%=====================================================================
 \section{Key design decisions (for the viva)}
 %=====================================================================
 \begin{longtable}{p{4.6cm}p{11.2cm}}\toprule

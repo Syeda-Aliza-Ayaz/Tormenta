@@ -641,3 +641,36 @@ The guidelines want "a **live** Space (Gradio or Streamlit)". Hosted Gradio/Dock
 - `sync_hf.py` now builds the Space (`index.html` loads stlite 1.12.0 with our files) and also uploads `current_portable.npz` to the model repo. `--build-only <dir>` builds locally for testing. The weekly workflow republishes everything after each promotion.
 - **Verified** by opening the real Space in Edge (Playwright): app ready after 53 s, live Kp shown, what-if works. Screenshot: `docs/report/figs/hf_space.png`.
 - The report's Deployment section and figure are updated. The local Gradio app is still there as a backup.
+
+---
+
+## F10.7 freshness fix (2026-11-08, raised by HRK about `features.py` line 115)
+
+**The question:** line 115 (`prior_median = ...`, the flare-spike check) and the F10.7 features rely on a daily F10.7 series. How is that series kept up to date live, and what happens if it isn't?
+
+**Where the series comes from:**
+- **training:** GFZ's archive (every day present);
+- **live:** `data/f107_history.csv` (last 365 days of GFZ data, refreshed by the weekly workflow) plus SWPC's 30-day feed for the newest days (`fetch_live.fetch_f107`).
+
+### Bug found while answering it
+For the **current day's hours** both F10.7 features were **NaN** live. F10.7 is measured once a day at ~20 UT, so today's value never exists yet. Today's features only need *yesterday's* value, but `f107_daily_features` built rows only up to the last measured day, so "today" had no row. Training never showed it because the archive has every day.
+- **Fix:** the daily series is extended `F107_MAX_STALE_DAYS` (7) days past the last value.
+- **Training features are byte-for-byte identical:** all 245,688 × 66 values were compared old vs new. So the model needs no retraining; only live current-day predictions change, and they now match training.
+- **New test** `test_todays_f107_features_do_not_need_todays_value`: today's features must be the same whether or not today's value is known. It **fails on the old code** and passes now.
+
+### What happens when F10.7 data goes stale (measured)
+| history file age | NOAA feed OK | NOAA feed down |
+|---|---|---|
+| up to date | both features OK | both OK |
+| 30–60 days old | both OK | NaN after 7 days |
+| ~70+ days old | `f107_prev` OK, 81-day mean NaN | NaN |
+
+When a feature is NaN, HistGB still predicts (missing values go down the branch learned in training), so the app keeps working, just slightly less accurately.
+
+### Gaps closed
+1. **The weekly workflow commits the F10.7 history every week.** Before, it only committed in weeks with new OMNI data, and OMNI arrives in bursts months apart, so the file could have reached the 70-day limit. The weekly bot commit also keeps the repo active, so GitHub won't disable the schedule after 60 idle days.
+2. **The Hugging Face Space is republished every week**, because it carries its own copy of the history file.
+3. **The F10.7 feed has a fallback:** if SWPC is unreachable, `fetch_f107` logs a warning and uses the history file instead of failing the whole nowcast (`test_f107_falls_back_to_history_when_feed_is_down`).
+4. **The dashboard shows the F10.7 date**, and a warning if the data is more than 7 days old.
+
+38 tests total.

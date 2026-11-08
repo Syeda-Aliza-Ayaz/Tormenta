@@ -1,6 +1,7 @@
 """Live path parity: SWPC-shaped 1-min data must give the same features as the training path."""
 import numpy as np
 import pandas as pd
+import requests
 
 from src import config
 from src.features import build_features
@@ -59,3 +60,12 @@ def test_parse_gfz_nowcast():
     kp = fetch_live.parse_gfz_nowcast(text)
     assert kp.index[0] == pd.Timestamp("2026-10-30 06:00") and kp.iloc[0] == 1.0
     assert np.isnan(kp.iloc[1])
+
+
+def test_f107_falls_back_to_history_when_feed_is_down(monkeypatch):
+    """A failed F10.7 feed must not stop the nowcast: the history file is used and features degrade gracefully."""
+    def offline(_url):
+        raise requests.ConnectionError("offline")
+    monkeypatch.setattr(fetch_live, "fetch_json", offline)
+    f107 = fetch_live.fetch_f107()
+    pd.testing.assert_series_equal(f107, fetch_live.load_f107_history())

@@ -89,6 +89,7 @@ MEMORY_WINDOW_HOURS = 48
 F107_TRAILING_DAYS = 81
 F107_SPIKE_WINDOW_DAYS = 27    # flare-spike check against the trailing median
 F107_SPIKE_RATIO = 2.0         # value > 2× trailing median → treated as flare-contaminated
+F107_MAX_STALE_DAYS = 7        # last F10.7 value is carried forward at most 7 days (then features become NaN)
 MIN_HISTORY_HOURS = 48         # live warm-up: hours dropped before the first prediction (>= longest window; feed has 7 days)
 
 # ── Split & training ─────────────────────────────────────────────────────────

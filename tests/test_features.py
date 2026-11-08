@@ -60,6 +60,17 @@ def test_f107_spike_removed_and_lagged(synthetic):
     assert feats["f107_prev"].max() < 300
 
 
+def test_todays_f107_features_do_not_need_todays_value(synthetic):
+    """Live, today's flux (measured ~20 UT) is never known yet; today's features must not depend on it."""
+    hourly, f107 = synthetic
+    day = hourly.index[60 * 24].normalize()
+    hours = hourly.loc[:day + pd.Timedelta("23h")]
+    known = build_features(hours, f107.loc[:day])
+    not_yet = build_features(hours, f107.loc[:day - pd.Timedelta("1D")])
+    pd.testing.assert_frame_equal(known.loc[day:], not_yet.loc[day:])
+    assert not_yet.loc[day:, ["f107_prev", "f107_mean81d"]].notna().all().all()
+
+
 def test_no_geomagnetic_inputs_and_enough_features(synthetic):
     hourly, f107 = synthetic
     cols = build_features(hourly, f107).columns

@@ -111,12 +111,16 @@ def f107_daily_features(f107_daily: pd.Series) -> pd.DataFrame:
     The daily flux is measured ~20 UT, so day D's own value is not used. Flare-contaminated
     spikes (> 2× the trailing 27-day median of earlier days) are treated as missing.
     """
-    s = f107_daily.sort_index().asfreq("D")
+    s = f107_daily.sort_index().dropna()
+    # Extend past the last measurement: live, today's flux is never known yet (measured ~20 UT), but today's
+    # features only need earlier days. Without these rows the current day's hours would get NaN F10.7 features.
+    days = pd.date_range(s.index.min(), s.index.max() + pd.Timedelta(days=config.F107_MAX_STALE_DAYS), freq="D")
+    s = s.reindex(days)
     prior_median = s.shift(1).rolling(config.F107_SPIKE_WINDOW_DAYS, min_periods=10).median()
     clean = s.mask(s > config.F107_SPIKE_RATIO * prior_median)
     upto_yesterday = clean.shift(1)
     return pd.DataFrame({
-        "f107_prev": upto_yesterday.ffill(limit=7),
+        "f107_prev": upto_yesterday.ffill(limit=config.F107_MAX_STALE_DAYS),
         "f107_mean81d": upto_yesterday.rolling(config.F107_TRAILING_DAYS, min_periods=40).mean(),
     })
 

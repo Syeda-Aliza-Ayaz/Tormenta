@@ -279,8 +279,14 @@ with live_tab:
                 a, b = st.columns([2, 3])
                 a.metric(label, f"{fmt.format(latest[col])} {unit}")
                 b.altair_chart(sparkline(hourly, col, unit), width="stretch")
+            f107_day = f107.dropna().index[-1]
+            f107_age = (past.index[-1].normalize() - f107_day).days
             st.caption(f"|B| {latest['b_scalar']:.1f} nT · temperature {latest['temperature']:,.0f} K · "
-                       f"F10.7 {f107.dropna().iloc[-1]:.0f} sfu. **Negative Bz and high speed drive storms.**")
+                       f"F10.7 {f107.dropna().iloc[-1]:.0f} sfu ({f107_day:%d %b}). "
+                       "**Negative Bz and high speed drive storms.**")
+            if f107_age > config.F107_MAX_STALE_DAYS:
+                st.warning(f"Solar flux (F10.7) data is {f107_age} days old, so the model runs without it "
+                           "(slightly less accurate).", icon="☀️")
 
         st.subheader("Last 5 days: nowcast vs observed Kp")
         st.altair_chart(live_chart(live), width="stretch")

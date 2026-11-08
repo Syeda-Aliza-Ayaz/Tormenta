@@ -10,6 +10,8 @@ Sources (no auth, checked 2026-10-30):
 Hourly averaging mirrors OMNI: the hour labelled HH is the mean of minutes HH:00–HH:59, and
 |B| (b_scalar) is the mean of the 1-min field magnitudes.
 """
+import logging
+
 import pandas as pd
 import requests
 
@@ -86,7 +88,15 @@ def fetch_solar_wind() -> pd.DataFrame:
 
 
 def fetch_f107() -> pd.Series:
-    return merge_f107(load_f107_history(), parse_f107(fetch_json(config.SWPC_F107)))
+    """History file + SWPC's 30-day feed. If the feed is unreachable, fall back to the history file alone:
+    features.f107_daily_features carries the last value forward up to F107_MAX_STALE_DAYS, then gives NaN,
+    which HistGB handles, so the nowcast keeps working instead of failing on a non-essential input."""
+    history = load_f107_history()
+    try:
+        return merge_f107(history, parse_f107(fetch_json(config.SWPC_F107)))
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        logging.getLogger(__name__).warning("SWPC F10.7 feed unavailable (%s); using the history file only", exc)
+        return history
 
 
 def fetch_swpc_kp() -> pd.Series:
