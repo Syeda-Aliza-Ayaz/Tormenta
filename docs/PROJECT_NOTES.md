@@ -674,3 +674,10 @@ When a feature is NaN, HistGB still predicts (missing values go down the branch 
 4. **The dashboard shows the F10.7 date**, and a warning if the data is more than 7 days old.
 
 37 tests total.
+
+---
+
+## Workflow YAML fix + contributions (2026-11-08)
+- **Failed runs on GitHub:** after the F10.7 fix, every push showed a failed "retrain.yml" run lasting **0 s** ("workflow file issue"). Cause: the Hugging Face step's command was an unquoted YAML line containing `Weekly update: …`, and in YAML a colon followed by a space inside a plain value is a syntax error ("mapping values are not allowed here"). The file couldn't be parsed, so GitHub marked every push as failed, and the Monday schedule would have silently stopped.
+- **Fix:** the command moved into a `run: |` block. New `tests/test_workflow.py` parses the workflow and checks its triggers and steps (38 tests). A manual dry run on GitHub then confirmed the workflow runs again.
+- **Report:** individual contributions filled in as agreed (Alizeh: data → deployment; HRK: features/models → weekly retraining; shared: proposal, decisions, testing, demo/viva). The report is now single-column with stacked full-width figures.

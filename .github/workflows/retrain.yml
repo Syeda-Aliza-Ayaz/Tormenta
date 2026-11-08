@@ -58,4 +58,5 @@ jobs:
         if: ${{ !inputs.dry_run }}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: python app/hf_space/sync_hf.py --user aliza-ayaz --message "Weekly update: ${{ steps.update.outputs.status }} ${{ steps.update.outputs.version }}"
+        run: |
+          python app/hf_space/sync_hf.py --user aliza-ayaz --message "Weekly update: ${{ steps.update.outputs.status }} ${{ steps.update.outputs.version }}"

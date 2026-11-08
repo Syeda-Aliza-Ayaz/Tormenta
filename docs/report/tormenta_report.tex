@@ -283,8 +283,16 @@ wind-magnetosphere coupling function inferred from 10 magnetospheric state varia
 {\small\centering
 \begin{tabular}{@{}p{2cm}p{14.5cm}@{}}\toprule
 Member & Contribution\\\midrule
-Alizeh & \textcolor{red}{[to be filled in by the team: e.g.\ data pipeline, EDA, modelling, deployments, report]}\\
-HRK & \textcolor{red}{[to be filled in by the team]}\\\bottomrule
+Alizeh & Data collection and preprocessing (OMNI and GFZ ingestion, hourly table, cleaning, source
+documentation); EDA notebook and figures; live nowcast pipeline from NOAA SWPC and the live/training parity test;
+Streamlit dashboard; Hugging Face model card and in-browser Space; report sections: Abstract, Problem and motivation,
+Data collection, EDA, Deployment.\\\addlinespace
+HRK & Feature engineering (66 causal features) and leakage tests, including finding and fixing the current-day F10.7
+issue; baselines, model training, cross-validated tuning and evaluation; improvement rounds and conformal intervals;
+Flask app with input validation; weekly retraining (SPDF parser, \code{update.py}, GitHub Actions, validation gate);
+report sections: Methodology, Results, Limitations and future work.\\\addlinespace
+Both & Problem selection and proposal, design decisions, testing, demo and viva preparation; each member reviewed
+the other's code so that both can explain every part.\\\bottomrule
 \end{tabular}\par}
 
 \end{document}
