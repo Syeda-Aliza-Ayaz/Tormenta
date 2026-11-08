@@ -673,4 +673,4 @@ When a feature is NaN, HistGB still predicts (missing values go down the branch 
 3. **The F10.7 feed has a fallback:** if SWPC is unreachable, `fetch_f107` logs a warning and uses the history file instead of failing the whole nowcast (`test_f107_falls_back_to_history_when_feed_is_down`).
 4. **The dashboard shows the F10.7 date**, and a warning if the data is more than 7 days old.
 
-38 tests total.
+37 tests total.
