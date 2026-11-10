@@ -12,7 +12,8 @@ from src import config
 KEY = ["origin", "lead", "target_date"]
 
 
-def lead_table(fc: pd.DataFrame, references=("persistence", "recurrence27", "climatology")) -> pd.DataFrame:
+def lead_table(fc: pd.DataFrame,
+               references=("persistence", "recurrence27", "trailing27", "climatology")) -> pd.DataFrame:
     """RMSE, MAE and skill score vs each reference, per model × target × lead day.
 
     Skill = 1 − MSE_model / MSE_reference on exactly the same forecasts (origin, lead) — > 0 beats the reference.

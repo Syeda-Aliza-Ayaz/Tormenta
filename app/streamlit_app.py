@@ -200,12 +200,14 @@ def sweep_chart(values: dict, label: str) -> alt.LayerChart:
 
 
 # ── 7-day forecast (v2) ──────────────────────────────────────────────────────
-# One fixed categorical slot per entity (reference palette slots 1–5, light / dark steps), so a series keeps its
-# colour whatever else is shown. Observed values are neutral ink, not a series colour.
-FC_SERIES = {"trailing27": "27-day average", "persistence": "Persistence", "recurrence27": "27-day recurrence",
-             "climatology": "Climatology", "noaa": "NOAA 27-day outlook"}
-FC_COLORS = {"light": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"],
-             "dark": ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"]}[MODE]
+# One fixed categorical slot per entity (reference palette slots 1–6 in order, light / dark steps), so a series
+# keeps its colour whatever else is shown. Observed values are neutral ink, not a series colour. New models take the
+# next slot; at most 8 series (palette size), after that fold the baselines into one toggle.
+FC_SERIES = {"histgb": "HistGB (machine learning)", "trailing27": "27-day average", "persistence": "Persistence",
+             "recurrence27": "27-day recurrence", "climatology": "Climatology", "noaa": "NOAA 27-day outlook"}
+FC_COLORS = {"light": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"],
+             "dark": ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300"]}[MODE]
+FC_TRAINED = {"histgb"}
 INK = {"light": "#3d3d3a", "dark": "#e0dfd9"}[MODE]
 OBSERVED = "Observed (GFZ)"
 FC_TARGETS = {"Daily Ap": ("ap", "Ap"), "Daily max Kp": ("kpmax", "max Kp")}
@@ -351,10 +353,13 @@ with forecast_tab:
         col, unit = FC_TARGETS[choice]
         st.altair_chart(forecast_chart(forecast_long(latest, recent, noaa, col), origin, col, unit), width="stretch")
         st.caption("**Ap** is the day's average geomagnetic activity (0–400; above about 30 is a storm day). **Max Kp** "
-                   "is the day's strongest 3-hour Kp; 5− or more is a storm. Hover for every value. The forecast "
-                   "currently comes from four simple reference methods; the trained models (ARIMA family, gradient "
-                   "boosting, a pretrained transformer) are added over the next days. NOAA's outlook is shown for "
-                   "comparison only.")
+                   "is the day's strongest 3-hour Kp; 5− or more is a storm. Hover for every value. "
+                   + ("**HistGB** is the machine-learning forecast; the others are simple reference methods it must "
+                      "beat. " if FC_TRAINED & set(latest["model"]) else
+                      "This issue comes from simple reference methods only; the machine-learning forecast (HistGB) "
+                      "joins from the next daily issue. ")
+                   + "More models (ARIMA family, a pretrained transformer) are added over the next days. NOAA's "
+                   "outlook is shown for comparison only.")
         with st.expander("Forecast table"):
             table = latest.assign(model=latest["model"].map(FC_SERIES)).pivot_table(
                 index="target_date", columns="model", values=col)

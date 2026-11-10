@@ -743,3 +743,32 @@ so it is never edited and never filled in afterwards.
 bot takes over at 02:00 UTC on 11 Nov. The first scores appear once GFZ publishes 10 Nov.
 
 58 tests (+8 daily job, +1 workflow).
+
+---
+
+## v2 forecaster: Day 3 — the first learned model, HistGB (2026-11-10)
+
+| File | What it does | Why |
+|---|---|---|
+| `src/forecast/features.py` | for each issue day D: the last 7 days of Ap / max Kp, 3/7/27-day means, max Kp of the week, F10.7 and its 81-day mean; and, per lead day h, the values one, two and three solar rotations before the target day (D+h−27, −54, −81) plus the target day's season | the "clues" a forecaster can know on day D; a test proves none of them uses a day after D |
+| `src/forecast/gbm.py` | `HistGBDirect`: 7 lead days × 2 targets = 14 HistGradientBoosting models; tuning with time-ordered CV on the training years; `python -m src.forecast.gbm` runs tune → validation backtest → rule → production bundle (`--reuse-params` skips tuning) | "direct" models don't feed on their own forecasts, so errors don't build up across days |
+| `src/forecast/registry.py` | HistGB is in every backtest; the daily job loads the saved bundle only if it exists (i.e. only if HistGB passed its rule) | a failed model can't reach the live log |
+| `models/forecast/histgb.joblib`, `histgb_params.json` | the production model (fitted 1947-06 → 2019-12) and its tuned settings | loaded, never refitted, by the daily job (D-27) |
+| `reports/forecast/metrics/` | `validation_leads.csv`, `validation_storms.csv`, `histgb_tuning.csv`, `histgb_importance.csv` | the evidence |
+| `tests/test_forecast_gbm.py` | 12 tests: features use only the past (every lead day), recurrence and target alignment, a frozen bundle is never refitted, the committed bundle loads | — |
+
+**Results (validation 2017–2019, D-31):**
+- HistGB has the lowest error at **every** lead day. **It beats NOAA's official forecast on days 1–3**
+  (day-1 Ap RMSE 6.34 vs 6.90). On days 4–7 it beats the 27-day average by about 16% skill.
+- **What it learned matches the physics:** day 1 relies mostly on yesterday's max Kp; day 7 relies mostly on the
+  27-day recurrence (the Sun's rotation) and the season.
+- **Weakness:** like every forecast of an average, it rarely reaches the storm threshold after day 1. Storm
+  warnings are handled on day 6 (D-22).
+
+**Two bugs caught before they reached production:**
+- The first bundle was saved from `__main__` and would have crashed the 02:00 job. Fixed, with a regression test (D-32).
+- File paths as default arguments: fixed again here, as on day 2 (D-30).
+
+**GitHub:** the daily workflow passed a dry run on GitHub (D-34). HistGB is issued live from 11 Nov 02:00 UTC (D-33).
+
+71 tests in total.

@@ -346,3 +346,70 @@ Template:
   tests, before any real log existed.
 - **Result / consequence:** the tests use temporary folders only. A separate test checks that the committed
   log's rows are never changed.
+
+### D-31 · HistGB, one model per lead day: tuned on train, passed its rule, joins the live log · 2026-11-10 · ✅
+- **Decision:**
+  - 14 HistGradientBoosting models (lead days 1–7 × Ap and max Kp), using the §5 features
+    (`src/forecast/features.py`).
+  - Tuning: 12 random settings, time-ordered 5-fold cross-validation on the **training years only**, on lead day 3
+    as the representative. The best settings are used for all lead days.
+  - **Rule written down before validation:** HistGB goes live only if its mean Ap skill against `trailing27`
+    over lead days 1–7 is above 0.
+- **Why:**
+  - "Direct" models (one per lead day) don't feed on their own forecasts, so errors don't build up from day to day.
+  - Tuning every lead day separately would cost 7× the time for little gain.
+  - The rule had to exist before the result, so the validation result can't influence it.
+- **Alternatives considered:**
+  - Predicting log(1+Ap): **lost** on cross-validation (RMSE 13.99 vs 13.77 for raw Ap), so raw Ap is used.
+    Fitting on log scale pulls forecasts toward typical values.
+  - One "recursive" model fed its own forecasts.
+- **Result / consequence:** **PASS, mean skill +0.179.** Validation 2017–2019:
+
+  | Ap RMSE | day 1 | day 2 | day 3 | days 4–7 |
+  |---|---|---|---|---|
+  | **HistGB** | **6.34** | **7.08** | **7.08** | **7.07–7.09** |
+  | NOAA | 6.90 | 7.35 | 7.74 | — |
+  | trailing27 | 7.63 | 7.69 | 7.70 | 7.71–7.73 |
+
+  - **HistGB beats NOAA's official forecast on days 1–3** (skill against trailing27: 0.31 / 0.15 / 0.16, vs
+    NOAA's 0.19 / 0.09 / −0.01) and beats every baseline at every lead day.
+  - Max Kp RMSE: 1.03 on day 1 and 1.14–1.15 after, vs 1.23–1.24 for trailing27.
+  - **Which features matter** (permutation importance on validation, Ap):
+    - day 1 is dominated by **yesterday's max Kp**, then yesterday's Ap and the 27-day recurrence;
+    - day 7 is dominated by the **27-day recurrence window**, then the 54-day recurrence and the season.
+    - This matches the physics: recent activity sets the next day, and the Sun's rotation sets the following week.
+  - **Caveats:**
+    - Validation is solar minimum (D-23).
+    - **HistGB almost never warns of storms after day 1**: 17 of 91 storm days caught on day 1 (Heidke skill
+      score 0.25), about 0 from day 2 on. Persistence and recurrence27 catch more, with many false alarms. This
+      confirms D-22: storm warnings need the interval or a tuned threshold (day 6).
+  - The production bundle (`models/forecast/histgb.joblib`, 4.4 MB) is fitted on the production window
+    (1947-06 → 2019-12, D-27). Its settings are in `models/forecast/histgb_params.json`.
+
+### D-32 · The training script must not save a model "from `__main__`" · 2026-11-10 · ✅
+- **Decision:** `python -m src.forecast.gbm` now runs `main()` through the imported module. A regression test
+  loads the committed production bundle the way the daily job does.
+- **Why:** the first saved bundle recorded its class as `__main__.HistGBDirect`. It loaded fine inside the
+  training run, but **would have crashed the daily job at 02:00**. Found by previewing tomorrow's issue before pushing.
+- **Alternatives considered:** a separate training script that imports the class (an extra file to maintain).
+- **Result / consequence:**
+  - The bundle was re-saved, and the test passes.
+  - `--reuse-params` re-saves without repeating the 5-minute tuning.
+  - The validation result is identical (+0.179).
+
+### D-33 · HistGB starts in the live log with the 11 Nov 02:00 issue, not today · 2026-11-10 · ✅
+- **Decision:** don't add HistGB rows to today's issue (origin 9 Nov), which was issued at 07:07.
+- **Why:** adding them now would mean issuing about 13 hours into its own day 1, and later than the baselines it
+  is compared with. In the live log, every model in a comparison should be issued at the same time from the same data.
+- **Alternatives considered:** append HistGB for origin 9 Nov now. The log would allow it (a new model is a new key).
+- **Result / consequence:** from the 11 Nov issue on, HistGB is issued at 02:00 alongside the baselines. Preview
+  for 10–16 Nov from data up to 9 Nov: Ap 10–11, max Kp about 3, close to NOAA's outlook for those days.
+
+### D-34 · Daily workflow verified on GitHub (dry run) · 2026-11-10 · ✅
+- **Decision:** after installing the GitHub CLI and logging in, ran `daily.yml` with `dry_run=true` (run 42778526940).
+- **Result / consequence:**
+  - Passed in 35 s: install, tests, GFZ + NOAA download, issue step.
+  - It found origin 9 Nov already issued and added 0 rows (idempotent), and committed nothing (dry run).
+  - GitHub warns that `actions/checkout@v4` and `actions/setup-python@v5` target Node 20 (being retired; forced
+    onto Node 24, still working) and that `ubuntu-latest` is moving to Ubuntu 26. No action needed now; to check
+    on day 10.

@@ -1,0 +1,19 @@
+{
+  "params": {
+    "ap": {
+      "min_samples_leaf": 200,
+      "max_leaf_nodes": 7,
+      "max_iter": 200,
+      "learning_rate": 0.03,
+      "l2_regularization": 3.0
+    },
+    "kpmax": {
+      "min_samples_leaf": 400,
+      "max_leaf_nodes": 7,
+      "max_iter": 400,
+      "learning_rate": 0.02,
+      "l2_regularization": 3.0
+    }
+  },
+  "log_ap": false
+}
