@@ -137,3 +137,14 @@ NOAA_RSGA_DIR = "ftp://ftp.swpc.noaa.gov/pub/warehouse/{year}/RSGA/"            
 NOAA_27DO = SWPC_BASE + "/text/27-day-outlook.txt"
 NOAA_3DAY = SWPC_BASE + "/text/3-day-forecast.txt"
 NOAA_RSGA_CSV = DATA_DIR / "noaa_rsga_ap.csv"    # committed: NOAA predicted Ap, days 1–3, parsed from RSGA
+
+# Live forecast log (daily job, src/issue.py). All committed; log.csv is append-only (DECISIONS D-07)
+FORECASTS_DIR = ROOT / "forecasts"
+FORECAST_LOG = FORECASTS_DIR / "log.csv"          # every forecast ever issued, never edited
+FORECAST_SCORES = FORECASTS_DIR / "scores.csv"    # log rows whose target day has arrived, with the observed values
+FORECAST_RECENT = FORECASTS_DIR / "recent.csv"    # last RECENT_DAYS of observed Ap / max Kp, for the app's chart
+NOAA_LIVE_CSV = FORECASTS_DIR / "noaa_live.csv"   # NOAA 27-day outlook + 3-day forecast, parsed, saved every day
+NOAA_LIVE_DIR = FORECASTS_DIR / "noaa"            # the raw NOAA texts, as evidence
+RECENT_DAYS = 60
+# Only issue when GFZ has published yesterday: a forecast issued late would already overlap its own lead day 1
+MAX_ORIGIN_AGE_DAYS = 1

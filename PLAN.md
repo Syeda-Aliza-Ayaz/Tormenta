@@ -251,7 +251,7 @@ requirements.txt             + statsmodels, CPU-only torch (via --extra-index-ur
 | Day | Date | Work | Done |
 |---|---|---|---|
 | 1 | Tue 10 Nov | Re-download raw data; `daily.py`; keep Ap; baselines; NOAA parsers (RSGA + live) | [x] |
-| 2 | Wed 11 Nov | `issue.py` + `daily.yml` with the baselines, **so the live log starts**; RSGA backfill; **a basic forecast tab live on Streamlit, reading `log.csv`** | [ ] |
+| 2 | Wed 11 Nov | `issue.py` + `daily.yml` with the baselines, **so the live log starts**; RSGA backfill; **a basic forecast tab live on Streamlit, reading `log.csv`** | [x] (done 10 Nov; RSGA done on day 1) |
 | 3 | Thu 12 Nov | Forecast features (§5) + leakage test; HistGB per lead day; backtest runner | [ ] |
 | 4 | Fri 13 Nov | ARIMA / SARIMA / ARIMAX | [ ] |
 | 5 | Sat 14 Nov | Chronos; intervals for all models; add every model to the daily job; **test CPU torch + Chronos on Streamlit Cloud** (decides live vs saved) | [ ] |

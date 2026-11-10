@@ -15,6 +15,7 @@ COLUMNS = ["origin", "lead", "target_date"] + config.FORECAST_TARGETS
 
 class Forecaster:
     name = "base"
+    version = "v1"           # written into the live log with every forecast
 
     def fit(self, daily: pd.DataFrame) -> "Forecaster":
         return self

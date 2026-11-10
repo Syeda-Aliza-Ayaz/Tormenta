@@ -6,6 +6,18 @@ from src import config
 yaml = pytest.importorskip("yaml")
 
 
+def test_daily_workflow_parses_and_has_its_steps():
+    wf = yaml.safe_load((config.ROOT / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8"))
+    triggers = wf.get("on", wf.get(True))
+    assert {"schedule", "workflow_dispatch"} <= set(triggers)
+    assert len(triggers["schedule"]) == 2                   # main run + backup run
+    names = [s.get("name") for s in wf["jobs"]["forecast"]["steps"]]
+    for step in ["Issue, save NOAA, score", "Commit forecasts"]:
+        assert step in names
+    run = next(s["run"] for s in wf["jobs"]["forecast"]["steps"] if s.get("name") == "Commit forecasts")
+    assert "git add forecasts" in run and "git pull --rebase" in run
+
+
 def test_retrain_workflow_parses_and_has_its_steps():
     wf = yaml.safe_load((config.ROOT / ".github" / "workflows" / "retrain.yml").read_text(encoding="utf-8"))
     triggers = wf.get("on", wf.get(True))                   # YAML 1.1 reads the key `on` as boolean True

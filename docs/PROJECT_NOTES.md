@@ -717,3 +717,29 @@ it is kept on the `nowcaster` branch.
 **Run:** `python -m src.daily` (download + build) · `python -m src.backtest` (validation scorecard →
 `reports/forecast/metrics/`) · `python -m src.ingest.fetch_noaa --rsga 2017 2026` (one-off NOAA backfill).
 50 tests in total (35 existing + 15 new).
+
+---
+
+## v2 forecaster: Day 2 — the live forecast log, daily job, forecast tab (2026-11-10)
+
+Think of it as a **forecast diary**. Every morning we write down the next 7 days, and once those days have
+passed we check the forecast against the real values. The diary must be written *before* the real values exist,
+so it is never edited and never filled in afterwards.
+
+| File | What it does | Why |
+|---|---|---|
+| `src/issue.py` | the daily job: download GFZ, find yesterday (the "origin"), ask every model for D+1 … D+7, **append** to `forecasts/log.csv`; save NOAA's 27-day outlook and 3-day forecast; rebuild `scores.csv` (forecast vs observed) and `recent.csv` (last 60 days observed) | one command does the whole daily cycle; idempotent, so a second run the same day adds nothing |
+| `.github/workflows/daily.yml` | runs it at 02:00 UTC (07:00 PKT) and 06:00 UTC (backup), runs the forecaster tests first, commits `forecasts/` | GFZ updates its file at about 23:48 UTC, so 02:00 finds yesterday's row; the backup covers delays |
+| `forecasts/` | `log.csv` (append-only), `scores.csv`, `recent.csv`, `noaa_live.csv`, `noaa/` (raw NOAA texts) | the evidence for the live scorecard, committed so it is public and dated |
+| `app/streamlit_app.py` | new first tab **📅 7-day forecast**: last 30 days observed + each model's 7-day forecast + NOAA's outlook, Ap or max Kp, hover tooltips, forecast table, error by lead day once scores exist | the forecaster is now the main product; the nowcast tabs are unchanged |
+| `tests/test_issue.py` | 9 tests: issue only from yesterday, append-only + idempotent, never backfill, scores matched to the right day, NOAA failure is a warning, committed log rows unchanged | the log's integrity is the whole point of live verification |
+
+**Rules that protect the log** (DECISIONS D-26):
+- No GFZ data for yesterday → no forecast. We don't issue late or fill gaps.
+- Rows already in the log are never rewritten. A test compares the working copy with the last commit.
+- Every row records `issued_at`, so anyone can check that each forecast was written before its days.
+
+**First live forecast:** issued 10 Nov 07:07 UTC (by hand, D-28) from GFZ data up to 9 Nov, for 10–16 Nov. The
+bot takes over at 02:00 UTC on 11 Nov. The first scores appear once GFZ publishes 10 Nov.
+
+58 tests (+8 daily job, +1 workflow).

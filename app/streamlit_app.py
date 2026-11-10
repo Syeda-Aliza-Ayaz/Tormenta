@@ -19,7 +19,7 @@ from src import config, scoring  # noqa: E402  (numpy-only helpers, no scikit-le
 from src.ingest import fetch_live  # noqa: E402
 from src.predict import INPUT_LIMITS, load_bundle, nowcast, predict_steady, validate_inputs  # noqa: E402
 
-st.set_page_config(page_title="Tormenta Kp Nowcast", page_icon="🧲", layout="wide")
+st.set_page_config(page_title="Tormenta Kp Forecast", page_icon="🧲", layout="wide")
 
 IN_BROWSER = sys.platform == "emscripten"           # Hugging Face static Space: stlite (Streamlit on Pyodide)
 NETWORK_ERRORS = (requests.RequestException,)
@@ -199,6 +199,87 @@ def sweep_chart(values: dict, label: str) -> alt.LayerChart:
     return alt.layer(band, storm, you_rule, you_text, line, pts).properties(height=300)
 
 
+# ── 7-day forecast (v2) ──────────────────────────────────────────────────────
+# One fixed categorical slot per entity (reference palette slots 1–5, light / dark steps), so a series keeps its
+# colour whatever else is shown. Observed values are neutral ink, not a series colour.
+FC_SERIES = {"trailing27": "27-day average", "persistence": "Persistence", "recurrence27": "27-day recurrence",
+             "climatology": "Climatology", "noaa": "NOAA 27-day outlook"}
+FC_COLORS = {"light": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"],
+             "dark": ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"]}[MODE]
+INK = {"light": "#3d3d3a", "dark": "#e0dfd9"}[MODE]
+OBSERVED = "Observed (GFZ)"
+FC_TARGETS = {"Daily Ap": ("ap", "Ap"), "Daily max Kp": ("kpmax", "max Kp")}
+GFZ_FLAGS = {0: "nowcast", 1: "provisional", 2: "definitive"}
+HISTORY_DAYS = 30
+
+
+@st.cache_data(ttl=600)
+def get_forecasts():
+    """The daily job's files (src/issue.py): no network call, so this works in the browser Space too."""
+    log = pd.read_csv(ROOT / "forecasts" / "log.csv", parse_dates=["issued_at", "origin", "target_date"])
+    scores = pd.read_csv(ROOT / "forecasts" / "scores.csv", parse_dates=["issued_at", "origin", "target_date"])
+    recent = pd.read_csv(ROOT / "forecasts" / "recent.csv", index_col="date", parse_dates=["date"])
+    noaa = pd.read_csv(ROOT / "forecasts" / "noaa_live.csv", parse_dates=["issued", "origin", "target_date"])
+    return log, scores, recent, noaa
+
+
+def forecast_long(latest: pd.DataFrame, recent: pd.DataFrame, noaa: pd.DataFrame, col: str) -> pd.DataFrame:
+    """Observed history + every model's forecast + NOAA's outlook for the same days, as (time, series, value)."""
+    obs = recent[col].tail(HISTORY_DAYS).rename("value").rename_axis("time").reset_index().assign(series=OBSERVED)
+    fc = latest.assign(series=latest["model"].map(FC_SERIES).fillna(latest["model"]))
+    fc = fc.rename(columns={"target_date": "time", col: "value"})[["time", "series", "value"]]
+    parts = [obs, fc]
+    outlook = noaa[noaa["product"] == "27do"]
+    if len(outlook):
+        outlook = outlook[outlook["issued"] == outlook["issued"].max()]
+        outlook = outlook[outlook["target_date"].isin(latest["target_date"])]
+        parts.append(outlook.rename(columns={"target_date": "time", col: "value"})[["time", "value"]]
+                     .assign(series=FC_SERIES["noaa"]))
+    return pd.concat(parts, ignore_index=True).dropna(subset=["value"])
+
+
+def forecast_chart(long: pd.DataFrame, origin: pd.Timestamp, col: str, unit: str) -> alt.LayerChart:
+    """History in ink, forecasts in their own colours, issue day marked, crosshair tooltip with every value."""
+    present = [s for s in [OBSERVED, *FC_SERIES.values()] if s in set(long["series"])]
+    colours = [INK if s == OBSERVED else FC_COLORS[list(FC_SERIES.values()).index(s)] for s in present]
+    df = long.assign(time=long["time"].dt.tz_localize("UTC"), label=long["time"].dt.strftime("%a %d %b"))
+    colour = alt.Color("series:N", scale=alt.Scale(domain=present, range=colours),
+                       legend=alt.Legend(orient="top", title=None, symbolStrokeWidth=3))
+    top = 9 if col == "kpmax" else max(40.0, float(df["value"].max()) * 1.1)
+    y = alt.Y("value:Q", scale=alt.Scale(domain=[0, top]), title=unit)
+    x = alt.X("time:T", scale=alt.Scale(type="utc"), title=None,
+              axis=alt.Axis(format="%d %b", labelAngle=0, grid=False, tickCount=8))
+    lines = alt.Chart(df).mark_line(strokeWidth=2, point=alt.OverlayMarkDef(size=36, filled=True)).encode(
+        x=x, y=y, color=colour, detail="series:N")
+
+    start = origin + pd.Timedelta(hours=12)              # shade from the middle of the issue day onwards
+    ahead = pd.DataFrame({"start": [start.tz_localize("UTC")], "end": [df["time"].max() + pd.Timedelta(hours=12)],
+                          "text": ["forecast →"]})
+    shade = alt.Chart(ahead).mark_rect(color=MUTED, opacity=0.10).encode(x="start:T", x2="end:T")
+    shade_text = alt.Chart(ahead).mark_text(align="left", dx=6, y=10, color=MUTED, fontSize=11).encode(
+        x="start:T", text="text:N")
+
+    wide = df.pivot_table(index=["time", "label"], columns="series", values="value").reset_index()
+    keys = {s: f"s{i}" for i, s in enumerate(present)}
+    wide = wide.rename(columns=keys)
+    hover = alt.selection_point(nearest=True, on="pointerover", fields=["time"], empty=False, clear="pointerout")
+    tips = [alt.Tooltip("label:N", title="Day")] + [
+        alt.Tooltip(f"{k}:Q", title=s, format=".1f" if col == "kpmax" else ".0f") for s, k in keys.items()
+        if k in wide]
+    rule = alt.Chart(wide).mark_rule(color=MUTED, strokeWidth=1).encode(
+        x="time:T", opacity=alt.condition(hover, alt.value(0.8), alt.value(0)), tooltip=tips).add_params(hover)
+    dots = alt.Chart(df).mark_point(filled=True, size=80).encode(
+        x=x, y=y, color=colour, opacity=alt.condition(hover, alt.value(1), alt.value(0)))
+
+    layers = [shade, shade_text, lines, dots, rule]
+    if col == "kpmax":
+        storm = alt.Chart(pd.DataFrame({"v": [config.STORM_THRESHOLD], "text": ["storm threshold (G1)"]}))
+        layers.insert(2, storm.mark_rule(strokeDash=[4, 4], color=MUTED).encode(y="v:Q"))
+        layers.insert(3, storm.mark_text(align="left", dx=4, dy=-7, color=MUTED, fontSize=11).encode(
+            y="v:Q", text="text:N", x=alt.value(0)))
+    return alt.layer(*layers).properties(height=340)
+
+
 # ── Data ─────────────────────────────────────────────────────────────────────
 @st.cache_resource
 def get_bundle():
@@ -245,10 +326,56 @@ BUNDLE = get_bundle()
 
 # ── Page ─────────────────────────────────────────────────────────────────────
 st.title("🧲 Tormenta")
-st.caption("Nowcast of the geomagnetic **Kp index** (0–9) from the solar wind measured about an hour upstream of "
-           "Earth. Machine learning on 28 years of NASA OMNI data and GFZ Kp; live inputs from NOAA SWPC.")
+st.caption("**7-day forecast** of geomagnetic activity (daily Ap and max Kp), scored against official GFZ data as it "
+           "arrives, and a **live nowcast** of the Kp index (0–9) from the solar wind measured about an hour upstream "
+           "of Earth. GFZ Kp since 1932, NASA OMNI and live NOAA SWPC data.")
 
-live_tab, manual_tab, about_tab = st.tabs(["🛰️ Live nowcast", "🧪 What-if explorer", "📊 About the model"])
+forecast_tab, live_tab, manual_tab, about_tab = st.tabs(
+    ["📅 7-day forecast", "🛰️ Live nowcast", "🧪 What-if explorer", "📊 About the nowcast model"])
+
+with forecast_tab:
+    try:
+        log, scores, recent, noaa = get_forecasts()
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        log = None
+    if log is None or not len(log):
+        st.info("No forecast has been issued yet. The daily job runs at 02:00 UTC.", icon="📅")
+    else:
+        origin = log["origin"].max()
+        latest = log[log["origin"] == origin]
+        issued, flag = latest["issued_at"].max(), int(latest["origin_flag"].iloc[0])
+        days = latest["target_date"]
+        st.markdown(f"**Forecast for {days.min():%a %d %b} – {days.max():%a %d %b %Y}**, issued "
+                    f"{issued:%d %b %H:%M} UTC from GFZ data up to {origin:%d %b} ({GFZ_FLAGS.get(flag, flag)} values).")
+        choice = st.radio("Quantity", list(FC_TARGETS), horizontal=True, label_visibility="collapsed")
+        col, unit = FC_TARGETS[choice]
+        st.altair_chart(forecast_chart(forecast_long(latest, recent, noaa, col), origin, col, unit), width="stretch")
+        st.caption("**Ap** is the day's average geomagnetic activity (0–400; above about 30 is a storm day). **Max Kp** "
+                   "is the day's strongest 3-hour Kp; 5− or more is a storm. Hover for every value. The forecast "
+                   "currently comes from four simple reference methods; the trained models (ARIMA family, gradient "
+                   "boosting, a pretrained transformer) are added over the next days. NOAA's outlook is shown for "
+                   "comparison only.")
+        with st.expander("Forecast table"):
+            table = latest.assign(model=latest["model"].map(FC_SERIES)).pivot_table(
+                index="target_date", columns="model", values=col)
+            table.index = table.index.strftime("%a %d %b")
+            st.dataframe(table.round(2 if col == "kpmax" else 1), width="stretch")
+
+        st.subheader("How past forecasts did")
+        done = scores.dropna(subset=[f"{col}_obs"]) if len(scores) else scores
+        if not len(done):
+            st.info(f"Scoring starts when GFZ publishes {log['target_date'].min():%d %b}: each forecast is checked "
+                    "against the real value once its day has passed, so a full week of lead days takes 7 days.",
+                    icon="⏳")
+        else:
+            mae = done.assign(model=done["model"].map(FC_SERIES), err=done[f"{col}_err"].abs()).pivot_table(
+                index="model", columns="lead", values="err", aggfunc="mean")
+            mae.columns = [f"day {c}" for c in mae.columns]
+            st.dataframe(mae.round(2), width="stretch")
+            n_issues = done["origin"].nunique()
+            st.caption(f"Mean absolute error of {unit} by lead day (lower is better), over {len(done)} checked "
+                       f"forecasts from {n_issues} issue day{'s' if n_issues > 1 else ''}. Recent observed values are "
+                       "GFZ's provisional ones and are rescored when the definitive values arrive.")
 
 with live_tab:
     try:

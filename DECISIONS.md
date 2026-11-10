@@ -281,3 +281,68 @@ Template:
   - NOAA's skill against climatology is +0.52 on day 1, +0.45 on day 2 and +0.39 on day 3.
   - **By day 3, NOAA is no better than the 27-day average.** For days 1–2, NOAA is the bar to beat. From day 3
     on, the realistic goal is to beat trailing27.
+
+### D-26 · Daily job: 02:00 UTC with a 06:00 backup; issue only from yesterday; never backfill · 2026-11-10 · ⏳
+- **Decision:** `.github/workflows/daily.yml` runs `src/issue.py` at 02:00 UTC (07:00 PKT) and again at 06:00
+  UTC. A forecast is issued only when GFZ's newest complete day is yesterday. Issuing is idempotent: a second
+  run on the same day adds nothing.
+- **Why:**
+  - **Checked 10 Nov:** GFZ's daily file was last modified at 23:48 UTC on 9 Nov, so yesterday's row is there by
+    02:00. The 06:00 run covers a late GFZ update or a delayed GitHub cron.
+  - If GFZ is more than a day behind, the job issues nothing. A late forecast would already overlap its own
+    day 1, and filling the gap afterwards would amount to a backtest, not a live forecast (D-07).
+- **Alternatives considered:** a single run (one GFZ delay loses a day); issuing from whatever day is newest
+  (late forecasts would look better than they are).
+- **Result / consequence:**
+  - The log has one fixed set of columns from the start, including empty interval columns (`ap_lo/hi`,
+    `kpmax_lo/hi`) for the trained models that come later.
+  - `scores.csv` is rebuilt from the log every run, so it updates by itself when GFZ's provisional values
+    become definitive.
+  - NOAA failures are only warnings, because NOAA is a benchmark.
+
+### D-27 · Live models are fitted on a fixed window (train + validation) · 2026-11-10 · ✅
+- **Decision:** the daily job fits each model on definitive days from 1947-06-01 to 2019-12-31, the same data
+  every day.
+- **Why:**
+  - A forecast changes only when its inputs change, never because the model quietly drifted.
+  - It fits the "retrain only when performance drops" rule (D-12): a model changes only through the retrain path.
+  - Trained models (from day 3 on) will be loaded from saved files rather than refitted each day.
+- **Alternatives considered:** refit on all definitive data every day (drifts monthly, against D-12).
+- **Result / consequence:** for the baselines, only climatology uses the fit at all.
+
+### D-28 · First live forecast issued by hand, 10 Nov 07:07 UTC · 2026-11-10 · ✅
+- **Decision:** ran `python -m src.issue` locally once, so the log starts today instead of tomorrow. Origin
+  9 Nov (GFZ nowcast values); 4 models × 7 lead days = 28 rows. NOAA's 27-day outlook and 3-day forecast were
+  saved with it.
+- **Why:** every day of delay is a day of verified live results we won't have at the deadline (PLAN §8).
+- **Result / consequence:**
+  - **Note for the report:** this first issue came 7 hours into its own day 1 (10 Nov). The models use no data
+    from 10 Nov, so nothing leaks, but its day 1 is strictly about 0.7 days ahead.
+  - From 11 Nov on, forecasts are issued at 02:00 by the bot.
+  - `issued_at` is recorded on every row, so this stays visible.
+
+### D-29 · The app reads the committed forecast files; the forecast tab comes first · 2026-11-10 · ✅
+- **Decision:**
+  - The new "📅 7-day forecast" tab (first tab) reads `forecasts/*.csv` from the repo. It shows the last 30 days
+    observed, every model's forecast and NOAA's outlook, plus a forecast table and an error-by-lead-day table
+    once scores exist.
+  - The daily job writes `forecasts/recent.csv` (last 60 days observed), so the app never calls GFZ.
+- **Why:**
+  - GFZ blocks browser requests (no CORS header), so the HF browser Space couldn't fetch it.
+  - Reading files is also faster and can't fail.
+  - Streamlit Cloud redeploys on each daily commit, so the files are always current there.
+- **Result / consequence:**
+  - The HF Space also gets the files (added to `SPACE_ASSETS`), but it is only republished weekly, so it can
+    show a forecast up to a week old. The issue date is shown above the chart.
+  - A daily HF sync is planned for day 8.
+  - Chart colours: categorical slots 1–5 of the reference palette, fixed per series. They could not be
+    re-validated here (Node.js isn't installed); they are the reference set, used in order.
+
+### D-30 · File paths resolved at call time in `src/issue.py` · 2026-11-10 · ✅
+- **Decision:** `load_log()` and `load_noaa_live()` look up `config.FORECAST_LOG` and `config.NOAA_LIVE_CSV` when
+  called, not as default arguments.
+- **Why:** a default argument is fixed when the module is imported. Tests that point `config` at a temporary
+  folder would have read and overwritten the **real** `forecasts/log.csv`. This was caught while writing the
+  tests, before any real log existed.
+- **Result / consequence:** the tests use temporary folders only. A separate test checks that the committed
+  log's rows are never changed.

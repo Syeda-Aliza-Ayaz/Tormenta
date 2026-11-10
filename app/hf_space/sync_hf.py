@@ -29,6 +29,7 @@ HERE = Path(__file__).parent
 # Pyodide packages the browser app needs (no scikit-learn: the model is the portable .npz, scores use numpy)
 BROWSER_REQUIREMENTS = ["numpy", "pandas", "altair", "requests"]
 SPACE_ASSETS = ["app/streamlit_app.py", "data/f107_history.csv", "reports/metrics/test.csv",
+                "forecasts/log.csv", "forecasts/scores.csv", "forecasts/recent.csv", "forecasts/noaa_live.csv",
                 "reports/figures/14_may2024_nowcast.png"]
 
 
