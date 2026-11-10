@@ -33,7 +33,7 @@ This plan adds a forecaster on top of it. Every decision and its outcome is logg
   - *Viva framing:* past Kp is autoregression, not leakage. The forecaster must beat persistence and
     27-day recurrence to be worth anything.
 - **Split:** the same years as before, with more history available:
-  - train: 1932–2016
+  - train: 1947-06-01–2016 (F10.7 starts in 1947; DECISIONS D-19)
   - validation: 2017–2019
   - test: 2020 → last definitive day (about Jun 2026)
   - The test set is scored once per model version.
@@ -111,7 +111,8 @@ For issue day D, all trailing:
 |---|---|---|
 | Persistence | Ap(D+h) = Ap(D) | baseline |
 | 27-day recurrence | Ap(D+h) = Ap(D+h−27) | baseline; the one NOAA's outlook is largely built on |
-| Climatology | mean Ap by solar-cycle phase × season | baseline |
+| 27-day trailing mean | mean of the last 27 days | baseline; the strongest one on validation (D-21) |
+| Climatology | training-period mean for the target day's calendar month | baseline |
 | ARIMA | on log(1+Ap) | order picked by AIC on train |
 | SARIMA | seasonal period 27 days | fit once on train, then extend the state with new data at each origin without refitting (otherwise the backtest is too slow) |
 | ARIMAX | ARIMA + F10.7 81-day mean + recurrence term as exogenous inputs | exogenous inputs per §4.2 |
@@ -249,7 +250,7 @@ requirements.txt             + statsmodels, CPU-only torch (via --extra-index-ur
 
 | Day | Date | Work | Done |
 |---|---|---|---|
-| 1 | Tue 10 Nov | Re-download raw data; `daily.py`; keep Ap; baselines; NOAA parsers (RSGA + live) | [ ] |
+| 1 | Tue 10 Nov | Re-download raw data; `daily.py`; keep Ap; baselines; NOAA parsers (RSGA + live) | [x] |
 | 2 | Wed 11 Nov | `issue.py` + `daily.yml` with the baselines, **so the live log starts**; RSGA backfill; **a basic forecast tab live on Streamlit, reading `log.csv`** | [ ] |
 | 3 | Thu 12 Nov | Forecast features (§5) + leakage test; HistGB per lead day; backtest runner | [ ] |
 | 4 | Fri 13 Nov | ARIMA / SARIMA / ARIMAX | [ ] |

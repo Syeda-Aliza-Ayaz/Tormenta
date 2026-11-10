@@ -681,3 +681,39 @@ When a feature is NaN, HistGB still predicts (missing values go down the branch 
 - **Failed runs on GitHub:** after the F10.7 fix, every push showed a failed "retrain.yml" run lasting **0 s** ("workflow file issue"). Cause: the Hugging Face step's command was an unquoted YAML line containing `Weekly update: …`, and in YAML a colon followed by a space inside a plain value is a syntax error ("mapping values are not allowed here"). The file couldn't be parsed, so GitHub marked every push as failed, and the Monday schedule would have silently stopped.
 - **Fix:** the command moved into a `run: |` block. New `tests/test_workflow.py` parses the workflow and checks its triggers and steps (38 tests). A manual dry run on GitHub then confirmed the workflow runs again.
 - **Report:** individual contributions filled in as agreed (Alizeh: data → deployment; HRK: features/models → weekly retraining; shared: proposal, decisions, testing, demo/viva). The report is now single-column with stacked full-width figures.
+
+---
+
+## v2 forecaster: Day 1 — daily data, baselines, NOAA benchmark (2026-11-10)
+
+The teacher asked for a forecaster with a horizon of at least one week. The plan is in [`PLAN.md`](../PLAN.md), and
+every decision with its reason is in [`DECISIONS.md`](../DECISIONS.md). The nowcaster is unchanged; a snapshot of
+it is kept on the `nowcaster` branch.
+
+| File | What it does | Why |
+|---|---|---|
+| `src/ingest/fetch_gfz.py` | now also returns daily **Ap** and the GFZ quality flag (0 nowcast, 1 provisional, 2 definitive) | the forecaster predicts daily Ap. The nowcaster ignores the new columns |
+| `src/daily.py` | one row per day, 1932 → yesterday: `ap`, `kpmax` (largest of the 8 Kp values), `f107_obs`, flag. Fills a complete daily grid and checks it | `.shift(27)` must always mean "27 days earlier" |
+| `src/forecast/base.py` | the interface every model follows: `fit(daily)`, then `predict(daily, origins)` gives D+1 … D+7 from data up to D only | the backtest, the daily job and the apps treat every model the same way |
+| `src/forecast/baselines.py` | persistence, 27-day recurrence, 27-day trailing mean, monthly climatology | the bar every real model must clear |
+| `src/forecast/registry.py` | the list of models to run | adding a model is one line |
+| `src/backtest.py` | rolling-origin backtest: one forecast per day, trained only on days before the period | the main evidence (a live log alone would be too short) |
+| `src/scorecard.py` | RMSE/MAE and skill score per lead day; storm days (max Kp ≥ 5−): probability of detection, false alarm ratio, Heidke skill score | the scorecards the teacher asked for |
+| `src/ingest/fetch_noaa.py` | parsers for NOAA's archived daily reports (RSGA, predicted Ap for days 1–3), the 27-day outlook and the 3-day forecast; backfills `data/noaa_rsga_ap.csv` | NOAA's official forecast is the benchmark (never an input) |
+| `tests/test_forecast.py`, `tests/test_noaa.py` | 14 tests: daily grid, **no future data for any model**, baseline values, backtest coverage, skill and storm formulas, parsers on real NOAA files | the leakage guard runs automatically for every model added to the registry |
+
+**What we found:**
+- The GFZ file is updated **daily**: its last row is yesterday. Definitive values reach 30 Jun 2026; after that
+  come provisional and nowcast values. There are no missing days and no missing Kp or Ap since 1932. F10.7
+  starts in 1947, so the forecaster trains from 1947-06-01 (D-19).
+- On validation (2017–2019), **the 27-day trailing mean is the strongest baseline at every lead day** (Ap RMSE
+  7.6–7.7, skill +0.40 against climatology). Persistence is useful only on day 1 and is worse than climatology
+  from day 3 (D-21).
+- Forecasts that are averages never reach the storm threshold, so storm warnings need the interval or a tuned
+  threshold (D-22).
+- Validation is solar minimum and test is the cycle 25 peak. This is a limitation to report (D-23).
+- **NOAA's own forecast** (3,591 archived reports, `data/noaa_rsga_ap.csv`) beats every baseline on days 1–2 (day-1 Ap RMSE 6.90 vs 7.63). By day 3 it is no better than the 27-day average (7.74 vs 7.70) (D-25).
+
+**Run:** `python -m src.daily` (download + build) · `python -m src.backtest` (validation scorecard →
+`reports/forecast/metrics/`) · `python -m src.ingest.fetch_noaa --rsga 2017 2026` (one-off NOAA backfill).
+50 tests in total (35 existing + 15 new).

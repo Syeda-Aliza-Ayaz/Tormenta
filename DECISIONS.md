@@ -188,3 +188,96 @@ Template:
 - **Why:** the old plan documents decisions that are still true for the nowcaster, so rewriting it would lose that history.
 - **Alternatives considered:** edit the old plan in place.
 - **Result / consequence:** done.
+
+### D-19 · Forecaster history starts 1947-06-01, not 1932 · 2026-11-10 · ✅ (replaces the 1932 start in D-08)
+- **Decision:** all forecasters train from 1947-06-01 to 2016-12-31. The validation and test years are unchanged.
+- **Why:** the GFZ file's F10.7 starts on 1947-02-14, so the 81-day trailing mean exists from about May 1947.
+  Starting every model on the same day keeps the comparison fair (ARIMA could use 1932, but HistGB with F10.7 could not).
+- **Alternatives considered:** Ap-only models from 1932 and the rest from 1947, which would make an unequal comparison.
+- **Result / consequence:** about 25,000 training days (7 solar cycles) instead of 31,000. Kp and Ap themselves have
+  no gaps from 1932 (checked: 34,647 days, no missing days, no missing Kp or Ap).
+
+### D-20 · How NOAA forecasts line up with ours: origin = UTC date of (issue time − 3 h) · 2026-11-10 · ✅
+- **Decision:** a NOAA product's "origin" is the last day whose data NOAA had (almost) complete.
+  - The RSGA report, issued at 22:00 on D, has origin D and covers D+1..D+3 as lead days 1–3.
+  - The 27-day outlook, issued at 02:58 on D, has origin D−1 (its first row, day D, is lead day 1).
+  - The 3-day forecast, issued at 00:30 on D, has origin D−1.
+  - Our forecast, issued at about 02:00 on D+1, has origin D.
+- **Why:** comparing "lead day 1" with "lead day 1" is only fair if both forecasts knew the same data. NOAA's
+  RSGA report misses the last 2–3 hours of day D, which is close enough and slightly in our favour. NOAA can see
+  solar images (CMEs), which we can't. Both points are noted for the report.
+- **Alternatives considered:** take the issue date as the origin, which would give the 27-day outlook a lead day 0
+  and the RSGA report an extra day of advantage.
+- **Result / consequence:** one rule in `src/ingest/fetch_noaa.py`, used for every NOAA product.
+
+### D-21 · Baselines: persistence, 27-day recurrence, 27-day trailing mean, monthly climatology · 2026-11-10 · ✅
+- **Decision:** four reference forecasts. `trailing27` (the mean of the last 27 days) was added to the plan's three.
+- **Why:** an average over one solar rotation is a cheap measure of the current activity level. Any model that
+  can't beat it is not learning anything beyond "how active has it been lately".
+- **Alternatives considered:** the plan's three baselines only.
+- **Result / consequence** (validation 2017–2019, 1,095 target days per lead day, `reports/forecast/metrics/`):
+
+  | Ap RMSE | day 1 | day 2 | day 3 | day 7 |
+  |---|---|---|---|---|
+  | persistence | 8.20 | 10.22 | 10.72 | 10.77 |
+  | recurrence27 | 8.99 | 8.99 | 8.99 | 8.99 |
+  | **trailing27** | **7.63** | **7.69** | **7.70** | **7.72** |
+  | climatology | 9.91 | 9.91 | 9.91 | 9.91 |
+
+  - **trailing27 is the strongest baseline at every lead day, even day 1.** Its skill against climatology is +0.40.
+    This is now the main bar the real models must clear.
+  - Persistence beats climatology only on day 1. By day 3 it is worse than climatology (skill −0.17).
+  - Storm days (max Kp ≥ 5−, 91 of 1,095):
+    - persistence detects 38% on day 1 (Heidke skill score 0.33), then about 0 by day 3;
+    - recurrence27 stays flat at Heidke skill score 0.19 at every lead day;
+    - forecasts that are averages (trailing27, climatology) **never** reach the storm threshold. See D-22.
+  - Max Kp shows the same ranking (day-1 RMSE: trailing27 1.23, persistence 1.26).
+
+### D-22 · Storm warnings need more than a point forecast · 2026-11-10 · ⏳
+- **Decision:** to be made on day 6. The options are to warn when the upper end of the 80% interval reaches 5−,
+  or to tune a warning threshold on validation.
+- **Why:** forecasts of an average are pulled toward typical values, so they almost never cross the storm
+  threshold. D-21 shows this: trailing27 has zero hits.
+- **Result / consequence:** pending.
+
+### D-23 · Validation years are solar minimum: watch for a mismatch with test · 2026-11-10 · ⏳
+- **Decision:** keep the split (D-08), and report it as a known limitation.
+- **Why:** 2017–2019 was the quiet end of cycle 24, while the 2020+ test years cover the rise and peak of cycle 25.
+  Monthly climatology, fitted on 1947–2016, overestimates the quiet years. A model chosen on validation is chosen
+  on quiet conditions.
+- **Alternatives considered:** move the validation years. Rejected: the boundaries would no longer match the
+  nowcaster, and the test set must not change after this point.
+- **Result / consequence:** pending. We will compare validation and test skill on day 6.
+
+### D-24 · Plain ASCII in console output · 2026-11-10 · ✅
+- **Decision:** new scripts print `->` instead of `→`.
+- **Why:** the Windows console (cp1252) raised `UnicodeEncodeError` on `→`. GitHub Actions (UTF-8) never showed
+  this, but anyone running the scripts locally on Windows would hit it.
+- **Result / consequence:** the existing scripts still print `→`. Run them with `PYTHONUTF8=1` on Windows, or fix
+  them when they are next touched.
+
+### D-25 · NOAA's archived forecasts backfilled; NOAA is the bar for days 1–3 · 2026-11-10 · ✅
+- **Decision:**
+  - Backfill NOAA's predicted Ap for days 1–3 from the RSGA reports for 2017–2026, into the committed
+    `data/noaa_rsga_ap.csv`: 3,591 reports, 10,765 rows, 524 KB.
+  - Score them as model `noaa` in every backtest.
+- **Why:** this is the official forecast scored on exactly our days, which makes it the strongest benchmark for the scorecard.
+- **Problems hit, and the fixes:**
+  - **An FTP timeout on the 2023 archive lost the whole first run**, because results were written only at the end.
+    Now each year retries up to 3 times on a fresh connection and is cached in `data/raw/noaa_rsga/<year>.csv`
+    as soon as it finishes.
+  - **The 28 Feb 2020 report failed to parse.** It forecasts 29 Feb, and the year-guessing code tried "29 Feb 2019",
+    which doesn't exist. Fixed, with a regression test.
+  - 10 reports, issued just after midnight, give a "lead 0/−1" day. They fall outside lead days 1–3 and are dropped.
+  - 2024 has 367 reports for 366 days, so NOAA sometimes reissues a report. The latest report per origin is kept.
+- **Result / consequence** (validation 2017–2019, Ap RMSE, about 1,090 days per lead day):
+
+  | | day 1 | day 2 | day 3 |
+  |---|---|---|---|
+  | **NOAA** | **6.90** | **7.35** | 7.74 |
+  | trailing27 (best baseline) | 7.63 | 7.69 | **7.70** |
+  | persistence | 8.20 | 10.22 | 10.72 |
+
+  - NOAA's skill against climatology is +0.52 on day 1, +0.45 on day 2 and +0.39 on day 3.
+  - **By day 3, NOAA is no better than the 27-day average.** For days 1–2, NOAA is the bar to beat. From day 3
+    on, the realistic goal is to beat trailing27.

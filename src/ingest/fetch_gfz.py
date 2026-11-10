@@ -25,15 +25,18 @@ def download_gfz(dest=config.GFZ_TXT) -> None:
 
 
 def load_gfz_daily(path=config.GFZ_TXT) -> pd.DataFrame:
-    """One row per UTC day: kp1–kp8, observed F10.7, definitive flag. Missing (-1) → NaN."""
+    """One row per UTC day: kp1–kp8, daily Ap, observed F10.7, GFZ flag (0 nowcast, 1 provisional,
+    2 definitive) and the definitive boolean. Missing (-1) → NaN."""
     df = pd.read_csv(path, sep=r"\s+", comment="#", header=None, names=GFZ_COLUMNS)
     df.index = pd.to_datetime(df[["year", "month", "day"]])
     df.index.name = "date"
 
     df[KP_COLS] = df[KP_COLS].mask(df[KP_COLS] < 0)
+    df["ap_daily"] = df["Ap"].mask(df["Ap"] < 0)
     df["f107_obs"] = df["f107_obs"].mask(df["f107_obs"] <= 0)
+    df["gfz_flag"] = df["D"]
     df["definitive"] = df["D"] == config.GFZ_DEFINITIVE
-    return df[KP_COLS + ["f107_obs", "definitive"]]
+    return df[KP_COLS + ["ap_daily", "f107_obs", "gfz_flag", "definitive"]]
 
 
 def kp_3hourly(daily: pd.DataFrame) -> pd.DataFrame:

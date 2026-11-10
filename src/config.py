@@ -120,3 +120,20 @@ METRICS_DIR = REPORTS_DIR / "metrics"
 # ── Slow loop ────────────────────────────────────────────────────────────────
 GATE_HOLDOUT_MONTHS = 6
 GATE_TOLERANCE = 1.02        # promote if candidate RMSE <= current RMSE × 1.02
+
+# ── v2 forecaster (PLAN.md) ──────────────────────────────────────────────────
+DAILY_CSV = PROCESSED_DIR / "daily.csv"          # one row per UTC day from GFZ (rebuilt, not committed)
+FORECAST_LEADS = list(range(1, 8))               # lead days 1–7: issued after day D, covering D+1 … D+7
+FORECAST_TARGETS = ["ap", "kpmax"]               # daily Ap and daily max Kp (NOAA's forecast quantities)
+RECURRENCE_DAYS = 27                             # solar rotation seen from Earth (synodic, ~27 d)
+# Same year boundaries as the nowcaster; history starts once the 81-day trailing F10.7 mean exists
+# (GFZ F10.7 starts 1947-02-14 → +81 d), so every model trains on the same days (DECISIONS D-19)
+FORECAST_TRAIN_START = "1947-06-01"
+FORECAST_REPORTS_DIR = REPORTS_DIR / "forecast"
+
+# NOAA SWPC forecasts: benchmark only, never model inputs (DECISIONS D-06)
+NOAA_RSGA_ARCHIVE = "ftp://ftp.swpc.noaa.gov/pub/warehouse/{year}/{year}_RSGA.tar.gz"  # past years
+NOAA_RSGA_DIR = "ftp://ftp.swpc.noaa.gov/pub/warehouse/{year}/RSGA/"                    # current year
+NOAA_27DO = SWPC_BASE + "/text/27-day-outlook.txt"
+NOAA_3DAY = SWPC_BASE + "/text/3-day-forecast.txt"
+NOAA_RSGA_CSV = DATA_DIR / "noaa_rsga_ap.csv"    # committed: NOAA predicted Ap, days 1–3, parsed from RSGA
