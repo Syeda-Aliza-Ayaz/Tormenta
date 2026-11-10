@@ -10,6 +10,9 @@ data/raw/
 data/processed/*
 !data/processed/.gitkeep
 
+# Local working notes (not part of the project)
+dev_notes/
+
 # OS / editor
 .DS_Store
 Thumbs.db

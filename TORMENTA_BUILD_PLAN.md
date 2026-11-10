@@ -1,5 +1,7 @@
 # Tormenta — Build Plan & Architecture (v2)
 
+> **Nowcaster build: complete.** The 7-day forecaster work is planned in [PLAN.md](PLAN.md).
+
 **Project:** Tormenta — predicting Earth's geomagnetic storm level (Kp index) from solar wind data.
 **Course:** CT-378 Machine Learning, NED University (Fall 2026).
 **Task type:** Supervised **regression** (target = Kp, continuous, 0–9).
