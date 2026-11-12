@@ -390,12 +390,13 @@ with forecast_tab:
         st.altair_chart(forecast_chart(forecast_long(latest, recent, noaa, col), origin, col, unit), width="stretch")
         st.caption("**Ap** is the day's average geomagnetic activity (0–400; above about 30 is a storm day). **Max Kp** "
                    "is the day's strongest 3-hour Kp; 5− or more is a storm. Hover for every value. "
-                   + ("**HistGB** is the machine-learning forecast; the others are simple reference methods it must "
-                      "beat. " if FC_TRAINED & set(latest["model"]) else
-                      "This issue comes from simple reference methods only; the machine-learning forecast (HistGB) "
-                      "joins from the next daily issue. ")
-                   + "More models (ARIMA family, a pretrained transformer) are added over the next days. NOAA's "
-                   "outlook is shown for comparison only.")
+                   + ("**HistGB** (gradient boosting) and **ARIMAX** (a time-series model with the 27-day recurrence "
+                      "and solar flux as inputs) are the trained forecasts; switch on the reference methods to see the "
+                      "simple forecasts they must beat. ARIMA and SARIMA were tested too but did not beat the 27-day "
+                      "average, so they are not issued. " if FC_TRAINED & set(latest_all["model"]) else
+                      "This issue comes from simple reference methods only; the trained forecasts join from the next "
+                      "daily issue. ")
+                   + "A pretrained transformer is added next. NOAA's outlook is shown for comparison only.")
         with st.expander("Forecast table"):
             table = latest_all.assign(model=latest_all["model"].map(FC_SERIES)).pivot_table(
                 index="target_date", columns="model", values=col)

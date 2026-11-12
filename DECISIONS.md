@@ -472,3 +472,83 @@ Template:
   - `tests/test_whatif.py` (4 tests): unedited equals the live tab exactly; an edit changes only the current
     hour; the F10.7 override reaches the features; the rounding tolerance works.
   - If live data is unavailable, Real falls back to Steady with a warning.
+
+### D-39 · ARIMA family: parameters fitted once, forecasts by Kalman filter with fixed parameters · 2026-11-12 · ✅
+- **Decision:**
+  - `src/forecast/arima.py` provides ARIMA, SARIMA (27-day season) and ARIMAX as statsmodels SARIMAX models,
+    one per target.
+  - Each model's parameters are estimated **once** on the training years.
+  - To forecast, the Kalman filter runs over the daily series with those parameters fixed, always from the first
+    day of the series. The 7-day forecast for every origin is projected from the filtered state at D in one
+    vectorised step.
+  - ARIMAX inputs:
+    - Ap 27 days before the target day, which is already observed when the forecast is made;
+    - the 81-day trailing F10.7 mean, carried forward from D (D-09).
+  - The first weeks of a series have no inputs yet, so those days are treated as unobserved. They are not
+    filled from later days.
+- **Why:** refitting at each of about 1,100 validation origins would take hours for SARIMA (D-10). Starting the
+  filter at a fixed day makes a forecast for D identical whether or not later data exists.
+- **Alternatives considered:** refit per origin (too slow); statsmodels' own `forecast()` per origin (correct
+  but about 1,100 separate filter runs).
+- **Result / consequence:**
+  - A test checks the vectorised forecast against statsmodels' own forecast: **identical** (to 1e-6) for ARIMA
+    and ARIMAX, Ap and max Kp, at two origins.
+  - The general no-future-data test passes for all three.
+  - New pinned dependencies: `statsmodels==0.15.0`, `patsy==1.0.3`, `formulaic==1.2.2`, installed with the
+    existing pins as constraints. NumPy, pandas, SciPy and scikit-learn are unchanged.
+
+### D-40 · ARIMA orders chosen on the training years only · 2026-11-12 · ✅
+- **Decision:**
+  - Order by AIC over p∈{1,2,3}, d∈{0,1}, q∈{0,1,2} on 1947–2013 (log Ap): **ARIMA(3,0,1)**.
+  - Seasonal part by AIC: **(1,0,1,27)**, chosen over (1,0,0,27).
+  - Raw vs log Ap by forecast RMSE on 2014–2016, still inside the training years: **raw** (9.38 vs 9.61).
+  - The same orders are used for max Kp. Settings are in `models/forecast/arima_settings.json`.
+- **Why:** like HistGB (D-31), nothing about the model is chosen by looking at validation or test.
+- **Result / consequence:**
+  - **The 27-day season lowers AIC by about 430** (43,496 → 43,069): statistical evidence that the Sun's
+    rotation is in the data.
+  - Raw Ap beat log Ap again, as for HistGB.
+
+### D-41 · Validation: ARIMAX passes; ARIMA and SARIMA fail the rule · 2026-11-12 · ✅
+- **Decision:** the same rule as HistGB, fixed in advance: mean Ap skill against `trailing27` over lead days 1–7
+  must be above 0.
+- **Result / consequence** (validation 2017–2019, Ap RMSE):
+
+  | | day 1 | day 2 | day 3 | days 4–7 | mean skill | rule |
+  |---|---|---|---|---|---|---|
+  | HistGB | **6.34** | **7.08** | **7.08** | **7.07–7.09** | +0.179 | pass (live since 11 Nov) |
+  | **ARIMAX** | 6.88 | 7.57 | 7.62 | 7.63–7.64 | **+0.047** | **pass**: joins the live log |
+  | ARIMA | 6.98 | 7.76 | 7.84 | 7.85 | −0.004 | fail |
+  | SARIMA | 7.25 | 8.29 | 8.54 | 8.66–8.74 | −0.198 | fail |
+  | NOAA | 6.90 | 7.35 | 7.74 | — | — | benchmark |
+  | trailing27 | 7.63 | 7.69 | 7.70 | 7.71–7.73 | 0 | the bar |
+
+  - All three are better than trailing27 on **day 1**; ARIMAX ties NOAA there (6.88 vs 6.90). After day 1 they
+    fall back toward the long-term mean.
+  - ARIMAX's 27-day recurrence input keeps it just above the bar.
+  - On max Kp, all three beat trailing27 on day 1 only.
+  - ARIMAX's production bundle is `models/forecast/arimax.joblib` (1.3 KB, parameters only), fitted on
+    1947-06 → 2019-12. The daily job now issues 6 models in about 3 s.
+  - ARIMA and SARIMA stay in the backtest and the scorecards, but are not issued live.
+
+### D-42 · Why SARIMA had the best AIC but the worst forecasts · 2026-11-12 · ✅
+- **Finding:** AIC measures how well the model predicts **one step ahead, in the training years**. Several days
+  ahead, these models fall back toward the training-period mean:
+  - **Ap averaged 13.9 over 1947–2016 but only 7.75 in the quiet 2017–2019 validation years.**
+  - Mean over-forecast on validation:
+
+    | model | day 1 | day 3 | day 7 |
+    |---|---|---|---|
+    | SARIMA | +2.35 | +3.96 | +4.35 |
+    | ARIMA | +0.75 | +1.25 | +1.38 |
+    | ARIMAX | +0.60 | +0.99 | +1.09 |
+    | trailing27 | +0.09 | +0.11 | +0.13 |
+
+  - SARIMA's seasonal terms add memory of the long-run level, so it is pulled up the most.
+  - trailing27 tracks the current level and is almost unbiased.
+- **Why it matters:**
+  - For the report: a good in-sample fit criterion does not guarantee good multi-day forecasts when the activity
+    level shifts. This is the solar-minimum validation issue (D-23) in action.
+  - It also suggests a fix to try only if time allows: model the departure from the 81-day level rather than Ap
+    itself.
+- **Result / consequence:** no change to the rule or the selection, which were fixed in advance. Listed as future work.

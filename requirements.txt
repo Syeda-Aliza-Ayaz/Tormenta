@@ -5,6 +5,10 @@ pandas==3.1.0
 scipy==1.18.1
 scikit-learn==1.9.1
 joblib==1.6.0
+# v2 forecaster: ARIMA / SARIMA / ARIMAX (src/forecast/arima.py)
+statsmodels==0.15.0
+patsy==1.0.3
+formulaic==1.2.2
 matplotlib==3.11.2
 requests==2.34.2
 # Phase 5 apps

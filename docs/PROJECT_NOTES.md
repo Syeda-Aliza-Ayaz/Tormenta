@@ -772,3 +772,30 @@ bot takes over at 02:00 UTC on 11 Nov. The first scores appear once GFZ publishe
 **GitHub:** the daily workflow passed a dry run on GitHub (D-34). HistGB is issued live from 11 Nov 02:00 UTC (D-33).
 
 71 tests in total.
+
+---
+
+## v2 forecaster: Day 4 — ARIMA, SARIMA, ARIMAX (2026-11-12)
+
+| File | What it does | Why |
+|---|---|---|
+| `src/forecast/arima.py` | ARIMA / SARIMA (27-day season) / ARIMAX as statsmodels state-space models; parameters fitted once, then the Kalman filter with fixed parameters gives the 7-day forecast for every origin at once; `python -m src.forecast.arima` selects orders (train only), runs the validation backtest, applies the rule and saves passing models | the models the teacher named, evaluated exactly like the others |
+| `models/forecast/arima_settings.json`, `arimax.joblib` | chosen orders, and ARIMAX's production parameters | ARIMAX passed; ARIMA and SARIMA did not |
+| `src/forecast/registry.py` | the ARIMA family is in every backtest; the daily job loads any saved ARIMA-family bundle | the same rule for every model |
+| `tests/test_forecast_arima.py` | our fast forecast is **identical to statsmodels' own forecast**; a saved model is never refitted | proves the vectorised maths is right |
+| `requirements.txt` | `statsmodels==0.15.0`, `patsy==1.0.3`, `formulaic==1.2.2` | exact pins, as for every dependency |
+| `app/streamlit_app.py` | forecast chart: trained models + NOAA by default, the 4 reference methods behind a toggle (9 forecast series won't fit the 8-colour palette) | readable chart |
+
+**Results (validation 2017–2019, D-41):** chosen model ARIMA(3,0,1), seasonal (1,0,1,27); raw Ap.
+- **ARIMAX passes** (+0.047) and joins the live log. ARIMA (−0.004) and SARIMA (−0.198) fail.
+- On day 1 all three beat the 27-day average, and ARIMAX ties NOAA. After that they drift toward the long-term
+  average. HistGB remains the best at every lead day.
+- **SARIMA had the best AIC but the worst forecasts** (D-42). AIC rewards one-step fit over 1947–2013, which
+  included very active cycles (mean Ap 13.9). In quiet 2017–2019 (mean 7.75), SARIMA over-forecast by about +4
+  from day 3 on. A good lesson for the report.
+- The 27-day season lowers AIC by about 430, which is statistical evidence of the solar-rotation signal.
+
+Also today: the what-if explorer now agrees with the live tab (D-38); six overnight schedule slots for the daily
+job (D-35); the chart tooltip no longer shows `null` (D-36).
+
+83 tests in total.

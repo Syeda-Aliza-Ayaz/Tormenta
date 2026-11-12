@@ -42,8 +42,8 @@ jobs:
       - name: Install
         run: pip install -r requirements.txt pytest==9.2.0
 
-      - name: Tests (forecaster, HistGB bundle, NOAA parsers, daily job)
-        run: python -m pytest -q tests/test_forecast.py tests/test_forecast_gbm.py tests/test_noaa.py tests/test_issue.py
+      - name: Tests (forecasters, saved bundles, NOAA parsers, daily job)
+        run: python -m pytest -q tests/test_forecast.py tests/test_forecast_gbm.py tests/test_forecast_arima.py tests/test_noaa.py tests/test_issue.py
 
       - name: Issue, save NOAA, score
         id: issue
