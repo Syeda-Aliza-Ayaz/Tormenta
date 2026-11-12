@@ -17,4 +17,5 @@ dev_notes/
 .DS_Store
 Thumbs.db
 .vscode/
+*.code-workspace
 .env

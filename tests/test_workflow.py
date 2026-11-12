@@ -10,7 +10,9 @@ def test_daily_workflow_parses_and_has_its_steps():
     wf = yaml.safe_load((config.ROOT / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8"))
     triggers = wf.get("on", wf.get(True))
     assert {"schedule", "workflow_dispatch"} <= set(triggers)
-    assert len(triggers["schedule"]) == 2                   # main run + backup run
+    crons = [c["cron"] for c in triggers["schedule"]]
+    assert len(crons) >= 4                                  # GitHub delays schedules by hours (D-35)
+    assert min(int(c.split()[1]) for c in crons) == 0       # first slot right after GFZ's ~23:45 UTC update
     names = [s.get("name") for s in wf["jobs"]["forecast"]["steps"]]
     for step in ["Issue, save NOAA, score", "Commit forecasts"]:
         assert step in names

@@ -1,12 +1,18 @@
 name: Daily forecast
 
 # Issue the 7-day forecast, save NOAA's forecasts, score past forecasts, commit forecasts/ (src/issue.py).
-# GFZ updates its daily file just before midnight UTC (Last-Modified 23:48 on 2026-11-09), so 02:00 UTC finds
-# yesterday's row. The 06:00 run is a backup: issuing is idempotent, so it adds nothing if 02:00 already issued.
+# GFZ updates its daily file just before midnight UTC (Last-Modified 23:41-23:48), so any run after 00:00 UTC finds
+# yesterday's row. GitHub does not guarantee schedule times: on 2026-11-11 the 02:00 and 06:00 slots started at
+# 08:38 and 13:55 (DECISIONS D-35). So there are several slots, off the busy top of the hour; issuing is idempotent,
+# so the first run that gets through issues and the later ones only refresh scores and NOAA.
 on:
   schedule:
-    - cron: "0 2 * * *"           # 07:00 PKT
-    - cron: "0 6 * * *"           # 11:00 PKT, backup
+    - cron: "17 0 * * *"          # 05:17 PKT
+    - cron: "17 1 * * *"
+    - cron: "17 2 * * *"
+    - cron: "17 3 * * *"
+    - cron: "47 4 * * *"
+    - cron: "47 7 * * *"          # last resort, 12:47 PKT
   workflow_dispatch:
     inputs:
       dry_run:

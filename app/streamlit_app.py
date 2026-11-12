@@ -261,19 +261,30 @@ def forecast_chart(long: pd.DataFrame, origin: pd.Timestamp, col: str, unit: str
     shade_text = alt.Chart(ahead).mark_text(align="left", dx=6, y=10, color=MUTED, fontSize=11).encode(
         x="start:T", text="text:N")
 
+    # Crosshair tooltips per region: past days list only what was observed, forecast days only the series that
+    # forecast them. One tooltip over both regions showed "null" for every series absent on that day.
     wide = df.pivot_table(index=["time", "label"], columns="series", values="value").reset_index()
     keys = {s: f"s{i}" for i, s in enumerate(present)}
     wide = wide.rename(columns=keys)
-    hover = alt.selection_point(nearest=True, on="pointerover", fields=["time"], empty=False, clear="pointerout")
-    tips = [alt.Tooltip("label:N", title="Day")] + [
-        alt.Tooltip(f"{k}:Q", title=s, format=".1f" if col == "kpmax" else ".0f") for s, k in keys.items()
-        if k in wide]
-    rule = alt.Chart(wide).mark_rule(color=MUTED, strokeWidth=1).encode(
-        x="time:T", opacity=alt.condition(hover, alt.value(0.8), alt.value(0)), tooltip=tips).add_params(hover)
+    is_past = wide["time"] <= origin.tz_localize("UTC")
+    rules, hovers = [], []
+    for region, name in [(wide[is_past], "hover_past"), (wide[~is_past], "hover_forecast")]:
+        if not len(region):
+            continue
+        shown = [(s, k) for s, k in keys.items() if k in region and region[k].notna().all()]
+        tips = [alt.Tooltip("label:N", title="Day")] + [
+            alt.Tooltip(f"{k}:Q", title=s, format=".1f" if col == "kpmax" else ".0f") for s, k in shown]
+        hover = alt.selection_point(name=name, nearest=True, on="pointerover", fields=["time"], empty=False,
+                                    clear="pointerout")
+        hovers.append(hover)
+        rules.append(alt.Chart(region[["time", "label"] + [k for _, k in shown]]).mark_rule(
+            color=MUTED, strokeWidth=1).encode(
+            x="time:T", opacity=alt.condition(hover, alt.value(0.8), alt.value(0)), tooltip=tips).add_params(hover))
+    any_hover = hovers[0] if len(hovers) == 1 else hovers[0] | hovers[1]
     dots = alt.Chart(df).mark_point(filled=True, size=80).encode(
-        x=x, y=y, color=colour, opacity=alt.condition(hover, alt.value(1), alt.value(0)))
+        x=x, y=y, color=colour, opacity=alt.condition(any_hover, alt.value(1), alt.value(0)))
 
-    layers = [shade, shade_text, lines, dots, rule]
+    layers = [shade, shade_text, lines, dots, *rules]
     if col == "kpmax":
         storm = alt.Chart(pd.DataFrame({"v": [config.STORM_THRESHOLD], "text": ["storm threshold (G1)"]}))
         layers.insert(2, storm.mark_rule(strokeDash=[4, 4], color=MUTED).encode(y="v:Q"))
@@ -349,6 +360,11 @@ with forecast_tab:
         days = latest["target_date"]
         st.markdown(f"**Forecast for {days.min():%a %d %b} – {days.max():%a %d %b %Y}**, issued "
                     f"{issued:%d %b %H:%M} UTC from GFZ data up to {origin:%d %b} ({GFZ_FLAGS.get(flag, flag)} values).")
+        late_h = (issued - (origin + pd.Timedelta(days=1))) / pd.Timedelta(hours=1)
+        if late_h > 3:
+            st.caption(f"⏱️ This issue went out {late_h:.0f} h into its first forecast day, because GitHub's scheduler "
+                       "started the job late. The models use no data from that day, so nothing is leaked, but day 1 "
+                       "is effectively a shorter lead.")
         choice = st.radio("Quantity", list(FC_TARGETS), horizontal=True, label_visibility="collapsed")
         col, unit = FC_TARGETS[choice]
         st.altair_chart(forecast_chart(forecast_long(latest, recent, noaa, col), origin, col, unit), width="stretch")

@@ -413,3 +413,35 @@ Template:
   - GitHub warns that `actions/checkout@v4` and `actions/setup-python@v5` target Node 20 (being retired; forced
     onto Node 24, still working) and that `ubuntu-latest` is moving to Ubuntu 26. No action needed now; to check
     on day 10.
+
+### D-35 · Six overnight schedule slots, because GitHub runs scheduled jobs hours late · 2026-11-12 · ⏳
+- **Decision:**
+  - `daily.yml` now has slots at 00:17, 01:17, 02:17, 03:17, 04:47 and 07:47 UTC, off the busy top of the hour.
+  - Issuing is idempotent, so the first run that gets through issues the forecast and later runs only refresh
+    scores and NOAA.
+  - The app shows a note when an issue went out more than 3 hours into its first forecast day.
+- **Why:**
+  - GitHub doesn't guarantee schedule times. On 11 Nov, the 02:00 and 06:00 slots started at **08:38 and 13:55
+    UTC**. On 12 Nov, neither had started by 06:46 UTC.
+  - A late issue isn't leakage (the models use no data from that day), but day 1 becomes a shorter lead.
+  - If both slots slipped far enough, a whole day could be missed.
+  - GFZ updates its file at 23:41–23:48 UTC, so any slot after midnight UTC finds yesterday's data.
+- **Alternatives considered:** an external scheduler calling `workflow_dispatch` (needs a token and another
+  service); accepting the delay.
+- **Result / consequence:**
+  - Up to six bot runs a day; only runs with changes commit.
+  - The 11 Nov issue (origin 10 Nov) went out 8.6 h into its day 1. Its `issued_at` is in the log, and the app
+    shows it.
+  - Pending: check over the next days whether the earlier slots get through.
+
+### D-36 · Chart tooltip: one hover region for observed days, one for forecast days · 2026-11-12 · ✅
+- **Decision:** the forecast chart's crosshair is split at the issue day. Past days list only the observed value;
+  forecast days list only the series that have a value for every forecast day.
+- **Why:** reported by HRK. One tooltip over all days listed every series, so past days showed `null` for HistGB
+  and the other models, and forecast days showed `null` for the observed value.
+- **Result / consequence:** checked on the generated chart: 0 empty values in either region, for both Ap and max
+  Kp. The app runs without errors.
+
+### D-37 · Editor workspace files ignored · 2026-11-12 · ✅
+- **Decision:** `*.code-workspace` added to `.gitignore`.
+- **Why:** `Tormenta.code-workspace` is a personal VS Code file, not part of the project.
