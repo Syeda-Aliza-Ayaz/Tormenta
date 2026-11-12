@@ -445,3 +445,30 @@ Template:
 ### D-37 · Editor workspace files ignored · 2026-11-12 · ✅
 - **Decision:** `*.code-workspace` added to `.gitignore`.
 - **Why:** `Tormenta.code-workspace` is a personal VS Code file, not part of the project.
+
+### D-38 · What-if runs on the real last 3 days, so unedited live values equal the live tab · 2026-11-12 · ✅
+- **Decision:**
+  - The what-if tab has a "Past 3 days" choice: **Real (live data up to now)** or **Steady at these values**.
+  - "Latest live values" fills the form from the live tab's own "Kp now" hour and selects Real. Only the fields
+    the user changes replace that hour (`predict.predict_on_history`); the lags and 3–24 h averages keep the
+    real solar wind.
+  - Presets select Steady, because a made-up scenario has no real past.
+  - The response curves use the same choice, so they pass through the headline number.
+- **Why:**
+  - Reported by HRK: the live tab showed Kp 1.2 while the what-if tab, with "Latest live values", showed 0.8.
+    The same thing happened on 8 Nov (3.2 vs 2.2). The cause is the one recorded in `dev_notes/`: the what-if tab
+    repeated the current hour for 72 hours and erased the real history behind the lag and average features.
+  - **A second cause, found while fixing it:** "Latest live values" took the newest hour with complete data. That
+    is often the hour *ahead* of the clock (the solar wind is measured about an hour before it reaches Earth),
+    while the live tab reports the current hour. So the two tabs could even describe different hours.
+- **Alternatives considered:** remove the "Latest live values" button (5 minutes, but the tabs can no longer be
+  compared and the most useful starting point for experiments is lost).
+- **Result / consequence:**
+  - Checked in the app with live NOAA data (12 Nov 07:00 UTC): live tab **1.1**, what-if unedited **1.1**, with
+    the caption "Unchanged live values: this is the live tab's nowcast for the same hour".
+  - Bz −20 nT and |B| 25 nT on the real history give 5.1; the same values held steady for 3 days give 6.2. The
+    CME preset switches to Steady and gives 7.2.
+  - Display rounding (the form shows 2 decimals) is not counted as an edit.
+  - `tests/test_whatif.py` (4 tests): unedited equals the live tab exactly; an edit changes only the current
+    hour; the F10.7 override reaches the features; the rounding tolerance works.
+  - If live data is unavailable, Real falls back to Steady with a warning.

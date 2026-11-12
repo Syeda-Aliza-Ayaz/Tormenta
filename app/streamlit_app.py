@@ -17,7 +17,8 @@ import streamlit as st  # noqa: E402
 
 from src import config, scoring  # noqa: E402  (numpy-only helpers, no scikit-learn)
 from src.ingest import fetch_live  # noqa: E402
-from src.predict import INPUT_LIMITS, load_bundle, nowcast, predict_steady, validate_inputs  # noqa: E402
+from src.predict import (INPUT_LIMITS, edited_fields, live_form_values, load_bundle, now_hour, nowcast,  # noqa: E402
+                         predict_on_history, predict_steady, validate_inputs)
 
 st.set_page_config(page_title="Tormenta Kp Forecast", page_icon="🧲", layout="wide")
 
@@ -172,14 +173,15 @@ def sparkline(hourly: pd.DataFrame, col: str, unit: str) -> alt.Chart:
     return alt.layer(*layers).properties(height=56).configure_view(strokeWidth=0)
 
 
-def sweep_chart(values: dict, label: str) -> alt.LayerChart:
-    """What-if: Kp (+ 80% range) as one input varies, the others held at the entered values."""
+def sweep_chart(values: dict, label: str, predict) -> alt.LayerChart:
+    """What-if: Kp (+ 80% range) as one input varies, the others held at the entered values. `predict` is the
+    same function as the headline what-if number (real history or steady), so the curve passes through it."""
     col, grid = SWEEPS[label]
     rows = []
     for v in grid:
         x = {**values, col: float(v)}
         x["b_scalar"] = max(x["b_scalar"], float(np.sqrt(x["bx"] ** 2 + x["by_gsm"] ** 2 + x["bz_gsm"] ** 2)))
-        out = predict_steady(BUNDLE, x)
+        out = predict(x)
         rows.append({"x": float(v), "kp": out["kp_pred"], "lo": out["kp_lo"], "hi": out["kp_hi"]})
     df = pd.DataFrame(rows)
     xs = alt.X("x:Q", title=label, axis=alt.Axis(grid=False))
@@ -200,14 +202,18 @@ def sweep_chart(values: dict, label: str) -> alt.LayerChart:
 
 
 # ── 7-day forecast (v2) ──────────────────────────────────────────────────────
-# One fixed categorical slot per entity (reference palette slots 1–6 in order, light / dark steps), so a series
-# keeps its colour whatever else is shown. Observed values are neutral ink, not a series colour. New models take the
-# next slot; at most 8 series (palette size), after that fold the baselines into one toggle.
-FC_SERIES = {"histgb": "HistGB (machine learning)", "trailing27": "27-day average", "persistence": "Persistence",
-             "recurrence27": "27-day recurrence", "climatology": "Climatology", "noaa": "NOAA 27-day outlook"}
-FC_COLORS = {"light": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"],
-             "dark": ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300"]}[MODE]
-FC_TRAINED = {"histgb"}
+# One fixed colour per entity (reference palette slots 1–8 in order, light / dark steps), so a series keeps its colour
+# whatever else is shown. 9 forecast series exceed the 8-slot palette, so the four reference methods sit behind a
+# toggle (off by default) and climatology, the least informative, is drawn in muted grey instead of a 9th hue.
+# Observed values are neutral ink, not a series colour.
+FC_SERIES = {"histgb": "HistGB (machine learning)", "arima": "ARIMA", "sarima": "SARIMA (27-day season)",
+             "arimax": "ARIMAX", "noaa": "NOAA 27-day outlook", "trailing27": "27-day average",
+             "persistence": "Persistence", "recurrence27": "27-day recurrence", "climatology": "Climatology"}
+FC_COLORS = {"light": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948", MUTED],
+             "dark": ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767",
+                      MUTED]}[MODE]
+FC_TRAINED = {"histgb", "arima", "sarima", "arimax"}
+FC_REFERENCE = {"trailing27", "persistence", "recurrence27", "climatology"}
 INK = {"light": "#3d3d3a", "dark": "#e0dfd9"}[MODE]
 OBSERVED = "Observed (GFZ)"
 FC_TARGETS = {"Daily Ap": ("ap", "Ap"), "Daily max Kp": ("kpmax", "max Kp")}
@@ -319,18 +325,25 @@ def get_live():
     return live, hourly, fetch_live.fetch_f107(), pd.Timestamp.now("UTC")
 
 
+HISTORY_OPTIONS = ["Real (live data up to now)", "Steady at these values"]
+
+
 def apply_preset(name: str):
     for k, v in PRESETS[name].items():
         st.session_state[k] = float(v)
+    st.session_state["history_mode"] = HISTORY_OPTIONS[1]      # a made-up scenario has no real past
 
 
 def fill_live():
+    """Fill the form with the inputs of the live tab's "Kp now" hour; the what-if then runs on the real history,
+    so an unedited prediction equals the live tab exactly (predict_on_history)."""
     try:
-        _, hourly, f107, _ = get_live()
-        latest = hourly.dropna().iloc[-1]
-        for c in config.SW_FEATURES:
-            st.session_state[c] = float(round(latest[c], 2))
-        st.session_state["f107"] = float(f107.dropna().iloc[-1])
+        live, hourly, f107, _ = get_live()
+        shown = live_form_values(hourly, f107, now_hour(live))
+        for k, v in shown.items():
+            st.session_state[k] = float(round(v, 2))
+        st.session_state["live_shown"] = shown
+        st.session_state["history_mode"] = HISTORY_OPTIONS[0]
     except LIVE_ERRORS:
         st.session_state["fill_error"] = True
 
@@ -365,7 +378,14 @@ with forecast_tab:
             st.caption(f"⏱️ This issue went out {late_h:.0f} h into its first forecast day, because GitHub's scheduler "
                        "started the job late. The models use no data from that day, so nothing is leaked, but day 1 "
                        "is effectively a shorter lead.")
-        choice = st.radio("Quantity", list(FC_TARGETS), horizontal=True, label_visibility="collapsed")
+        c1, c2 = st.columns([3, 2])
+        choice = c1.radio("Quantity", list(FC_TARGETS), horizontal=True, label_visibility="collapsed")
+        show_ref = c2.toggle("Show reference methods", value=not (FC_TRAINED & set(latest["model"])),
+                             help="Persistence, 27-day recurrence, 27-day average and climatology: the simple "
+                                  "forecasts every model must beat.")
+        latest_all = latest
+        if not show_ref:
+            latest = latest[~latest["model"].isin(FC_REFERENCE)]
         col, unit = FC_TARGETS[choice]
         st.altair_chart(forecast_chart(forecast_long(latest, recent, noaa, col), origin, col, unit), width="stretch")
         st.caption("**Ap** is the day's average geomagnetic activity (0–400; above about 30 is a storm day). **Max Kp** "
@@ -377,7 +397,7 @@ with forecast_tab:
                    + "More models (ARIMA family, a pretrained transformer) are added over the next days. NOAA's "
                    "outlook is shown for comparison only.")
         with st.expander("Forecast table"):
-            table = latest.assign(model=latest["model"].map(FC_SERIES)).pivot_table(
+            table = latest_all.assign(model=latest_all["model"].map(FC_SERIES)).pivot_table(
                 index="target_date", columns="model", values=col)
             table.index = table.index.strftime("%a %d %b")
             st.dataframe(table.round(2 if col == "kpmax" else 1), width="stretch")
@@ -459,8 +479,8 @@ with live_tab:
             st.dataframe(table.round(2), width="stretch")
 
 with manual_tab:
-    st.markdown("Pick a scenario or type your own conditions. One set of values is **assumed to have held steady "
-                "for the past 3 days**, because the model also uses lags and 6–24 h averages.")
+    st.markdown("Pick a scenario or type your own conditions for **the current hour**. The model also uses the "
+                "past 3 days (lags and 3–24 h averages), so choose what that past looks like below.")
     for name, value in DEFAULTS.items():
         st.session_state.setdefault(name, value)
     cols = st.columns(len(PRESETS) + 1)
@@ -482,13 +502,42 @@ with manual_tab:
             st.error(msg)
     values = st.session_state.get("manual_values")
     if values:
-        out = predict_steady(BUNDLE, values)
+        st.session_state.setdefault("history_mode", HISTORY_OPTIONS[1])
+        mode = st.radio("Past 3 days", HISTORY_OPTIONS, horizontal=True, key="history_mode",
+                        help="Real: the actual solar wind of the last 3 days from NOAA, with only the current hour "
+                             "replaced by your numbers. Unchanged live values give exactly the live tab's Kp. "
+                             "Steady: your numbers are assumed to have held for 3 days.")
+        live = None
+        if mode == HISTORY_OPTIONS[0]:
+            try:
+                live, hourly, f107, _ = get_live()
+            except LIVE_ERRORS:
+                st.warning("Live data is unavailable right now, so the past 3 days are assumed steady.", icon="📡")
+        if live is not None:
+            hour = now_hour(live)
+            shown = st.session_state.get("live_shown") or live_form_values(hourly, f107, hour)
+
+            def predict(x):
+                return predict_on_history(BUNDLE, hourly, f107, hour, edited_fields(x, shown))
+            changed = edited_fields(values, shown)
+            title = (f"Kp at {hour:%d %b %H:00} UTC, real history" if not changed else
+                     f"Kp at {hour:%d %b %H:00} UTC with your {len(changed)} change{'s' if len(changed) > 1 else ''}")
+        else:
+            def predict(x):
+                return predict_steady(BUNDLE, x)
+            title, changed = "Predicted Kp, steady for 3 days", None
+        out = predict(values)
         left, right = st.columns([2, 3], gap="large")
         with left:
-            kp_card(out["kp_pred"], out["kp_lo"], out["kp_hi"], "Predicted Kp for your inputs")
+            kp_card(out["kp_pred"], out["kp_lo"], out["kp_hi"], title)
+            if live is not None and not changed:
+                st.caption("✅ Unchanged live values: this is the live tab's nowcast for the same hour.")
+            elif live is not None:
+                st.caption("Changed: " + ", ".join(INPUT_LIMITS[k][2] for k in changed) + ". Everything before "
+                           "this hour is the real solar wind.")
         with right:
             label = st.radio("How does Kp respond to…", list(SWEEPS), horizontal=True)
-            st.altair_chart(sweep_chart(values, label), width="stretch")
+            st.altair_chart(sweep_chart(values, label, predict), width="stretch")
             st.caption("Each point is a full model prediction with that one input changed and the others held at "
                        "your values. Hover for the 80% range. Dashed line: storm threshold.")
 

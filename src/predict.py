@@ -117,6 +117,50 @@ def predict_steady(bundle: dict, values: dict, when=None) -> dict:
             "level": storm_level(row["kp_pred"])}
 
 
+LIVE_MATCH_TOL = 0.006   # the what-if form shows live values rounded to 2 decimals; within this they count as unedited
+
+
+def now_hour(pred: pd.DataFrame) -> pd.Timestamp:
+    """The hour the live tab reports as "Kp now": the newest hour that is not ahead of the clock."""
+    return pred.index[~pred["ahead"]][-1]
+
+
+def live_form_values(hourly: pd.DataFrame, f107_daily: pd.Series, hour) -> dict:
+    """What the what-if form shows for "latest live values": the inputs at the live tab's hour (a column missing
+    that hour shows its last known value, so the form always has a number)."""
+    upto = hourly.loc[:pd.Timestamp(hour)]
+    out = {c: float(upto[c].dropna().iloc[-1]) for c in config.SW_FEATURES}
+    out["f107"] = float(f107_daily.dropna().iloc[-1])
+    return out
+
+
+def edited_fields(values: dict, shown: dict) -> dict:
+    """The fields the user changed from what the form showed (display rounding is not an edit)."""
+    return {k: v for k, v in values.items() if k not in shown or abs(v - shown[k]) > LIVE_MATCH_TOL}
+
+
+def predict_on_history(bundle: dict, hourly: pd.DataFrame, f107_daily: pd.Series, hour, overrides: dict = None) -> dict:
+    """Kp at `hour` from the REAL preceding history, with only the fields in `overrides` changed (what-if).
+
+    With no overrides the features, and so the result, are identical to the live nowcast for that hour. Overrides
+    change only the current hour; the lags and 3–24 h averages keep the real past. F10.7 is daily: an override
+    replaces the flux the model reads for that hour (the previous day's, features.f107_daily_features).
+    """
+    hour = pd.Timestamp(hour)
+    h = hourly.loc[:hour].copy()
+    f107 = f107_daily.copy()
+    for c, v in (overrides or {}).items():
+        if c in config.SW_FEATURES:
+            h.at[hour, c] = v
+    if overrides and "f107" in overrides:
+        day = hour.normalize() - pd.Timedelta(days=1)
+        f107 = pd.concat([f107[f107.index < day],
+                          pd.Series(overrides["f107"], index=pd.date_range(day, hour.normalize(), freq="D"))])
+    row = predict_with_interval(bundle, build_features(h, f107).loc[[hour]]).iloc[0]
+    return {"time": f"{hour:%Y-%m-%d %H:00} UTC", **{k: round(float(row[k]), 2) for k in row.index},
+            "level": storm_level(row["kp_pred"])}
+
+
 def storm_level(kp: float) -> str:
     """NOAA level label for a Kp value (0-3, 4, 5 (G1), …)."""
     return str(pd.cut([kp], config.KP_BINS, labels=config.KP_BIN_LABELS, right=False)[0])
