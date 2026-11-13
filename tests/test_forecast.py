@@ -90,3 +90,16 @@ def test_skill_score_against_itself_is_zero_and_contingency():
     c = scorecard.contingency([True, True, False, False], [True, False, True, False])
     assert (c["hits"], c["false_alarms"], c["misses"], c["correct_negatives"]) == (1, 1, 1, 1)
     assert c["pod"] == 0.5 and c["far"] == 0.5 and c["hss"] == 0
+
+
+def test_recent_hindcast_stays_outside_validation_and_test(daily):
+    """'recent' starts the day after the last definitive day (end of the test period) and scores provisional days."""
+    d = daily.copy()
+    d.loc["2013-07-01":, "definitive"] = False                 # provisional tail, as in the live GFZ file
+    d.loc["2013-07-01":, "gfz_flag"] = 1
+    first, last = backtest.period("recent", d)
+    assert first == pd.Timestamp("2013-07-01") and last == d.index.max()
+    assert first > backtest.period("test", d)[1]
+    fc = backtest.hindcast(d, first, last)
+    assert len(fc) and fc["target_date"].min() >= first and not fc["obs_definitive"].any()
+    assert set(fc["model"]) == {m.name for m in registry.production_models()}

@@ -799,3 +799,5 @@ Also today: the what-if explorer now agrees with the live tab (D-38); six overni
 job (D-35); the chart tooltip no longer shows `null` (D-36).
 
 83 tests in total.
+
+**Recent hindcast (2026-11-13, D-43):** `python -m src.backtest --period recent` scores the live models on 1 Jul – 12 Nov 2026 (135 days, after the test period, unseen by every model). HistGB is best at every lead day and beats NOAA on days 1-3 (day-1 Ap RMSE 9.02 vs 9.76); ARIMAX is level with the 27-day average. The OMNI raw files are restored locally, so the retrain tests run again (D-44).

@@ -552,3 +552,51 @@ Template:
   - It also suggests a fix to try only if time allows: model the departure from the 81-day level rather than Ap
     itself.
 - **Result / consequence:** no change to the rule or the selection, which were fixed in advance. Listed as future work.
+
+### D-43 · "Recent hindcast": the live models scored on 1 Jul – 12 Nov 2026 · 2026-11-13 · ✅
+- **Decision:** `python -m src.backtest --period recent` runs the **production models**, exactly as the daily job
+  does, on every issue day from the day after GFZ's last definitive day (30 Jun 2026) to the newest published day.
+  It is scored against GFZ's provisional and nowcast values, flagged as such, and NOAA's archived day 1–3
+  forecasts are scored on the same days.
+- **Why:**
+  - HRK asked to use the existing data instead of waiting for the live log, which had only 3 scored days.
+  - These days are in **neither validation nor test**, and every live model was trained on data up to 2019, so
+    nothing is reused or leaked.
+  - The test period (2020 → 30 Jun 2026) stays untouched until day 6 (D-08).
+  - Each forecast uses data up to its origin only, the same code path as live.
+- **Alternatives considered:** wait for the live log (weeks); score the test period now (would spend the one-time test).
+- **Result / consequence** (135 target days, mean Ap 9.3, 16 storm days, maximum Ap 73; Ap RMSE):
+
+  | | day 1 | day 2 | day 3 | days 4–7 |
+  |---|---|---|---|---|
+  | **HistGB** | **9.02** | **9.01** | **8.58** | **8.86–9.04** |
+  | ARIMAX | 9.15 | 9.58 | 9.32 | 9.24–9.26 |
+  | NOAA | 9.76 | 9.54 | 9.36 | — |
+  | trailing27 | 9.36 | 9.38 | 9.27 | 9.23–9.31 |
+  | climatology | 10.49 | 10.49 | 10.49 | 10.49 |
+  | persistence | 11.38 | 13.87 | 13.80 | 12.6–13.6 |
+
+  - **The validation result holds on unseen, more active days:** HistGB is best at every lead day and beats NOAA
+    on days 1–3. Its skill against trailing27 is smaller than in validation (+0.05 to +0.14 vs +0.15 to +0.31).
+  - **ARIMAX is only level with trailing27 here** (skill about 0 after day 1). It passed its rule narrowly
+    (+0.047), and this is consistent with that.
+  - Storms: HistGB catches 2 of 16 storm days on day 1 and none from day 3 on; recurrence27 catches 5. This
+    confirms that storm warnings need their own rule (D-22, day 6).
+  - **Limits:**
+    - 135 days is useful but still modest, and errors on neighbouring days are correlated.
+    - The observed values are provisional and may change slightly when GFZ finalises them.
+  - The live log is still the only proof that forecasts were written before their days. The hindcast is issued in
+    hindsight, even though it uses the same data limits.
+  - Files: `reports/forecast/metrics/recent_leads.csv`, `recent_storms.csv`. Test:
+    `test_recent_hindcast_stays_outside_validation_and_test`.
+
+### D-44 · OMNI raw files restored locally; retrain tests run again · 2026-11-13 · ✅
+- **Decision:** HRK copied the original OMNI subset (`omni2_UuPWjVIAYC.lst/.fmt`, 245,688 hours,
+  1998-01-01 → 2026-01-10) into `data/raw/`. The hourly table was rebuilt with `build_hourly` + `check` +
+  `save_processed`, **without** `src.preprocessing.main`, so the committed `data/f107_history.csv` wasn't
+  overwritten by an older local GFZ copy.
+- **Result / consequence:**
+  - The 2 weekly-retrain guard tests (`tests/test_update.py`) run and pass locally again.
+  - `test_omni_spdf.py::test_spdf_parser_against_real_2024_file` still skips here, because NASA SPDF can't be
+    reached from this network (v1 #31). It runs on GitHub, which can reach SPDF.
+  - `data/raw/` and `data/processed/` stay out of git, as before.
