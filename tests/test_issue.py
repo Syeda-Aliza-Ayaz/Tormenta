@@ -131,3 +131,16 @@ def test_committed_log_rows_are_unchanged():
     committed = head.stdout.splitlines()
     current = config.FORECAST_LOG.read_text(encoding="utf-8").splitlines()
     assert current[:len(committed)] == committed, "forecasts/log.csv: committed rows were changed or removed"
+
+
+def test_issued_rows_carry_80pc_ranges_for_calibrated_models(offline, paths):
+    from src.forecast import intervals
+    table = intervals.load()
+    if not table:
+        pytest.skip("no intervals.json")
+    log = _run("2026-11-10 02:05")["log"]
+    calibrated = log[log["model"].isin(table)]
+    assert len(calibrated)
+    for t in config.FORECAST_TARGETS:
+        assert calibrated[[f"{t}_lo", f"{t}_hi"]].notna().all(axis=None)
+        assert (calibrated[f"{t}_lo"] <= calibrated[t]).all() and (calibrated[t] <= calibrated[f"{t}_hi"]).all()

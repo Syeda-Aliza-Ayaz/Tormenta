@@ -246,7 +246,18 @@ def forecast_long(latest: pd.DataFrame, recent: pd.DataFrame, noaa: pd.DataFrame
     return pd.concat(parts, ignore_index=True).dropna(subset=["value"])
 
 
-def forecast_chart(long: pd.DataFrame, origin: pd.Timestamp, col: str, unit: str) -> alt.LayerChart:
+BAND_MODEL = "histgb"     # the headline model's 80% range is drawn as a band (one band keeps the chart readable)
+
+
+def forecast_band(latest: pd.DataFrame, col: str) -> pd.DataFrame:
+    rows = latest[latest["model"] == BAND_MODEL]
+    if not len(rows) or f"{col}_lo" not in rows or rows[f"{col}_lo"].isna().all():
+        return pd.DataFrame()
+    return rows.rename(columns={"target_date": "time", f"{col}_lo": "lo", f"{col}_hi": "hi"})[["time", "lo", "hi"]]
+
+
+def forecast_chart(long: pd.DataFrame, origin: pd.Timestamp, col: str, unit: str,
+                   band: pd.DataFrame = None) -> alt.LayerChart:
     """History in ink, forecasts in their own colours, issue day marked, crosshair tooltip with every value."""
     present = [s for s in [OBSERVED, *FC_SERIES.values()] if s in set(long["series"])]
     colours = [INK if s == OBSERVED else FC_COLORS[list(FC_SERIES.values()).index(s)] for s in present]
@@ -291,6 +302,10 @@ def forecast_chart(long: pd.DataFrame, origin: pd.Timestamp, col: str, unit: str
         x=x, y=y, color=colour, opacity=alt.condition(any_hover, alt.value(1), alt.value(0)))
 
     layers = [shade, shade_text, lines, dots, *rules]
+    if band is not None and len(band):
+        b = band.assign(time=band["time"].dt.tz_localize("UTC"))
+        layers.insert(2, alt.Chart(b).mark_area(opacity=0.16, color=FC_COLORS[0]).encode(
+            x=alt.X("time:T", scale=alt.Scale(type="utc")), y="lo:Q", y2="hi:Q"))
     if col == "kpmax":
         storm = alt.Chart(pd.DataFrame({"v": [config.STORM_THRESHOLD], "text": ["storm threshold (G1)"]}))
         layers.insert(2, storm.mark_rule(strokeDash=[4, 4], color=MUTED).encode(y="v:Q"))
@@ -387,9 +402,10 @@ with forecast_tab:
         if not show_ref:
             latest = latest[~latest["model"].isin(FC_REFERENCE)]
         col, unit = FC_TARGETS[choice]
-        st.altair_chart(forecast_chart(forecast_long(latest, recent, noaa, col), origin, col, unit), width="stretch")
+        st.altair_chart(forecast_chart(forecast_long(latest, recent, noaa, col), origin, col, unit,
+                                       forecast_band(latest, col)), width="stretch")
         st.caption("**Ap** is the day's average geomagnetic activity (0–400; above about 30 is a storm day). **Max Kp** "
-                   "is the day's strongest 3-hour Kp; 5− or more is a storm. Hover for every value. "
+                   "is the day's strongest 3-hour Kp; 5− or more is a storm. Hover for every value; the shaded band is HistGB's 80% range (the real value should land inside it about 8 days in 10). "
                    + ("**HistGB** (gradient boosting) and **ARIMAX** (a time-series model with the 27-day recurrence "
                       "and solar flux as inputs) are the trained forecasts; switch on the reference methods to see the "
                       "simple forecasts they must beat. ARIMA and SARIMA were tested too but did not beat the 27-day "

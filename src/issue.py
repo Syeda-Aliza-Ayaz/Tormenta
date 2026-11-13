@@ -18,7 +18,7 @@ import pandas as pd
 
 from src import backtest, config
 from src.daily import build_daily, check
-from src.forecast import registry
+from src.forecast import intervals, registry
 from src.ingest import fetch_noaa
 from src.ingest.fetch_gfz import download_gfz, load_gfz_daily
 
@@ -47,7 +47,7 @@ def issue(daily: pd.DataFrame, origin: pd.Timestamp, models, issued_at: pd.Times
     for model in models:
         fc = model.fit(fit_rows).predict(daily, [origin])
         parts.append(fc.assign(model=model.name, model_version=model.version))
-    new = pd.concat(parts, ignore_index=True)
+    new = intervals.apply(pd.concat(parts, ignore_index=True), intervals.load())   # 80% ranges (D-45)
     new["issued_at"] = issued_at
     new["origin_flag"] = int(daily.loc[origin, "gfz_flag"])
     return new.reindex(columns=LOG_COLUMNS)

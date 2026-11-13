@@ -600,3 +600,34 @@ Template:
   - `test_omni_spdf.py::test_spdf_parser_against_real_2024_file` still skips here, because NASA SPDF can't be
     reached from this network (v1 #31). It runs on GitHub, which can reach SPDF.
   - `data/raw/` and `data/processed/` stay out of git, as before.
+
+### D-45 · 80% ranges for every live model, from out-of-sample errors per lead day · 2026-11-13 · ✅
+- **Decision:**
+  - `src/forecast/intervals.py`: for each model, target and lead day, the 10th–90th percentile of its
+    out-of-sample errors gives the 80% range.
+    - Ap uses **log ratios**, log(1+obs) − log(1+forecast), so the range widens on active days and stays ≥ 0.
+    - Max Kp uses plain differences, clipped to 0–9.
+  - The same method for every model, so ranges are comparable.
+  - The daily job writes the ranges into the log (`ap_lo/hi`, `kpmax_lo/hi`).
+  - The app draws HistGB's range as a band (one band keeps the chart readable).
+- **Why:**
+  - A single number hides how uncertain a 7-day forecast is.
+  - The same quantiles are the starting point for the storm-risk number (D-22, day 6).
+  - A fixed ±X would be too wide on quiet days and too narrow in storms.
+- **Alternatives considered:**
+  - Quantile models per lead day (14 more HistGB fits, and nothing similar for ARIMA).
+  - Each model's own theoretical interval (ARIMA has one, HistGB doesn't, so they wouldn't be comparable).
+- **Calibration data, changed once:**
+  - **First version:** validation 2017–2019 only. Checked on the 135 unseen recent days, coverage was **72–78%**
+    (target 80%), because validation is the quietest part of the cycle (D-23).
+  - **Final version:** errors from **2008–2016** (models fitted ≤ 2007, which includes the cycle-24 maximum) plus
+    validation 2017–2019 (fitted ≤ 2016). This uses training-period years only; the recent days and the test
+    period are untouched.
+  - **Disclosure:** this change was made *after* seeing the recent coverage. The reason (validation is too quiet)
+    was already documented in D-23. The test period will give the clean check on day 6.
+- **Result / consequence** (coverage on the recent hindcast, 1 Jul – 12 Nov 2026, lead days 1–7):
+  - HistGB Ap **81–83%**; HistGB max Kp 76–78%; ARIMAX Ap 73–79%; 27-day average about 80%.
+  - Example (HistGB, day 1): forecast Ap 5 → 1.6–8.3; forecast Ap 30 → 12–47. Day 7 is slightly wider.
+  - Files: `models/forecast/intervals.json`, `reports/forecast/metrics/recent_interval_coverage.csv`,
+    `reports/forecast/calibration_forecasts.csv.gz` (the out-of-sample forecasts, reused for the storm rule).
+  - Tests: `tests/test_intervals.py`, plus a daily-job test that issued rows carry the ranges.
