@@ -801,3 +801,26 @@ job (D-35); the chart tooltip no longer shows `null` (D-36).
 83 tests in total.
 
 **Recent hindcast (2026-11-13, D-43):** `python -m src.backtest --period recent` scores the live models on 1 Jul – 12 Nov 2026 (135 days, after the test period, unseen by every model). HistGB is best at every lead day and beats NOAA on days 1-3 (day-1 Ap RMSE 9.02 vs 9.76); ARIMAX is level with the 27-day average. The OMNI raw files are restored locally, so the retrain tests run again (D-44).
+
+---
+
+## v2 forecaster: Day 5 — 80% ranges and the transformer (2026-11-13)
+
+| File | What it does | Why |
+|---|---|---|
+| `src/forecast/intervals.py` | an 80% range for every live model and lead day, from its own out-of-sample errors (2008–2019); Ap uses log ratios, so ranges widen on active days | a 7-day forecast needs its uncertainty; the same numbers feed the storm risk (day 6) |
+| `models/forecast/intervals.json` | the calibrated ranges | the daily job writes `ap_lo/hi`, `kpmax_lo/hi` with every forecast; the app draws HistGB's band |
+| `src/forecast/chronos_model.py` | Chronos-Bolt-small, a **pretrained** transformer used zero-shot on the last 512 days | the teacher listed transformers; pretrained, because ours would overfit on about 29k days |
+| `requirements-chronos.txt` | optional CPU PyTorch + Chronos pins | Chronos is used in backtests only |
+| tests | `test_intervals.py`, `test_forecast_chronos.py`, issued rows carry ranges | — |
+
+**Results:**
+- **Ranges:** on the 135 unseen recent days, the real value fell inside HistGB's 80% Ap range **81–83%** of the
+  time (max Kp 76–78%). The first calibration, on quiet 2017–2019 only, gave 72–78%; adding 2008–2016 (with the
+  cycle-24 maximum) fixed it (D-45).
+- **Chronos fails its rule** (−0.039): good on day 1, then about at ARIMA's level (D-46). A model with no
+  physics features doesn't match HistGB, so **the hand-made features (27-day recurrence, F10.7, season) are what
+  make HistGB the best model**. Chronos stays in the report as a tested comparison, not live, so no PyTorch is
+  needed in deployment.
+
+96 tests in total.

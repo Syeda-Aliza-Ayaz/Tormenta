@@ -1,0 +1,10 @@
+# Optional: the Chronos-Bolt comparison (src/forecast/chronos_model.py). Not needed by the apps or the daily job:
+# Chronos failed its validation rule (DECISIONS D-46), so it is used only in backtests. CPU-only PyTorch:
+#   python -m pip install -r requirements-chronos.txt -c requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0+cpu
+chronos-forecasting==2.3.2
+transformers==5.22.2
+accelerate==1.15.0
+einops==0.8.2
+safetensors==0.8.0
+tokenizers==0.23.3

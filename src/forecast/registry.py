@@ -1,5 +1,5 @@
 """Every forecaster the backtest, the daily job and the apps run. Add new models here."""
-from src.forecast import arima, gbm
+from src.forecast import arima, chronos_model, gbm
 from src.forecast.baselines import Climatology, Persistence, Recurrence27, TrailingMean
 from src.forecast.gbm import HistGBDirect, load_params
 
@@ -13,7 +13,10 @@ def baselines() -> list:
 def trained() -> list:
     """Unfitted trained models with their tuned settings (backtests fit them on the period's training rows)."""
     params, log_ap = load_params()
-    return [HistGBDirect(params, log_ap=log_ap)] + arima.default_models(arima.load_settings())
+    models = [HistGBDirect(params, log_ap=log_ap)] + arima.default_models(arima.load_settings())
+    if chronos_model.available():                    # optional: needs torch + chronos-forecasting
+        models.append(chronos_model.ChronosForecaster())
+    return models
 
 
 def all_models() -> list:
@@ -34,4 +37,6 @@ def production_models() -> list:
         path = arima.BUNDLE_DIR / f"{name}.joblib"
         if path.exists():
             models.append(arima.StateSpaceForecaster.load(path))
+    if chronos_model.live():                         # passed its rule AND torch is installed here
+        models.append(chronos_model.ChronosForecaster())
     return models

@@ -631,3 +631,42 @@ Template:
   - Files: `models/forecast/intervals.json`, `reports/forecast/metrics/recent_interval_coverage.csv`,
     `reports/forecast/calibration_forecasts.csv.gz` (the out-of-sample forecasts, reused for the storm rule).
   - Tests: `tests/test_intervals.py`, plus a daily-job test that issued rows carry the ranges.
+
+### D-46 · Chronos-Bolt (pretrained transformer, zero-shot) fails its rule; kept as an offline comparison · 2026-11-13 · ✅
+- **Decision:**
+  - `src/forecast/chronos_model.py` wraps `amazon/chronos-bolt-small` (48M parameters), used **zero-shot**: no
+    training on our data.
+  - For each issue day it gets the last 512 days of Ap (and, separately, max Kp) up to that day, and forecasts
+    7 days. The point forecast is the median.
+  - The same rule as every model (D-31): mean Ap skill against trailing27 over lead days 1–7 on validation > 0.
+  - It's an optional dependency (`requirements-chronos.txt`; CPU PyTorch 2.15.0, chronos-forecasting 2.3.2).
+    The registry leaves it out wherever PyTorch isn't installed.
+- **Why:**
+  - The teacher listed transformers.
+  - Training one from scratch on about 29k days would overfit (D-11), so we use a pretrained one: Amazon trained
+    it with self-supervised learning on many time series, so our data size doesn't matter.
+  - It also tests our own work: does a model with **no** physics features match HistGB?
+- **Result / consequence:** **FAIL, mean skill −0.039.** Ap RMSE:
+
+  | | day 1 | day 2 | day 3 | days 4–7 |
+  |---|---|---|---|---|
+  | HistGB | **6.34** | **7.08** | **7.08** | **7.07–7.09** |
+  | ARIMAX | 6.88 | 7.57 | 7.62 | 7.63–7.64 |
+  | **Chronos** | 7.21 | 7.95 | 8.00 | 7.91–7.97 |
+  | trailing27 | 7.63 | 7.69 | 7.70 | 7.71–7.73 |
+
+  - On max Kp, Chronos is level with ARIMAX (day 1: 1.11; HistGB 1.03).
+  - On the recent hindcast (135 days): 9.24 on day 1 and 9.38–9.76 after, close to ARIMAX and slightly behind
+    trailing27 after day 1.
+  - **Interpretation:** a general pretrained transformer, given only the raw series, does about as well as ARIMA:
+    good on day 1, smooth and mean-reverting after that.
+    - It doesn't use the 27-day recurrence the way HistGB's hand-made features do. Example: for 16–17 Nov 2026,
+      HistGB and NOAA forecast a rise from the 21–22 Oct activity, while Chronos stays flat at about 7.5.
+    - **The physics-based features are what make HistGB the best model.**
+  - **Not tried, on purpose:** using Chronos's mean instead of its median, or longer contexts. Tuning it on
+    validation after seeing the result would break the "rule first" discipline. Listed as future work.
+  - **Consequence for deployment:** Chronos is not issued live, so the daily job and Streamlit Cloud don't need
+    PyTorch, and the Streamlit memory test planned for day 5 (D-14) is no longer needed. Its backtest forecasts
+    are saved (`reports/forecast/chronos_*_forecasts.csv.gz`) for the scorecards and the report.
+  - Practical numbers: first load 7 min (one-time 190 MB weights download), then 0.4 s per forecast and about
+    16 s per 256 forecast days on CPU.
