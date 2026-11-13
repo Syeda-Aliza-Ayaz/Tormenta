@@ -24,9 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -37,9 +37,14 @@ jobs:
       - name: Tests (leakage, live parity, SPDF parser vs training data, apps)
         run: python -m pytest -q -rs
 
-      - name: Fetch, rebuild, retrain, gate
+      # Nowcaster: retrains only if new data exists AND the current model's skill has dropped (DECISIONS D-53)
+      - name: Fetch, rebuild, health check, retrain only if degraded, gate
         id: update
         run: python -m src.update ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      # Forecaster: weekly health check from the live scores; retrains only after two degraded checks in a row
+      - name: Forecaster health check (retrain only if degraded)
+        run: python -m src.forecast.monitor ${{ !inputs.dry_run && '--act' || '' }}
 
       # Runs every week, even with no new OMNI data: the F10.7 history (used live for the 81-day mean) must stay
       # fresh, and the weekly commit keeps the repo active so GitHub does not disable the schedule
@@ -48,7 +53,7 @@ jobs:
         run: |
           git config user.name "tormenta-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add models data/f107_history.csv
+          git add models data/f107_history.csv forecasts/monitor.json
           if git diff --cached --quiet; then echo "Nothing to commit."; exit 0; fi
           git commit -m "Weekly update: ${{ steps.update.outputs.status }} ${{ steps.update.outputs.version }}"
           git push

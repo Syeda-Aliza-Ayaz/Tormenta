@@ -43,9 +43,24 @@ def refresh_data(write_f107: bool = True):
     return df
 
 
+def nowcaster_health(incumbent: dict, X, y, persistence) -> dict:
+    """Skill vs persistence (1 − MSE / MSE of the previous Kp block) on the gate holdout, compared with the
+    test-period skill of the same model type (reports/metrics/test.csv)."""
+    import numpy as np
+    test = pd.read_csv(config.METRICS_DIR / "test.csv", index_col=0)
+    reference = 1 - (test.loc["HistGB", "rmse"] / test.loc["Persistence (baseline)", "rmse"]) ** 2
+    hold = train._holdout_mask(y)
+    rmse = train.gate_metrics(incumbent, X, y)["rmse"]
+    rmse_persist = float(np.sqrt(np.mean((persistence[hold] - y[hold]) ** 2)))
+    skill = 1 - (rmse / rmse_persist) ** 2
+    floor = reference - config.NOWCAST_HEALTH_MARGIN
+    return {"skill": float(skill), "reference": float(reference), "floor": float(floor),
+            "status": "healthy" if skill >= floor else "degraded"}
+
+
 def run(dry_run: bool = False) -> dict:
     refresh_data(write_f107=not dry_run)
-    X, y, _ = train.load_xy()
+    X, y, persistence = train.load_xy()
     incumbent = load_bundle()
     assert list(X.columns) == incumbent["features"], "feature set changed: retrain needs a new tuning round"
 
@@ -56,6 +71,14 @@ def run(dry_run: bool = False) -> dict:
     if hold_start <= pd.Timestamp(incumbent["trained_until"]) + pd.Timedelta("1h"):
         print("No new definitive data since the current model was trained → nothing to do.")
         return {"status": "no_new_data", "promoted": False}
+
+    # Retrain only when the current model performs badly (DECISIONS D-53): its skill vs persistence on the newest
+    # 6 months must stay within HEALTH_MARGIN of its test-period skill, otherwise nothing is retrained.
+    health = nowcaster_health(incumbent, X, y, persistence)
+    print(f"current model on the holdout: skill vs persistence {health['skill']:.3f} "
+          f"(test {health['reference']:.3f}, floor {health['floor']:.3f}) → {health['status']}")
+    if health["status"] == "healthy":
+        return {**{f"health_{k}": v for k, v in health.items()}, "status": "healthy_no_retrain", "promoted": False}
 
     params = {f"model__{k}": v for k, v in incumbent["params"].items()}
     margin = incumbent.get("interval_margin", 0.0)

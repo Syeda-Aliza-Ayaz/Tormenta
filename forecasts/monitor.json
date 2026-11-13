@@ -1,0 +1,15 @@
+{
+  "floor": -0.2577386792818651,
+  "checks": [
+    {
+      "checked_on": "2026-11-13",
+      "window_end": "2026-11-12",
+      "skill": null,
+      "pairs": 3,
+      "floor": -0.2577,
+      "status": "insufficient_data",
+      "retrain_due": false
+    }
+  ],
+  "retrains": []
+}

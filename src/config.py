@@ -120,6 +120,7 @@ METRICS_DIR = REPORTS_DIR / "metrics"
 # ── Slow loop ────────────────────────────────────────────────────────────────
 GATE_HOLDOUT_MONTHS = 6
 GATE_TOLERANCE = 1.02        # promote if candidate RMSE <= current RMSE × 1.02
+NOWCAST_HEALTH_MARGIN = 0.10 # retrain the nowcaster only if its holdout skill vs persistence drops > 0.10 below test
 
 # ── v2 forecaster (PLAN.md) ──────────────────────────────────────────────────
 DAILY_CSV = PROCESSED_DIR / "daily.csv"          # one row per UTC day from GFZ (rebuilt, not committed)
