@@ -1,5 +1,5 @@
 """Tormenta Gradio demo (local). Hosting a Gradio Space now needs HF PRO, so Hugging Face gets the free
-model repo + static landing page instead (sync_hf.py); this app runs on a laptop, e.g. for the viva.
+model repo + static landing page instead (sync_hf.py); this app is run locally.
 
     .venv\\Scripts\\python app\\hf_space\\app.py   →  http://127.0.0.1:7860
 

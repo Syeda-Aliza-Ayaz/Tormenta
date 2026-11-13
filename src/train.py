@@ -2,7 +2,7 @@
 validation → single test evaluation → weighting ablation → production fit → save.
 
 Run from the notebook (03_modeling.ipynb) step by step, or end-to-end:
-    python -m src.train            # full run (~30–60 min on a 6-core laptop)
+    python -m src.train            # full run, including tuning (long-running)
     python -m src.train --fast     # smoke test (~2 min)
 """
 import argparse

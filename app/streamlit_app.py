@@ -231,6 +231,32 @@ def get_forecasts():
     return log, scores, recent, noaa
 
 
+@st.cache_data(ttl=600)
+def get_storm_log() -> pd.DataFrame:
+    """Storm risk per lead day (src/forecast/storm.py); empty until the first issue that includes it."""
+    try:
+        return pd.read_csv(ROOT / "forecasts" / "storm_log.csv", parse_dates=["issued_at", "origin", "target_date"])
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        return pd.DataFrame()
+
+
+def storm_row(storm_log: pd.DataFrame, origin: pd.Timestamp):
+    """One small card per forecast day: storm chance and, above the tuned threshold, a warning (icon + label)."""
+    rows = storm_log[storm_log["origin"] == origin].sort_values("lead") if len(storm_log) else storm_log
+    if not len(rows):
+        return
+    st.markdown("**Storm risk** (chance of a G1+ storm day, max Kp ≥ 5−)")
+    cols = st.columns(len(rows))
+    for c, (_, r) in zip(cols, rows.iterrows()):
+        warn = bool(r["warning"]) if not isinstance(r["warning"], str) else r["warning"] == "True"
+        label = "⚠️ **Warning**" if warn else "no warning"
+        c.markdown(f"{r['target_date']:%a %d}<br><span style='font-size:1.4rem;font-weight:700'>"
+                   f"{r['storm_prob']:.0%}</span><br>{label}", unsafe_allow_html=True)
+    st.caption("A separate storm classifier gives these chances. A warning is raised when the chance passes a "
+               "threshold tuned on 2008–2016 (about 21–29%, not 50%, because storms are rare): on 2017–2019 it caught "
+               "30–46% of storm days at every lead day, where the main forecast caught almost none after day 1.")
+
+
 def forecast_long(latest: pd.DataFrame, recent: pd.DataFrame, noaa: pd.DataFrame, col: str) -> pd.DataFrame:
     """Observed history + every model's forecast + NOAA's outlook for the same days, as (time, series, value)."""
     obs = recent[col].tail(HISTORY_DAYS).rename("value").rename_axis("time").reset_index().assign(series=OBSERVED)
@@ -413,6 +439,7 @@ with forecast_tab:
                       "This issue comes from simple reference methods only; the trained forecasts join from the next "
                       "daily issue. ")
                    + "A pretrained transformer is added next. NOAA's outlook is shown for comparison only.")
+        storm_row(get_storm_log(), origin)
         with st.expander("Forecast table"):
             table = latest_all.assign(model=latest_all["model"].map(FC_SERIES)).pivot_table(
                 index="target_date", columns="model", values=col)

@@ -22,7 +22,7 @@ def test_rsga_crosses_year_and_aligns_origin():
 
 
 def test_rsga_leap_day():
-    """Regression: '29 Feb' made the year-guess fail on non-leap neighbour years (2020-02-28 report)."""
+    """'29 Feb' must resolve to the leap year, not to a neighbouring non-leap year."""
     text = ":Issued: 2020 Feb 28 2200 UTC\nPredicted Afr/Ap 29 Feb-02 Mar  005/005-005/005-007/008\n"
     df = fetch_noaa.parse_rsga(text)
     assert df["target_date"].dt.strftime("%Y-%m-%d").tolist() == ["2020-02-29", "2020-03-01", "2020-03-02"]

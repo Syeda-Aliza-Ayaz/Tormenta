@@ -61,8 +61,8 @@ def test_production_models_include_histgb_only_when_a_bundle_exists(daily, tmp_p
 
 
 def test_committed_production_bundle_loads_and_matches_its_settings():
-    """The bundle the daily job loads must unpickle outside the training script (regression: it once pickled the
-    class as __main__.HistGBDirect) and use the committed tuned settings."""
+    """The bundle the daily job loads must unpickle outside the training script (the class must not be recorded
+    under __main__) and use the committed tuned settings."""
     if not gbm.BUNDLE.exists():
         pytest.skip("no production bundle (HistGB did not pass its validation rule)")
     import sklearn
@@ -73,3 +73,13 @@ def test_committed_production_bundle_loads_and_matches_its_settings():
     assert model.params == params and model.log_ap == log_ap
     import joblib
     assert joblib.load(gbm.BUNDLE)["sklearn_version"] == sklearn.__version__
+
+
+def test_flare_spike_does_not_reach_the_f107_features(daily):
+    """Regression (D-47): a flare-contaminated F10.7 day must be ignored, as the nowcaster already did."""
+    spiked = daily.copy()
+    day = pd.Timestamp("2011-03-07")
+    spiked.loc[day, "f107_obs"] = 939.0                   # the real 2011-03-07 spike
+    clean, dirty = F.features(daily.assign(f107_obs=daily["f107_obs"].mask(daily.index == day)), 1), F.features(spiked, 1)
+    pd.testing.assert_series_equal(dirty["f107_mean81"], clean["f107_mean81"])
+    assert dirty.loc[day, "f107"] == clean.loc[day, "f107"] < 300

@@ -2,17 +2,17 @@ name: Daily forecast
 
 # Issue the 7-day forecast, save NOAA's forecasts, score past forecasts, commit forecasts/ (src/issue.py).
 # GFZ updates its daily file just before midnight UTC (Last-Modified 23:41-23:48), so any run after 00:00 UTC finds
-# yesterday's row. GitHub does not guarantee schedule times: on 2026-11-11 the 02:00 and 06:00 slots started at
-# 08:38 and 13:55 (DECISIONS D-35). So there are several slots, off the busy top of the hour; issuing is idempotent,
+# yesterday's row. GitHub does not guarantee schedule times and often starts scheduled runs hours late (DECISIONS
+# D-35), so there are several slots, off the busy top of the hour; issuing is idempotent,
 # so the first run that gets through issues and the later ones only refresh scores and NOAA.
 on:
   schedule:
-    - cron: "17 0 * * *"          # 05:17 PKT
+    - cron: "17 0 * * *"
     - cron: "17 1 * * *"
     - cron: "17 2 * * *"
     - cron: "17 3 * * *"
     - cron: "47 4 * * *"
-    - cron: "47 7 * * *"          # last resort, 12:47 PKT
+    - cron: "47 7 * * *"          # last resort
   workflow_dispatch:
     inputs:
       dry_run:
@@ -43,7 +43,7 @@ jobs:
         run: pip install -r requirements.txt pytest==9.2.0
 
       - name: Tests (forecasters, saved bundles, NOAA parsers, daily job)
-        run: python -m pytest -q tests/test_forecast.py tests/test_forecast_gbm.py tests/test_forecast_arima.py tests/test_intervals.py tests/test_noaa.py tests/test_issue.py
+        run: python -m pytest -q tests/test_forecast.py tests/test_forecast_gbm.py tests/test_forecast_arima.py tests/test_intervals.py tests/test_storm.py tests/test_noaa.py tests/test_issue.py
 
       - name: Issue, save NOAA, score
         id: issue

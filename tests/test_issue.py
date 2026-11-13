@@ -27,7 +27,8 @@ def gfz():
 @pytest.fixture
 def paths(tmp_path, monkeypatch):
     for name, rel in [("FORECASTS_DIR", ""), ("FORECAST_LOG", "log.csv"), ("FORECAST_SCORES", "scores.csv"),
-                      ("FORECAST_RECENT", "recent.csv"), ("NOAA_LIVE_CSV", "noaa_live.csv"), ("NOAA_LIVE_DIR", "noaa")]:
+                      ("FORECAST_RECENT", "recent.csv"), ("NOAA_LIVE_CSV", "noaa_live.csv"), ("NOAA_LIVE_DIR", "noaa"),
+                      ("STORM_LOG", "storm_log.csv"), ("STORM_SCORES", "storm_scores.csv")]:
         monkeypatch.setattr(config, name, tmp_path / rel)
     return tmp_path
 
@@ -144,3 +145,15 @@ def test_issued_rows_carry_80pc_ranges_for_calibrated_models(offline, paths):
     for t in config.FORECAST_TARGETS:
         assert calibrated[[f"{t}_lo", f"{t}_hi"]].notna().all(axis=None)
         assert (calibrated[f"{t}_lo"] <= calibrated[t]).all() and (calibrated[t] <= calibrated[f"{t}_hi"]).all()
+
+
+def test_storm_log_is_written_append_only_and_idempotent(offline, paths):
+    from src.forecast import storm
+    if not storm.BUNDLE.exists():
+        pytest.skip("no storm bundle")
+    _run("2026-11-10 02:05")
+    first = pd.read_csv(paths / "storm_log.csv")
+    assert len(first) == len(config.FORECAST_LEADS) and first["storm_prob"].between(0, 1).all()
+    assert (first["warning"] == (first["storm_prob"] >= first["threshold"])).all()
+    _run("2026-11-10 06:00")
+    pd.testing.assert_frame_equal(pd.read_csv(paths / "storm_log.csv"), first)

@@ -824,3 +824,5 @@ job (D-35); the chart tooltip no longer shows `null` (D-36).
   needed in deployment.
 
 96 tests in total.
+
+**Patches (2026-11-13):** F10.7 flare filter shared with the forecaster; HistGB/ARIMAX retrained and pass again (D-47). **Storm warning classifier** with rare-event thresholds tuned on 2008-2016 (D-48): Heidke skill 0.28-0.36 at every lead day on validation, catching 30-46% of storm days, where the regression models caught almost none after day 1; shown in the app as storm risk % per day. Per-day storm tables for every model: `reports/forecast/storm_tables.md` (D-49). Code comments made impersonal (D-50).

@@ -1,4 +1,4 @@
-"""NOAA SWPC forecasts → tables we can score like our own (benchmark only, never model inputs; DECISIONS D-06).
+"""NOAA SWPC forecasts → tables scored like the project's own (benchmark only, never model inputs; DECISIONS D-06).
 
   RSGA (archived daily, ftp warehouse)  line "Predicted Afr/Ap 02 Jan-04 Jan  012/015-012/015-005/005" → Ap D+1..D+3
   27-day outlook (live text, weekly)    daily F10.7, Ap and largest Kp for 27 days — NOT archived, so saved daily
@@ -6,7 +6,7 @@
 
 Every parser returns rows with `issued` (UTC timestamp), `origin`, `lead`, `target_date`. The origin is the last day
 whose data NOAA had (almost) complete: the UTC date of (issued − 3 h). So a report issued 22:00 on D has origin D,
-and the outlook issued 02:58 on D has origin D−1, which matches our own forecasts, issued about 02:00 on D+1 with
+and the outlook issued 02:58 on D has origin D−1, which matches the project's forecasts, issued about 02:00 on D+1 with
 origin D.
 
     python -m src.ingest.fetch_noaa --rsga 2017 2026    # backfill data/noaa_rsga_ap.csv (one-off; ~10 min)

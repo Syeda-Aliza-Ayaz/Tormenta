@@ -670,3 +670,70 @@ Template:
     are saved (`reports/forecast/chronos_*_forecasts.csv.gz`) for the scorecards and the report.
   - Practical numbers: first load 7 min (one-time 190 MB weights download), then 0.4 s per forecast and about
     16 s per 256 forecast days on CPU.
+
+### D-47 · F10.7 flare spikes filtered in the forecaster too (bug fix); HistGB and ARIMAX retrained · 2026-11-13 · ✅
+- **Problem:** the nowcaster removes flare-contaminated F10.7 days (> 2× the trailing 27-day median of earlier
+  days), but the forecaster's features and ARIMAX's input used the raw value. 24 such days since 1947 (e.g.
+  939 sfu on 2011-03-07, normally about 110). Each one shifts the 81-day mean for 81 days, so about 1,900
+  feature-days were distorted.
+- **Decision:** one shared function, `features.mask_flares`, used by the nowcaster (behaviour unchanged; its
+  parity tests pass), the forecaster features and ARIMAX. Regression test:
+  `test_flare_spike_does_not_reach_the_f107_features`.
+- **Result / consequence:** retrained with the existing tuned settings, and the rules re-run:
+  - HistGB **+0.177** (was +0.179): PASS.
+  - ARIMAX **+0.046** (was +0.047): PASS.
+  - ARIMA and SARIMA don't use F10.7 and are unchanged.
+  - The 80% ranges were recalibrated: HistGB Ap coverage on the recent days is 81–83%.
+  - The small change is expected: only 24 days were affected, and same-day F10.7 has low importance.
+
+### D-48 · Storm classifier with rare-event thresholds (fix for the imbalance problem) · 2026-11-13 · ✅
+- **Problem:** the regression models forecast typical values, so they almost never reach the storm line
+  (max Kp ≥ 5−). On validation, HistGB caught 17 of 91 storm days on day 1 and none from day 3 on (D-22).
+  Storm days are 8% of days in quiet years and 23% over 1947–2016.
+- **Decision:** `src/forecast/storm.py`.
+  - A HistGB **classifier** per lead day gives P(storm on D+h) from the same causal features. Its settings are
+    fixed in advance, not tuned.
+  - **No resampling,** so the probabilities stay honest. Imbalance is handled by the **decision threshold**:
+    fit on data ≤ 2007, predict 2008–2016, and pick the threshold that maximises Heidke skill per lead day.
+    Result: **0.21–0.29**, far below 0.5, as expected for rare events.
+  - Validation (fit ≤ 2016) and the recent days are never used for any choice.
+  - The production classifier (≤ 2019) is saved with its thresholds.
+  - The daily job writes a separate **append-only** `forecasts/storm_log.csv` (the forecast log's columns stay
+    unchanged), scored in `storm_scores.csv`.
+  - The app shows "storm risk %" per day, with ⚠️ above the threshold.
+- **Alternatives considered:**
+  - Sample weighting (the nowcaster's `1 + Kp/3` didn't help there).
+  - Oversampling (distorts the probabilities).
+  - Thresholding the regression forecast (no probability to tune).
+- **Result / consequence** (Heidke skill):
+
+  | lead day | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+  |---|---|---|---|---|---|---|---|
+  | **validation, storm warning** | **0.36** | **0.31** | **0.32** | **0.28** | **0.29** | **0.32** | **0.29** |
+  | validation, best other model | 0.33 (persistence) | 0.19 (recurrence) | 0.19 | 0.19 | 0.19 | 0.19 | 0.19 |
+  | recent, storm warning | **0.37** | **0.28** | **0.25** | 0.09 | 0.11 | 0.18 | 0.15 |
+  | recent, recurrence | 0.22 | 0.22 | 0.22 | **0.22** | **0.22** | **0.22** | **0.22** |
+
+  - It catches 30–46% of storm days at every lead day on validation, where HistGB caught 0–19%. The cost is
+    false alarms: about 6 in 10 warnings are false. That's normal for rare-event warnings, and it's the trade-off
+    the threshold makes.
+  - **On the recent days, it is best on days 1–3. On days 4–7 the plain 27-day recurrence rule is better** (16
+    storm days, a small sample). Kept as a finding; the test period will check it on day 6.
+  - Tests: `tests/test_storm.py` (no future data, rare-event threshold, frozen bundle) and a daily-job test
+    (append-only, idempotent storm log).
+
+### D-49 · Storm confusion tables per lead day, every model · 2026-11-13 · ✅
+- **Decision:** `python -m src.forecast.tables` writes `reports/forecast/storm_tables.md`: one table per lead day
+  (1–7), for validation and the recent hindcast. Columns: caught, missed, false alarm, correct quiet, detection
+  rate, false-alarm ratio, Heidke skill.
+- **Why:** HRK asked for the confusion matrix of every model at each lead day.
+- **Result / consequence:** NOAA isn't included, because its archived forecasts contain Ap only. Two generator
+  glitches were fixed before publishing: a duplicated Chronos row and a "-0.00".
+
+### D-50 · Code comments made impersonal · 2026-11-13 · ✅
+- **Decision:** 14 comments and docstrings in 13 files were rewritten as neutral technical text: no hardware
+  details, names, anecdotes, dated "checked on" notes, local time zones or first person. History stays in this
+  log; code refers to it by decision ID.
+- **Why:** HRK asked for professional code without personal remarks.
+- **Result / consequence:** comments only; no code changed (all files compile, all tests pass). The app's author
+  credit in the footer is kept.

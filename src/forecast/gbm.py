@@ -199,7 +199,7 @@ def _validate_and_save(daily, first, last, train, out, chosen, log_ap) -> dict:
 if __name__ == "__main__":
     import argparse
     # Run through the imported module, not __main__: a bundle pickled from here would otherwise record the class
-    # as __main__.HistGBDirect and fail to load anywhere else (it happened once; DECISIONS D-32)
+    # as __main__.HistGBDirect and fail to load anywhere else (DECISIONS D-32)
     from src.forecast import gbm as _module
     ap = argparse.ArgumentParser()
     ap.add_argument("--reuse-params", action="store_true", help="skip tuning; use models/forecast/histgb_params.json")

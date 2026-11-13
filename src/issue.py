@@ -18,7 +18,7 @@ import pandas as pd
 
 from src import backtest, config
 from src.daily import build_daily, check
-from src.forecast import intervals, registry
+from src.forecast import intervals, registry, storm
 from src.ingest import fetch_noaa
 from src.ingest.fetch_gfz import download_gfz, load_gfz_daily
 
@@ -138,6 +138,11 @@ def run(download: bool = True, now: pd.Timestamp = None, models=None) -> dict:
         n_new = len(log) - before
         print(f"origin {origin.date()} (GFZ flag {int(daily.loc[origin, 'gfz_flag'])}): "
               f"{n_new} new forecast rows ({'already issued today' if not n_new else 'issued'})")
+    storm_log = load_storm_log()
+    if origin is not None:
+        new_storm = issue_storm(daily, origin, now)
+        if new_storm is not None:
+            storm_log = append_storm(storm_log, new_storm)
 
     config.FORECASTS_DIR.mkdir(parents=True, exist_ok=True)
     log.to_csv(config.FORECAST_LOG, index=False)
@@ -146,8 +151,44 @@ def run(download: bool = True, now: pd.Timestamp = None, models=None) -> dict:
     recent(daily).to_csv(config.FORECAST_RECENT)
     noaa = save_noaa() if download else load_noaa_live()
     noaa.to_csv(config.NOAA_LIVE_CSV, index=False)
-    print(f"log {len(log)} rows | scored {len(scores)} | NOAA rows {len(noaa)}")
+    storm_log.reindex(columns=STORM_COLUMNS).to_csv(config.STORM_LOG, index=False)
+    score_storm(storm_log, daily).to_csv(config.STORM_SCORES, index=False)
+    print(f"log {len(log)} rows | scored {len(scores)} | NOAA rows {len(noaa)} | storm log {len(storm_log)} rows")
     return {"origin": origin, "new_rows": n_new, "log": log, "scores": scores}
+
+
+STORM_COLUMNS = ["issued_at", "origin", "model_version", "lead", "target_date", "storm_prob", "threshold", "warning"]
+STORM_KEY = ["origin", "lead"]
+
+
+def issue_storm(daily: pd.DataFrame, origin: pd.Timestamp, issued_at: pd.Timestamp):
+    """Storm risk for D+1 … D+7 from the saved storm classifier, or None if there is no bundle."""
+    if not storm.BUNDLE.exists():
+        return None
+    model = storm.StormClassifier.load()
+    fc = model.predict(daily, [origin]).assign(issued_at=issued_at, model_version=f"until {model.trained_until_}")
+    return fc.reindex(columns=STORM_COLUMNS)
+
+
+def load_storm_log(path=None) -> pd.DataFrame:
+    path = path or config.STORM_LOG
+    if not path.exists():
+        return pd.DataFrame(columns=STORM_COLUMNS)
+    return pd.read_csv(path, parse_dates=["issued_at", "origin", "target_date"])
+
+
+def append_storm(log: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
+    """Same rule as the forecast log: existing rows untouched, a key already issued is never issued again."""
+    if len(log):
+        new = new[~pd.MultiIndex.from_frame(new[STORM_KEY]).isin(pd.MultiIndex.from_frame(log[STORM_KEY]))]
+    return pd.concat([log, new], ignore_index=True) if len(log) else new.reset_index(drop=True)
+
+
+def score_storm(log: pd.DataFrame, daily: pd.DataFrame) -> pd.DataFrame:
+    cols = STORM_COLUMNS + ["kpmax_obs", "obs_definitive", "storm_obs"]
+    if not len(log):
+        return pd.DataFrame(columns=cols)
+    return storm.attach_obs(log, daily).reset_index(drop=True)[cols]
 
 
 def _github_output(result: dict) -> None:

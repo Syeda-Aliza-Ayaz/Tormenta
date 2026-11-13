@@ -1,4 +1,4 @@
-"""What-if on the real history must agree with the live tab when nothing is edited (HRK, 2026-11-12)."""
+"""What-if on the real history must agree with the live tab when nothing is edited (DECISIONS D-38)."""
 import pandas as pd
 import pytest
 

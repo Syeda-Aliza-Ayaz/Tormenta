@@ -1,8 +1,8 @@
 """Portable model format: the fitted HistGradientBoosting trees as plain numpy arrays.
 
-Why: the browser app (Hugging Face static Space, Streamlit running in Pyodide via stlite) cannot load our
+Why: the browser app (Hugging Face static Space, Streamlit running in Pyodide via stlite) cannot load the
 scikit-learn 1.9.1 pickle, because Pyodide ships a different scikit-learn and pickles are not portable across
-versions. The trees themselves are just numbers, so we store them in an .npz file and walk them with numpy.
+versions. The trees themselves are just numbers, so they are stored in an .npz file and walked with numpy.
 tests/test_portable.py checks the predictions are identical to scikit-learn's.
 
 Prediction rule (same as scikit-learn's TreePredictor, numeric features only):

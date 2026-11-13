@@ -4,7 +4,7 @@ backtest and the daily job, so they can never disagree.
 Base features (the same for every lead day):
   {ap,kpmax}_lag0..6      the last 7 days
   ap_mean3/7/27, kpmax_mean27, kpmax_max7, ap_std7
-  f107, f107_mean81       solar activity level (trailing; last value carried at most 7 days)
+  f107, f107_mean81       solar activity level (trailing; flare spikes removed; last value carried ≤ 7 days)
 Lead-specific features (lead day h; all in the past because h ≤ 7 < 26):
   {ap,kpmax}_rec27        value one solar rotation before the target day (D+h−27)
   ap_rec27w               mean of D+h−28 … D+h−26 (rotation period jitters by a day or so)
@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 
 from src import config
+from src.features import mask_flares
 
 LAGS = range(7)
 
@@ -31,9 +32,9 @@ def base_features(daily: pd.DataFrame) -> pd.DataFrame:
     f["ap_std7"] = ap.rolling(7, min_periods=5).std()
     f["kpmax_mean27"] = kp.rolling(27, min_periods=20).mean()
     f["kpmax_max7"] = kp.rolling(7, min_periods=5).max()
-    f107 = daily["f107_obs"].ffill(limit=config.F107_MAX_STALE_DAYS)
-    f["f107"] = f107
-    f["f107_mean81"] = daily["f107_obs"].rolling(config.F107_TRAILING_DAYS, min_periods=40).mean()
+    clean = mask_flares(daily["f107_obs"])               # flare spikes → missing, as in the nowcaster (D-47)
+    f["f107"] = clean.ffill(limit=config.F107_MAX_STALE_DAYS)
+    f["f107_mean81"] = clean.rolling(config.F107_TRAILING_DAYS, min_periods=40).mean()
     return pd.DataFrame(f, index=daily.index)
 
 

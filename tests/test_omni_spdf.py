@@ -45,7 +45,7 @@ def test_spdf_parser_against_real_2024_file(tmp_path):
     try:
         path = fetch_omni.download_spdf_year(2024, tmp_path)
     except requests.RequestException:
-        pytest.skip("SPDF not reachable from this network")
+        pytest.skip("NASA SPDF not reachable from this network; covered by the weekly CI run")
     parsed = fetch_omni.parse_spdf(path)
     ref = _reference()
     cols = [c for c in ref.columns if c != "sunspot_r"]               # sunspot numbers get revised

@@ -23,6 +23,7 @@ import pandas as pd
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 from src import config
+from src.features import mask_flares
 from src.forecast.base import Forecaster, as_origins, stack
 
 BUNDLE_DIR = config.MODELS_DIR / "forecast"
@@ -40,7 +41,7 @@ def _inverse(y: np.ndarray, log: bool) -> np.ndarray:
 
 def exog_frame(daily: pd.DataFrame, log: bool) -> pd.DataFrame:
     """ARIMAX regressors as they are known ON each day t (used for the in-sample filter)."""
-    f107 = daily["f107_obs"].rolling(config.F107_TRAILING_DAYS, min_periods=40).mean()
+    f107 = mask_flares(daily["f107_obs"]).rolling(config.F107_TRAILING_DAYS, min_periods=40).mean()
     return pd.DataFrame({"ap_rec27": _transform(daily["ap"], log).shift(config.RECURRENCE_DAYS),
                          "f107_mean81": f107.ffill()}, index=daily.index)
 

@@ -105,6 +105,13 @@ def storm_memory(base: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(cols, index=base.index)
 
 
+def mask_flares(s: pd.Series) -> pd.Series:
+    """Daily F10.7 with flare-contaminated spikes (> F107_SPIKE_RATIO × the trailing 27-day median of EARLIER days)
+    set to missing. Shared by the nowcaster and the forecaster so both treat F10.7 the same (DECISIONS D-47)."""
+    prior_median = s.shift(1).rolling(config.F107_SPIKE_WINDOW_DAYS, min_periods=10).median()
+    return s.mask(s > config.F107_SPIKE_RATIO * prior_median)
+
+
 def f107_daily_features(f107_daily: pd.Series) -> pd.DataFrame:
     """Daily F10.7 features usable on day D: previous day's value and trailing 81-day mean.
 
@@ -116,9 +123,7 @@ def f107_daily_features(f107_daily: pd.Series) -> pd.DataFrame:
     # features only need earlier days. Without these rows the current day's hours would get NaN F10.7 features.
     days = pd.date_range(s.index.min(), s.index.max() + pd.Timedelta(days=config.F107_MAX_STALE_DAYS), freq="D")
     s = s.reindex(days)
-    prior_median = s.shift(1).rolling(config.F107_SPIKE_WINDOW_DAYS, min_periods=10).median()
-    clean = s.mask(s > config.F107_SPIKE_RATIO * prior_median)
-    upto_yesterday = clean.shift(1)
+    upto_yesterday = mask_flares(s).shift(1)
     return pd.DataFrame({
         "f107_prev": upto_yesterday.ffill(limit=config.F107_MAX_STALE_DAYS),
         "f107_mean81d": upto_yesterday.rolling(config.F107_TRAILING_DAYS, min_periods=40).mean(),

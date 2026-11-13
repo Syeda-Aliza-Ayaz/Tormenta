@@ -22,7 +22,7 @@ OMNI_SPDF_URL = "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2_{ye
 GFZ_URL = "https://kp.gfz.de/app/files/Kp_ap_Ap_SN_F107_since_1932.txt"
 
 SWPC_BASE = "https://services.swpc.noaa.gov"
-# Checked 2026-10-30: the old products/solar-wind/{mag,plasma}-N-day.json feeds are gone (404).
+# The older products/solar-wind/{mag,plasma}-N-day.json feeds are retired (HTTP 404).
 # Propagated solar wind: 7 days of 1-min IMF (GSM) + plasma from the active L1 spacecraft,
 # already time-shifted to Earth (~50–75 min), like OMNI's bow-shock shift.
 SWPC_SOLAR_WIND = SWPC_BASE + "/products/geospace/propagated-solar-wind.json"
@@ -30,7 +30,7 @@ SWPC_KP = SWPC_BASE + "/products/noaa-planetary-k-index.json"        # estimated
 GFZ_NOWCAST_URL = "https://kp.gfz.de/app/files/Kp_ap_nowcast.txt"   # GFZ quick-look Kp (same producer as labels)
 SWPC_F107 = SWPC_BASE + "/products/10cm-flux-30-day.json"           # observed Penticton flux, daily
 LIVE_MIN_MINUTES = 20        # an hour needs >= 20 one-minute samples, else that column is NaN
-REQUEST_TIMEOUT = 60         # seconds (slow connections)
+REQUEST_TIMEOUT = 60         # seconds
 
 # ── OMNI subset (.lst) columns, in .fmt order ────────────────────────────────
 OMNI_LST_COLUMNS = [
@@ -103,7 +103,7 @@ HISTGB_N_ITER = 20           # v2: wider search (v1 used 8)
 ENSEMBLE_MEMBERS = ["HistGB", "Random Forest", "SVR"]   # equal-weight average, no weights fitted
 RANDOM_STATE = 42
 QUANTILES = (0.1, 0.9)
-N_JOBS = 4                   # 7.4 GB RAM laptop: keep parallel workers modest
+N_JOBS = 4                   # parallel workers for CV and tuning (bounded to limit memory use)
 SAMPLE_WEIGHT = lambda kp: 1 + kp / 3   # storm-weighting ablation
 # v3 physics constraints for HistGB: Kp may only rise (+1) / fall (-1) as these rise
 USE_MONOTONIC = False        # 05_final_round: rejected (CV and validation worse)
@@ -145,6 +145,8 @@ FORECAST_SCORES = FORECASTS_DIR / "scores.csv"    # log rows whose target day ha
 FORECAST_RECENT = FORECASTS_DIR / "recent.csv"    # last RECENT_DAYS of observed Ap / max Kp, for the app's chart
 NOAA_LIVE_CSV = FORECASTS_DIR / "noaa_live.csv"   # NOAA 27-day outlook + 3-day forecast, parsed, saved every day
 NOAA_LIVE_DIR = FORECASTS_DIR / "noaa"            # the raw NOAA texts, as evidence
+STORM_LOG = FORECASTS_DIR / "storm_log.csv"       # APPEND-ONLY storm risk per lead day (src/forecast/storm.py, D-48)
+STORM_SCORES = FORECASTS_DIR / "storm_scores.csv" # storm_log rows whose day has arrived, with the observed max Kp
 RECENT_DAYS = 60
 # Only issue when GFZ has published yesterday: a forecast issued late would already overlap its own lead day 1
 MAX_ORIGIN_AGE_DAYS = 1

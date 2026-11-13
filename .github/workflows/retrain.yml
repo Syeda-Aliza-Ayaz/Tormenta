@@ -4,7 +4,7 @@ name: Weekly retrain
 # commit models/ + data/f107_history.csv → publish to Hugging Face. Streamlit Cloud redeploys on the push.
 on:
   schedule:
-    - cron: "0 3 * * 1"          # Mondays 03:00 UTC (08:00 PKT)
+    - cron: "0 3 * * 1"          # Mondays 03:00 UTC
   workflow_dispatch:
     inputs:
       dry_run:

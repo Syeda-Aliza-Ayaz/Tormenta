@@ -1,6 +1,6 @@
 """Live NOAA SWPC data → the same hourly raw columns and daily F10.7 that training uses.
 
-Sources (no auth, checked 2026-10-30):
+Sources (no authentication required):
   solar wind — products/geospace/propagated-solar-wind.json: 7 days of 1-min data from the active
                L1 spacecraft, IMF in GSM, already propagated to Earth (like OMNI's time shift)
   F10.7      — data/f107_history.csv (GFZ observed flux) + products/10cm-flux-30-day.json
