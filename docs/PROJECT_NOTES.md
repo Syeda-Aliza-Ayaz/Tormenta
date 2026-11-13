@@ -826,3 +826,5 @@ job (D-35); the chart tooltip no longer shows `null` (D-36).
 96 tests in total.
 
 **Patches (2026-11-13):** F10.7 flare filter shared with the forecaster; HistGB/ARIMAX retrained and pass again (D-47). **Storm warning classifier** with rare-event thresholds tuned on 2008-2016 (D-48): Heidke skill 0.28-0.36 at every lead day on validation, catching 30-46% of storm days, where the regression models caught almost none after day 1; shown in the app as storm risk % per day. Per-day storm tables for every model: `reports/forecast/storm_tables.md` (D-49). Code comments made impersonal (D-50).
+
+**Day 6 — test period scored once (2026-11-13, D-51, D-52):** headline models fixed first (HistGB; storm classifier). On 2020 – Jun 2026 (325 storm days) HistGB is the best of our models at every lead day (skill vs 27-day average 0.100) and level with NOAA on days 1-3; 80% ranges cover 80-82%; the storm warning keeps Heidke skill 0.20-0.30 at every lead day. The May 2024 superstorm onset was not forecast by any model that sees only past values (NOAA, using solar images, did). Figures in `reports/forecast/figures/`.

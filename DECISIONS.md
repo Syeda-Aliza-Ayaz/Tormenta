@@ -746,3 +746,49 @@ Template:
   the choice wasn't influenced by the test result.
 - **Result / consequence:** the test period (2020-01-01 → last definitive day) is scored once with the models as
   committed. A second run needs `--force` and a new DECISIONS entry.
+
+### D-52 · Test period scored once (2020-01-01 → 2026-06-30) · 2026-11-13 · ✅
+- **Decision:** `python -m src.forecast.test_eval` scored every model as it runs live (fitted ≤ 2019), plus NOAA,
+  on 2,379 issue days with 325 storm days, including the May 2024 superstorm. The headline models were fixed
+  and committed first (D-51). A marker file, `reports/forecast/test_scored.json`, blocks a second run without
+  `--force`; a test checks this.
+- **Run history (full disclosure):** the first attempt crashed **before producing any result**. The script
+  forgot to fit the baselines, which the daily job refits on every run. The fix was one line, and the second
+  attempt is the only scored run.
+- **Result / consequence:**
+
+  | Ap | RMSE day 1 | day 2 | day 3 | days 4–7 | mean skill vs 27-day avg (validation → test) |
+  |---|---|---|---|---|---|
+  | **HistGB** | **10.79** | 11.97 | 11.91 | **11.92–12.00** | 0.177 → **0.100** |
+  | NOAA (days 1–3) | 10.89 | **11.73** | **11.90** | — | 0.091 → 0.134 |
+  | ARIMAX | 10.96 | 12.12 | 12.15 | 12.16–12.17 | 0.046 → 0.069 |
+  | ARIMA | 10.97 | 12.16 | 12.20 | 12.21–12.22 | −0.004 → 0.062 |
+  | SARIMA | 11.11 | 12.37 | 12.43 | 12.46–12.49 | −0.198 → 0.025 |
+  | Chronos | 11.83 | 12.56 | 12.66 | 12.64–12.65 | −0.039 → −0.015 |
+  | 27-day average | 12.27 | 12.42 | 12.45 | 12.45–12.48 | 0 |
+
+  - **HistGB is the best of our models at every lead day** and beats the 27-day average at every lead day.
+  - **Against NOAA on days 1–3 it is level, not ahead:** better on day 1, NOAA better on day 2, tied on day 3.
+    HistGB's mean skill over days 1–3 is about 0.128, NOAA's 0.134. The validation claim "beats NOAA on days
+    1–3" does **not** hold on test; the report states the test result.
+  - **D-23 confirmed:**
+    - HistGB's skill fell from validation (quiet minimum) to test (active cycle 25).
+    - The ARIMA family improved on test, because its pull toward the long-term mean (D-42) hurts in quiet years
+      and helps in active ones.
+  - **80% ranges: test coverage is 80–82% at every lead day** for HistGB and ARIMAX. They are well calibrated
+    on fully unseen data.
+  - **Storm warning:**
+
+    | lead day | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+    |---|---|---|---|---|---|---|---|
+    | Heidke skill | 0.30 | 0.22 | 0.21 | 0.21 | 0.21 | 0.21 | 0.20 |
+    | storms caught | 54% | 39% | 40% | 43% | 42% | 43% | 29% |
+
+    - About 7 in 10 warnings are false alarms.
+    - It is the best storm signal on days 2–7: recurrence 0.16; every regression model about 0.0–0.03.
+    - Persistence edges it on day 1 (0.32 vs 0.30).
+  - **May 2024 case study** (`04_may2024_case_study.png`): no model forecast the superstorm's onset (Ap 271 on
+    11 May). Storm risk was 8% the day before onset, then 84–87% for 11–13 May once it had begun. NOAA, which sees
+    the CMEs in solar images, forecast the jump. This is the limit of forecasting from past values alone.
+- Files: `reports/forecast/metrics/test_*.csv`, `reports/forecast/test_*forecasts.csv.gz`, and
+  `reports/forecast/figures/01–04` (skill vs lead day, storm skill vs lead day, test coverage, May 2024).

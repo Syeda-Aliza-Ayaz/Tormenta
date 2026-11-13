@@ -30,7 +30,7 @@ def _all_models_fitted_to_2019(daily):
     if chronos_model.available() and "chronos" not in names:
         extra.append(chronos_model.ChronosForecaster())
     fit_rows = production_window(daily)
-    return prod + [m.fit(fit_rows) for m in extra]
+    return [m.fit(fit_rows) for m in prod + extra]          # frozen bundles ignore fit(); baselines need it
 
 
 def main(force: bool = False) -> dict:

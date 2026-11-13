@@ -1,0 +1,23 @@
+{
+  "scored_at": "2026-11-13T07:41:22+00:00",
+  "period": [
+    "2020-01-01",
+    "2026-06-30"
+  ],
+  "headline": {
+    "value": "histgb",
+    "storm": "storm_warning"
+  },
+  "models": [
+    "arima",
+    "arimax",
+    "chronos",
+    "climatology",
+    "histgb",
+    "noaa",
+    "persistence",
+    "recurrence27",
+    "sarima",
+    "trailing27"
+  ]
+}
