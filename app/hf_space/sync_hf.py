@@ -30,7 +30,7 @@ HERE = Path(__file__).parent
 BROWSER_REQUIREMENTS = ["numpy", "pandas", "altair", "requests"]
 SPACE_ASSETS = ["app/streamlit_app.py", "data/f107_history.csv", "reports/metrics/test.csv",
                 "forecasts/log.csv", "forecasts/scores.csv", "forecasts/recent.csv", "forecasts/noaa_live.csv",
-                "forecasts/storm_log.csv",
+                "forecasts/storm_log.csv", "forecasts/past_forecasts.csv.gz",
                 "reports/figures/14_may2024_nowcast.png"]
 
 

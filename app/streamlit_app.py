@@ -240,8 +240,9 @@ def get_storm_log() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def storm_row(storm_log: pd.DataFrame, origin: pd.Timestamp):
-    """One small card per forecast day: storm chance and, above the tuned threshold, a warning (icon + label)."""
+def storm_row(storm_log: pd.DataFrame, origin: pd.Timestamp, actual: pd.Series = None, caption: bool = True):
+    """One small card per forecast day: storm chance and, above the tuned threshold, a warning (icon + label).
+    With `actual` (observed max Kp by day), each card also says whether a storm really happened."""
     rows = storm_log[storm_log["origin"] == origin].sort_values("lead") if len(storm_log) else storm_log
     if not len(rows):
         return
@@ -250,16 +251,23 @@ def storm_row(storm_log: pd.DataFrame, origin: pd.Timestamp):
     for c, (_, r) in zip(cols, rows.iterrows()):
         warn = bool(r["warning"]) if not isinstance(r["warning"], str) else r["warning"] == "True"
         label = "⚠️ **Warning**" if warn else "no warning"
-        c.markdown(f"{r['target_date']:%a %d}<br><span style='font-size:1.4rem;font-weight:700'>"
-                   f"{r['storm_prob']:.0%}</span><br>{label}", unsafe_allow_html=True)
+        text = (f"{r['target_date']:%a %d}<br><span style='font-size:1.4rem;font-weight:700'>"
+                f"{r['storm_prob']:.0%}</span><br>{label}")
+        if actual is not None and r["target_date"] in actual.index and pd.notna(actual[r["target_date"]]):
+            kp = actual[r["target_date"]]
+            text += f"<br>{'🌩️ storm' if kp >= config.STORM_THRESHOLD else 'quiet'} (Kp {kp:.1f})"
+        c.markdown(text, unsafe_allow_html=True)
+    if not caption:
+        return
     st.caption("A separate storm classifier gives these chances. A warning is raised when the chance passes a "
                "threshold tuned on 2008–2016 (about 21–29%, not 50%, because storms are rare): on 2017–2019 it caught "
                "30–46% of storm days at every lead day, where the main forecast caught almost none after day 1.")
 
 
-def forecast_long(latest: pd.DataFrame, recent: pd.DataFrame, noaa: pd.DataFrame, col: str) -> pd.DataFrame:
+def forecast_long(latest: pd.DataFrame, recent: pd.DataFrame, noaa: pd.DataFrame, col: str,
+                  history_days: int = HISTORY_DAYS) -> pd.DataFrame:
     """Observed history + every model's forecast + NOAA's outlook for the same days, as (time, series, value)."""
-    obs = recent[col].tail(HISTORY_DAYS).rename("value").rename_axis("time").reset_index().assign(series=OBSERVED)
+    obs = recent[col].tail(history_days).rename("value").rename_axis("time").reset_index().assign(series=OBSERVED)
     fc = latest.assign(series=latest["model"].map(FC_SERIES).fillna(latest["model"]))
     fc = fc.rename(columns={"target_date": "time", col: "value"})[["time", "series", "value"]]
     parts = [obs, fc]
@@ -340,6 +348,64 @@ def forecast_chart(long: pd.DataFrame, origin: pd.Timestamp, col: str, unit: str
     return alt.layer(*layers).properties(height=340)
 
 
+# ── Try the forecaster ───────────────────────────────────────────────────────
+EDIT_DAYS = 30            # days the user can edit; the forecast also uses ~120 earlier days (lags, 27/54/81-day terms)
+CONTEXT_DAYS = 150
+NO_NOAA = pd.DataFrame(columns=["product", "issued", "origin", "lead", "target_date", "f107", "ap", "kpmax"])
+TRY_PRESETS = {
+    "🛰️ Latest real data": None,
+    "🌤️ Quiet week": {"days": range(-6, 1), "ap": 4.0, "kpmax": 1.7},
+    "🌩️ Storm now": {"days": range(-1, 1), "ap": 80.0, "kpmax": 7.0},
+    "🔁 Storm 27 days ago": {"days": range(-27, -24), "ap": 60.0, "kpmax": 6.0},
+}
+
+
+@st.cache_resource
+def get_forecast_models():
+    """The live forecast models, loaded once. Needs scikit-learn and statsmodels, so None in the browser Space."""
+    try:
+        from src.forecast import arima, gbm, intervals, storm
+        from src.forecast.baselines import Persistence, Recurrence27, TrailingMean
+    except ImportError:
+        return None
+    models = [Persistence(), Recurrence27(), TrailingMean()]
+    if gbm.BUNDLE.exists():
+        models.append(gbm.HistGBDirect.load())
+    path = arima.BUNDLE_DIR / "arimax.joblib"
+    if path.exists():
+        models.append(arima.StateSpaceForecaster.load(path))
+    warn = storm.StormClassifier.load() if storm.BUNDLE.exists() else None
+    return {"models": models, "storm": warn, "intervals": intervals}
+
+
+@st.cache_data(ttl=3600)
+def get_past_forecasts() -> pd.DataFrame:
+    return pd.read_csv(ROOT / "forecasts" / "past_forecasts.csv.gz", parse_dates=["origin", "target_date"])
+
+
+def run_forecasters(history: pd.DataFrame, kit: dict):
+    """Forecast D+1 … D+7 from an edited daily history (last day = D) with every live model."""
+    daily = history.asfreq("D").assign(gfz_flag=0, definitive=False)
+    origin = daily.index[-1]
+    rows = [m.predict(daily, [origin]).assign(model=m.name) for m in kit["models"]]
+    fc = kit["intervals"].apply(pd.concat(rows, ignore_index=True), kit["intervals"].load())
+    warn = kit["storm"].predict(daily, [origin]) if kit["storm"] is not None else pd.DataFrame()
+    return origin, fc, warn
+
+
+def apply_try_preset(name: str, base: pd.DataFrame):
+    edited = base.copy()
+    spec = TRY_PRESETS[name]
+    if spec:
+        last = edited.index[-1]
+        for k in spec["days"]:
+            day = last + pd.Timedelta(days=k)
+            if day in edited.index:
+                edited.loc[day, ["ap", "kpmax"]] = [spec["ap"], spec["kpmax"]]
+    st.session_state["try_history"] = edited
+    st.session_state["try_editor_version"] = st.session_state.get("try_editor_version", 0) + 1
+
+
 # ── Data ─────────────────────────────────────────────────────────────────────
 @st.cache_resource
 def get_bundle():
@@ -397,8 +463,90 @@ st.caption("**7-day forecast** of geomagnetic activity (daily Ap and max Kp), sc
            "arrives, and a **live nowcast** of the Kp index (0–9) from the solar wind measured about an hour upstream "
            "of Earth. GFZ Kp since 1932, NASA OMNI and live NOAA SWPC data.")
 
-forecast_tab, live_tab, manual_tab, about_tab = st.tabs(
-    ["📅 7-day forecast", "🛰️ Live nowcast", "🧪 What-if explorer", "📊 About the nowcast model"])
+forecast_tab, try_tab, live_tab, manual_tab, about_tab = st.tabs(
+    ["📅 7-day forecast", "🎛️ Try the forecaster", "🛰️ Live nowcast", "🧪 What-if explorer",
+     "📊 About the nowcast model"])
+
+with try_tab:
+    mode = st.radio("Mode", ["✏️ Edit the inputs", "🕰️ Pick a past date"], horizontal=True,
+                    label_visibility="collapsed")
+    try:
+        _, _, recent_obs, _ = get_forecasts()
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        recent_obs = None
+    if recent_obs is None or len(recent_obs) < CONTEXT_DAYS:
+        st.info("Observed history is not available yet.", icon="📅")
+    elif mode.startswith("✏️"):
+        kit = get_forecast_models()
+        if kit is None:
+            st.info("Live re-forecasting needs scikit-learn and statsmodels, which the in-browser version cannot "
+                    "load. Use the Streamlit app for this panel; the past-date mode works here.", icon="🧪")
+        else:
+            base = recent_obs[["ap", "kpmax", "f107_obs"]].tail(CONTEXT_DAYS)
+            st.markdown(f"Change any of the last {EDIT_DAYS} days (daily Ap, max Kp, F10.7) or start from a preset, "
+                        "then every live model forecasts the next 7 days from your history. The forecast also uses "
+                        f"the {CONTEXT_DAYS - EDIT_DAYS} days before, unchanged (27/54/81-day recurrence, 81-day "
+                        "F10.7 mean).")
+            cols = st.columns(len(TRY_PRESETS))
+            for c, name in zip(cols, TRY_PRESETS):
+                c.button(name, on_click=apply_try_preset, args=(name, base), width="stretch")
+            history = st.session_state.get("try_history")
+            if history is None or history.index[-1] != base.index[-1]:
+                history = base.copy()
+            visible = history.tail(EDIT_DAYS).copy()
+            visible.index = visible.index.strftime("%Y-%m-%d")
+            edited = st.data_editor(
+                visible, key=f"try_editor_{st.session_state.get('try_editor_version', 0)}", width="stretch",
+                height=320, column_config={
+                    "ap": st.column_config.NumberColumn("Ap", min_value=0, max_value=400, step=1, required=True),
+                    "kpmax": st.column_config.NumberColumn("max Kp", min_value=0.0, max_value=9.0, step=0.333,
+                                                           format="%.2f", required=True),
+                    "f107_obs": st.column_config.NumberColumn("F10.7", min_value=50.0, max_value=500.0, step=1.0)})
+            edited.index = pd.to_datetime(edited.index)
+            full = pd.concat([history.iloc[:-EDIT_DAYS], edited])
+            origin, fc, warn = run_forecasters(full, kit)
+            real = base.tail(EDIT_DAYS)[["ap", "kpmax"]].to_numpy()
+            changed = int((abs(edited[["ap", "kpmax"]].to_numpy() - real) > 1e-9).sum())
+            st.caption(f"Forecast from your history up to **{origin:%d %b %Y}**"
+                       + (f" with **{changed} value{'s' if changed != 1 else ''} changed** from the real data."
+                          if changed else ": the real data, unchanged."))
+            col_choice = st.radio("Quantity", list(FC_TARGETS), horizontal=True, key="try_quantity",
+                                  label_visibility="collapsed")
+            col, unit = FC_TARGETS[col_choice]
+            st.altair_chart(forecast_chart(forecast_long(fc, full, NO_NOAA, col), origin, col, unit,
+                                           forecast_band(fc, col)), width="stretch")
+            storm_row(warn, origin, caption=False)
+            with st.expander("Forecast table"):
+                table = fc.assign(model=fc["model"].map(FC_SERIES)).pivot_table(index="target_date",
+                                                                                 columns="model", values=col)
+                table.index = table.index.strftime("%a %d %b")
+                st.dataframe(table.round(2 if col == "kpmax" else 1), width="stretch")
+    else:
+        past = get_past_forecasts()
+        first, last = past["origin"].min().date(), past["origin"].max().date()
+        st.markdown("Pick any issue day from 2020 on. The forecasts shown were made **without seeing that period**: "
+                    "the live models were trained on data up to 2019 and scored once on 2020–2026 (the test run), "
+                    "then on the newest days. Compare them with what actually happened.")
+        day = st.date_input("Issue day (forecast made at the end of this day)",
+                            value=pd.Timestamp("2024-05-08").date(), min_value=first, max_value=last)
+        origin = pd.Timestamp(day)
+        rows = past[past["origin"] == origin]
+        values, warn = rows[rows["model"] != "storm_warning"], rows[rows["model"] == "storm_warning"]
+        col_choice = st.radio("Quantity", list(FC_TARGETS), horizontal=True, key="past_quantity",
+                              label_visibility="collapsed")
+        col, unit = FC_TARGETS[col_choice]
+        window = recent_obs.loc[: origin + pd.Timedelta(days=7)]
+        st.altair_chart(forecast_chart(forecast_long(values, window, NO_NOAA, col, HISTORY_DAYS + 7), origin, col,
+                                       unit, forecast_band(values, col)), width="stretch")
+        storm_row(warn, origin, actual=recent_obs["kpmax"], caption=False)
+        obs = recent_obs[col].reindex(values["target_date"]).to_numpy()
+        err = values.assign(abs_err=(values[col] - obs).abs()).dropna(subset=["abs_err"])
+        if len(err):
+            summary = err.groupby("model")["abs_err"].mean().rename(lambda m: FC_SERIES.get(m, m)).sort_values()
+            st.markdown(f"**Mean error of {unit} over these 7 days** (lower is better)")
+            st.dataframe(summary.round(2).rename("mean absolute error").to_frame().T, width="stretch")
+
+
 
 with forecast_tab:
     try:

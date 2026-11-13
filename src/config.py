@@ -142,11 +142,12 @@ NOAA_RSGA_CSV = DATA_DIR / "noaa_rsga_ap.csv"    # committed: NOAA predicted Ap,
 FORECASTS_DIR = ROOT / "forecasts"
 FORECAST_LOG = FORECASTS_DIR / "log.csv"          # every forecast ever issued, never edited
 FORECAST_SCORES = FORECASTS_DIR / "scores.csv"    # log rows whose target day has arrived, with the observed values
-FORECAST_RECENT = FORECASTS_DIR / "recent.csv"    # last RECENT_DAYS of observed Ap / max Kp, for the app's chart
+FORECAST_RECENT = FORECASTS_DIR / "recent.csv"    # observed Ap / max Kp / F10.7 since RECENT_START, for the app
+PAST_FORECASTS = FORECASTS_DIR / "past_forecasts.csv.gz"   # saved out-of-sample forecasts 2020 → (test + hindcast)
 NOAA_LIVE_CSV = FORECASTS_DIR / "noaa_live.csv"   # NOAA 27-day outlook + 3-day forecast, parsed, saved every day
 NOAA_LIVE_DIR = FORECASTS_DIR / "noaa"            # the raw NOAA texts, as evidence
 STORM_LOG = FORECASTS_DIR / "storm_log.csv"       # APPEND-ONLY storm risk per lead day (src/forecast/storm.py, D-48)
 STORM_SCORES = FORECASTS_DIR / "storm_scores.csv" # storm_log rows whose day has arrived, with the observed max Kp
-RECENT_DAYS = 60
+RECENT_START = "2019-10-01"   # covers the test period and enough history (≥ 130 days) for interactive forecasts
 # Only issue when GFZ has published yesterday: a forecast issued late would already overlap its own lead day 1
 MAX_ORIGIN_AGE_DAYS = 1

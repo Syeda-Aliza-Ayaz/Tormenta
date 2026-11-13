@@ -100,6 +100,7 @@ def main(name: str = "validation") -> dict:
     if name == "recent":
         fc = pd.concat([hindcast(daily, first, last), noaa_rows(daily, first, last, definitive_only=False)],
                        ignore_index=True)
+        fc.to_csv(config.FORECAST_REPORTS_DIR / "recent_forecasts.csv.gz", index=False)
     else:
         fc = run(registry.all_models(), daily, first, last)
         fc = pd.concat([fc, noaa_rows(daily, first, last)], ignore_index=True)

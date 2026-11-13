@@ -85,7 +85,8 @@ def score(log: pd.DataFrame, daily: pd.DataFrame) -> pd.DataFrame:
 
 
 def recent(daily: pd.DataFrame) -> pd.DataFrame:
-    return daily[config.FORECAST_TARGETS + ["gfz_flag"]].dropna(subset=config.FORECAST_TARGETS).tail(config.RECENT_DAYS)
+    cols = config.FORECAST_TARGETS + ["f107_obs", "gfz_flag"]
+    return daily.loc[config.RECENT_START:, cols].dropna(subset=config.FORECAST_TARGETS)
 
 
 NOAA_PRODUCTS = {"27do": (config.NOAA_27DO, fetch_noaa.parse_27do),
