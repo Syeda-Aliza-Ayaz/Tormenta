@@ -737,3 +737,12 @@ Template:
 - **Why:** HRK asked for professional code without personal remarks.
 - **Result / consequence:** comments only; no code changed (all files compile, all tests pass). The app's author
   credit in the footer is kept.
+
+### D-51 · Headline models fixed before the test period is scored · 2026-11-13 · ✅
+- **Decision:** by the rule written in advance (PLAN §6: highest mean validation skill over lead days 1–7),
+  the **headline value forecast is HistGB** (+0.177, vs ARIMAX +0.046, NOAA +0.091 over days 1–3 only). The
+  **headline storm warning is the storm classifier** (D-48, Heidke 0.28–0.36 on validation).
+- **Why:** this entry is committed *before* `python -m src.forecast.test_eval` runs, so the git history shows
+  the choice wasn't influenced by the test result.
+- **Result / consequence:** the test period (2020-01-01 → last definitive day) is scored once with the models as
+  committed. A second run needs `--force` and a new DECISIONS entry.
