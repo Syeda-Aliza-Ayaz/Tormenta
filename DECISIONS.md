@@ -792,3 +792,74 @@ Template:
     the CMEs in solar images, forecast the jump. This is the limit of forecasting from past values alone.
 - Files: `reports/forecast/metrics/test_*.csv`, `reports/forecast/test_*forecasts.csv.gz`, and
   `reports/forecast/figures/01–04` (skill vs lead day, storm skill vs lead day, test coverage, May 2024).
+
+### D-53 · Retrain only when performance drops: forecaster monitor and nowcaster health check · 2026-11-13 · ✅ (replaces the details of D-12)
+- **Decision:**
+  - **Forecaster** (`src/forecast/monitor.py`, weekly in `retrain.yml`): HistGB's skill against the 27-day
+    average over the last **56** target days of live scores (lead days 1–3).
+    - "Degraded" means below the 5th percentile of the same quantity on the test period (**−0.26**).
+    - A retrain happens only after **two degraded checks in a row**. The candidate is trained up to the start
+      of a 6-month holdout of the newest definitive data, and it replaces the incumbent only if its Ap RMSE there
+      is ≤ 1.02 × the incumbent's.
+    - State is kept in `forecasts/monitor.json`.
+  - **Nowcaster** (`src/update.py`): retrains only if new data exists **and** its holdout skill against
+    persistence fell more than 0.10 below its test skill (0.558). Otherwise the status is `healthy_no_retrain`.
+- **Why:**
+  - The teacher's rule.
+  - Skill against a reference, not raw error, because raw error jumps in every storm.
+  - **28 days was too noisy:** the 28-day skill was below 0 in 37% of test windows, even though the model is fine
+    overall (56 days: 27%; 91 days: 23%). 56 days is the compromise between noise and reaction time.
+- **Alternatives considered:** a 28-day window (from the plan); a raw-RMSE threshold; keeping the scheduled weekly
+  retrain.
+- **Result / consequence:**
+  - On the test period the monitor would have called for a retrain in 3 episodes (mid-2020, Aug 2023, Feb 2024):
+    13 of 331 weekly checks. In each case the gate still decides.
+  - Live it reports "insufficient data" (120 scored pairs needed, about 40 issue days) until about January 2027.
+  - The scorecard shows its test-period history.
+  - Tests (`tests/test_monitor.py`): the window skill, insufficient data, a retrain only after two degraded
+    checks, and a healthy nowcaster not being retrained.
+  - **A bug caught by those tests:** the nowcaster's return dict let the health details overwrite
+    `"healthy_no_retrain"` with `"healthy"`. Fixed.
+
+### D-54 · "Try the forecaster": edit the inputs, or pick a past date · 2026-11-13 · ✅
+- **Decision:** a new app tab with two modes.
+  - **Edit:** the last 30 days of Ap, max Kp and F10.7, with presets (quiet week, storm now, storm 27 days ago).
+    HistGB, ARIMAX, the storm classifier and the simple rules reforecast instantly, with ranges and storm risk.
+  - **Past date:** any issue day from 2020. The app shows the **saved out-of-sample forecasts** (the one-time test
+    run and the recent hindcast, `forecasts/past_forecasts.csv.gz`, 1.3 MB) against what happened.
+- **Why:**
+  - It is the teacher's requirement for live inputs.
+  - Re-running models on dates inside their training years would look better than it should; the saved test
+    forecasts are honest.
+- **Result / consequence:**
+  - Example: issued on 8 May 2024, the storm cards warned for 11 and 12 May (both real storm days) and missed the
+    onset on 10 May.
+  - "Storm now" raises day-1 storm risk from about 8% to 56%.
+  - `recent.csv` now holds observed values since Oct 2019, including F10.7.
+  - Heavy imports are loaded lazily, so the browser Space still runs (edit mode tells the visitor to use the
+    Streamlit app instead).
+
+### D-55 · Scorecard tab, Hugging Face forecaster publishing, Flask forecast page · 2026-11-13 · ✅
+- **Decision:**
+  - **Scorecard tab:** test headline numbers; a model comparison for test, validation or recent; the storm table
+    per lead day; the four figures; model health.
+  - **Hugging Face:** the forecaster's models and settings in the model repo, a model-card section with the test
+    results, and statsmodels pins. The daily job publishes after each new issue, as a non-blocking step.
+  - **Flask:** `/forecast` and `/api/forecast`.
+- **Result / consequence:** the workflow test caught an unquoted YAML value containing ": " in the new publish
+  step. It's the same mistake that broke the Monday job on 8 Nov, and it was fixed before pushing.
+
+### D-56 · Repository cleanup, and action versions · 2026-11-13 · ✅
+- **Decision:**
+  - Removed 11 files in `reports/v2/` that were byte-identical to `reports/figures` and `reports/metrics`, and
+    repointed `docs/report_notes.tex` to the identical copies.
+  - Removed `models/tormenta_v20261030_0737.joblib` (superseded; only mentioned in saved notebook output).
+  - Updated the workflows to `actions/checkout@v5` and `actions/setup-python@v6` (Node 24).
+- **Kept on purpose:**
+  - `models/tormenta_v20261028.joblib` and `tormenta_v20261029_1003.joblib`: notebooks 04 and 05 load them. They
+    were removed briefly, found by checking the notebooks, and restored before committing.
+  - The unique `reports/v2` files.
+  - `reports.zip` and `docs/report/overleaf_upload.zip`: they appear to be the report and Overleaf exports, so
+    deleting them is for the report authors to decide.
+- **Result / consequence:** about 10 MB less in the working tree; git history keeps everything. The README now
+  covers the forecaster, and `docs/report_notes.tex` has a forecaster section with viva points.

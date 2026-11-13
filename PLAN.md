@@ -256,10 +256,10 @@ requirements.txt             + statsmodels, CPU-only torch (via --extra-index-ur
 | 4 | Fri 13 Nov | ARIMA / SARIMA / ARIMAX | [x] (done 12 Nov; ARIMAX passes, ARIMA/SARIMA fail) |
 | 5 | Sat 14 Nov | Chronos; intervals for all models; add every model to the daily job; **test CPU torch + Chronos on Streamlit Cloud** (decides live vs saved) | [x] (done 13 Nov; ranges live, Chronos fails its rule, no Streamlit torch needed) |
 | 6 | Sun 15 Nov | Scorecards + figures; choose the production model by the fixed rule; score test once | [x] (done 13 Nov; storm warning, test scored once, figures) |
-| 7 | Mon 16 Nov | Streamlit: 7-day forecast tab + Try it yourself (edit inputs, past date); deploy | [ ] |
-| 8 | Tue 17 Nov | Streamlit: scorecard tab + model health; deploy. HF: portable per-lead HistGB, browser Space, model repo + card | [ ] |
-| 9 | Wed 18 Nov | `monitor.py`, trigger-based retrain, tests; Flask `/forecast` | [ ] |
-| 10 | Thu 19 Nov | README, PROJECT_NOTES, report + viva notes; repo cleanup (§14); check every deployment end to end | [ ] |
+| 7 | Mon 16 Nov | Streamlit: 7-day forecast tab + Try it yourself (edit inputs, past date); deploy | [x] (done 13 Nov) |
+| 8 | Tue 17 Nov | Streamlit: scorecard tab + model health; deploy. HF: portable per-lead HistGB, browser Space, model repo + card | [x] (done 13 Nov) |
+| 9 | Wed 18 Nov | `monitor.py`, trigger-based retrain, tests; Flask `/forecast` | [x] (done 13 Nov; 56-day window, see D-53) |
+| 10 | Thu 19 Nov | README, PROJECT_NOTES, report + viva notes; repo cleanup (§14); check every deployment end to end | [x] (done 13 Nov) |
 | — | Fri 20 Nov | Buffer | [ ] |
 
 **Order of priority if we fall behind:** live log running (day 2) → Streamlit deployment of the forecaster →

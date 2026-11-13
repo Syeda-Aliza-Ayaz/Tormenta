@@ -789,18 +789,18 @@ and 0.768).
 \end{itemize}
 
 \begin{figure}[H]\centering
-\includegraphics[width=\textwidth]{../reports/v2/figures/10_model_comparison.png}
+\includegraphics[width=\textwidth]{../reports/figures/10_model_comparison.png}
 \caption{v2 test RMSE per model: all hours (left) and storm hours (right).}
 \end{figure}
 
 \begin{figure}[H]\centering
-\includegraphics[width=\textwidth]{../reports/v2/figures/11_error_by_level.png}
+\includegraphics[width=\textwidth]{../reports/figures/11_error_by_level.png}
 \caption{v2 test MAE and bias by observed storm level. All models over-predict slightly in quiet times and
 under-predict in storms (regression to the mean); HistGB has the smallest storm bias.}\label{fig:v2level}
 \end{figure}
 
 \begin{figure}[H]\centering
-\includegraphics[width=0.75\textwidth]{../reports/v2/figures/13_feature_importance.png}
+\includegraphics[width=0.75\textwidth]{../reports/figures/13_feature_importance.png}
 \caption{v2 permutation importance on the validation years. The new block-so-far feature
 \code{newell\_block\_max} is now the most important input, followed by the new \code{pressure\_max3h}.}
 \end{figure}
@@ -1288,5 +1288,110 @@ wind--magnetosphere coupling function inferred from 10 magnetospheric state vari
 \bibitem{pedregosa2011} F.~Pedregosa et al., ``Scikit-learn: Machine learning in Python,'' \emph{J. Mach. Learn.
 Res.}, 12, 2825--2830, 2011.
 \end{thebibliography}
+
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{The 7-day forecaster (v2)}
+
+\subsection{Task and data}
+The nowcaster sees the solar wind about an hour before it reaches Earth, so it cannot forecast days ahead. The
+forecaster predicts \textbf{daily Ap and daily max Kp for lead days 1--7}, issued after each UTC day $D$ from data up
+to $D$ only. Inputs are past geomagnetic activity (allowed here, unlike the nowcaster: it is autoregression, not
+leakage), the values 27, 54 and 81 days before each target day (the Sun's rotation), F10.7 and its 81-day mean
+(flare spikes removed) and the season. Data: GFZ daily Kp/Ap/F10.7, 1947-06-01 onward (F10.7 starts in 1947).
+
+\begin{center}
+\begin{tabular}{llr}
+\toprule
+Split & Period & Days\\
+\midrule
+Train & 1947-06-01 -- 2016-12-31 & 25{,}417\\
+Validation & 2017 -- 2019 & 1{,}095\\
+Test (scored once) & 2020-01-01 -- 2026-06-30 & 2{,}373\\
+Live models refitted on & 1947-06-01 -- 2019-12-31 & 26{,}512\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Models and the selection rule}
+Every model is evaluated by a rolling-origin backtest (one forecast per day, data up to that day only; a test
+checks this for every model). A model goes live only if its mean Ap skill against the 27-day average,
+$1-\mathrm{MSE}/\mathrm{MSE}_{\text{27-day}}$, over lead days 1--7 on validation is above 0 --- a rule written down
+before the results.
+\begin{itemize}[leftmargin=*]
+\item \textbf{HistGB}: 14 direct models (7 lead days $\times$ 2 targets), tuned by time-ordered CV on the training
+years. Validation skill $+0.177$: \textbf{pass} (headline).
+\item \textbf{ARIMAX} (exogenous: Ap 27 days before the target day, 81-day F10.7 carried forward): $+0.046$, pass.
+\item \textbf{ARIMA} ($-0.004$) and \textbf{SARIMA} with a 27-day season ($-0.198$): fail. SARIMA had the best AIC
+but the worst forecasts: AIC rewards one-step fit over 1947--2013 (mean Ap 13.9), and multi-day forecasts revert to
+that level, too high for quiet 2017--2019 (mean 7.75).
+\item \textbf{Chronos-Bolt}, a pretrained transformer used zero-shot (self-supervised pretraining by Amazon; our
+29k days are too few to train a transformer from scratch): $-0.039$, fail. A model with no physics features does
+about as well as ARIMA, which shows the engineered features are what make HistGB the best.
+\item \textbf{Storm warning}: per-lead classifiers giving P(max Kp $\ge 5-$), with the warning threshold chosen for
+rare events (0.21--0.29) on 2008--2016. This fixes the imbalance problem: the value forecasts almost never reach
+the storm line after day 1.
+\end{itemize}
+
+\subsection{Test results (2020 -- mid-2026, scored once)}
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+Ap RMSE & day 1 & day 3 & day 7 & skill vs 27-day avg\\
+\midrule
+\textbf{HistGB} & \textbf{10.79} & \textbf{11.91} & \textbf{12.00} & $+0.100$\\
+NOAA official (days 1--3) & 10.89 & 11.90 & -- & $+0.134$\\
+ARIMAX & 10.96 & 12.15 & 12.17 & $+0.069$\\
+Chronos-Bolt & 11.83 & 12.66 & 12.65 & $-0.015$\\
+27-day average & 12.27 & 12.45 & 12.48 & 0\\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{itemize}[leftmargin=*]
+\item HistGB is the best of the project's models at every lead day and level with NOAA on days 1--3.
+\item 80\% ranges (from out-of-sample errors, Ap as log ratios) contain the observation on 80--82\% of days.
+\item Storm warning: Heidke skill 0.20--0.30 at every lead day; 29--54\% of storm days caught; about 7 in 10
+warnings false (the usual cost of warning about rare events).
+\item The skill drop from validation (quiet solar minimum) to test (active cycle 25) was expected and reported in
+advance.
+\end{itemize}
+
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{../reports/forecast/figures/01_skill_vs_lead.png}
+\caption{Ap skill against the 27-day average by lead day, validation and test.}
+\end{figure}
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{../reports/forecast/figures/02_storm_skill_vs_lead.png}
+\caption{Storm-day Heidke skill by lead day: the storm classifier against the other models.}
+\end{figure}
+\begin{figure}[H]\centering
+\includegraphics[width=0.85\textwidth]{../reports/forecast/figures/04_may2024_case_study.png}
+\caption{The May 2024 superstorm: no model that sees only past values foresaw its onset; NOAA, using solar
+images of the eruptions, did. The storm risk rose only once the storm had begun.}
+\end{figure}
+
+\subsection{Operations}
+\begin{itemize}[leftmargin=*]
+\item A daily GitHub Actions job issues the forecast, saves NOAA's forecasts as a benchmark, scores every
+forecast whose day has arrived, and publishes to Streamlit and Hugging Face. The forecast log is append-only and
+never backfilled, so it proves each forecast was written before its days.
+\item \textbf{Retraining only when performance drops}: weekly, HistGB's 56-day skill on live scores is compared with
+the 5th percentile of the same quantity on the test period ($-0.26$); a retrain needs two degraded checks in a
+row and must beat the current model on the newest 6 months. The nowcaster retrains only if its skill against
+persistence drops more than 0.10 below its test score.
+\end{itemize}
+
+\subsection{Viva points}
+\begin{itemize}[leftmargin=*]
+\item \emph{Why not use the solar wind for a 7-day forecast?} It is measured about an hour ahead of Earth; nobody
+knows it days ahead. Past activity and the 27-day rotation are what remain.
+\item \emph{Is it overfitting?} No: in-sample skill (1990--2016, $+0.148$) is not above validation ($+0.179$); the
+tuned trees are small and strongly regularised.
+\item \emph{How was imbalance handled?} By the decision threshold of a probabilistic classifier, tuned for Heidke
+skill on held-out years, not by resampling (which would distort the probabilities).
+\item \emph{Why is NOAA hard to beat?} NOAA sees coronal mass ejections in solar images; the project's models see
+only past numbers. That is also why sudden storms like May 2024 are missed.
+\item Every decision, with its reason and result, is in \texttt{DECISIONS.md} (D-01 onward).
+\end{itemize}
 
 \end{document}

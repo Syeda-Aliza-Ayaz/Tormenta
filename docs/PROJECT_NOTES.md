@@ -828,3 +828,12 @@ job (D-35); the chart tooltip no longer shows `null` (D-36).
 **Patches (2026-11-13):** F10.7 flare filter shared with the forecaster; HistGB/ARIMAX retrained and pass again (D-47). **Storm warning classifier** with rare-event thresholds tuned on 2008-2016 (D-48): Heidke skill 0.28-0.36 at every lead day on validation, catching 30-46% of storm days, where the regression models caught almost none after day 1; shown in the app as storm risk % per day. Per-day storm tables for every model: `reports/forecast/storm_tables.md` (D-49). Code comments made impersonal (D-50).
 
 **Day 6 — test period scored once (2026-11-13, D-51, D-52):** headline models fixed first (HistGB; storm classifier). On 2020 – Jun 2026 (325 storm days) HistGB is the best of our models at every lead day (skill vs 27-day average 0.100) and level with NOAA on days 1-3; 80% ranges cover 80-82%; the storm warning keeps Heidke skill 0.20-0.30 at every lead day. The May 2024 superstorm onset was not forecast by any model that sees only past values (NOAA, using solar images, did). Figures in `reports/forecast/figures/`.
+
+---
+
+## v2 forecaster: Days 7-10 (2026-11-13)
+
+- **Try the forecaster** (app tab, D-54): edit the last 30 days (with presets) and every live model reforecasts with ranges and storm risk; or pick any issue day from 2020 and compare the saved out-of-sample forecasts with what happened. Files: `src/forecast/app_data.py`, `forecasts/past_forecasts.csv.gz`.
+- **Scorecard tab, Hugging Face and Flask** (D-55): test headline numbers, model comparison by period, storm tables per lead day, figures, model health; forecaster models and model card on Hugging Face, published daily; Flask `/forecast` and `/api/forecast`.
+- **Retrain only when performance drops** (D-53): `src/forecast/monitor.py` (56-day live skill vs the 27-day average, floor -0.26 from the test period, two degraded checks in a row, holdout gate) and a nowcaster health check in `src/update.py` (retrain only if skill vs persistence fell > 0.10 below test). Both run in the weekly workflow.
+- **Cleanup and docs** (D-56): duplicate `reports/v2` files and one superseded model removed (notebook dependencies kept); actions moved to Node 24 versions; README rewritten for forecast + nowcast; forecaster section with viva points in `docs/report_notes.tex`.
