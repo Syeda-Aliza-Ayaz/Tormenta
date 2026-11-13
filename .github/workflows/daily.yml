@@ -40,7 +40,7 @@ jobs:
           cache: pip
 
       - name: Install
-        run: pip install -r requirements.txt pytest==9.2.0
+        run: pip install -r requirements.txt pytest==9.2.0 huggingface_hub==2.4.0
 
       - name: Tests (forecasters, saved bundles, NOAA parsers, daily job)
         run: python -m pytest -q tests/test_forecast.py tests/test_forecast_gbm.py tests/test_forecast_arima.py tests/test_intervals.py tests/test_storm.py tests/test_test_eval.py tests/test_monitor.py tests/test_app_data.py tests/test_noaa.py tests/test_issue.py
@@ -60,3 +60,13 @@ jobs:
           # the weekly retrain may have pushed meanwhile; forecasts/ never conflicts with its files
           git pull --rebase
           git push
+
+      # Keeps the in-browser Space and the model repo current; only when a new forecast was issued. A Hugging Face
+      # failure must not fail the forecast job (the commit above already happened).
+      - name: Publish to Hugging Face
+        if: ${{ !inputs.dry_run && steps.issue.outputs.new_rows != '0' }}
+        continue-on-error: true
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python app/hf_space/sync_hf.py --user aliza-ayaz --message "Daily forecast: origin ${{ steps.issue.outputs.origin }}"

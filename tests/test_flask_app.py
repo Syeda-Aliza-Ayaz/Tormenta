@@ -83,3 +83,19 @@ def test_live_json_shape(client, flask_module, monkeypatch):
     assert len(body["last_24h"]) == 24
     page = client.get("/live")
     assert page.status_code == 200 and b"Live nowcast" in page.data and b'value="100"' in page.data
+
+
+def test_forecast_json_and_page(client):
+    if not config.FORECAST_LOG.exists():
+        pytest.skip("no forecast log")
+    data = client.get("/api/forecast").get_json()
+    assert data["headline"] == "histgb" and data["models"] and data["origin"]
+    assert all(len(rows) == 7 for rows in data["models"].values())
+    page = client.get("/forecast")
+    assert page.status_code == 200 and b"7-day forecast" in page.data
+
+
+def test_forecast_unavailable_gives_503(client, flask_module, monkeypatch):
+    monkeypatch.setattr(flask_module.config, "FORECAST_LOG", config.ROOT / "missing" / "log.csv")
+    assert client.get("/api/forecast").status_code == 503
+    assert client.get("/forecast").status_code == 503

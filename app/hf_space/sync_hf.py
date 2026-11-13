@@ -31,6 +31,22 @@ BROWSER_REQUIREMENTS = ["numpy", "pandas", "altair", "requests"]
 SPACE_ASSETS = ["app/streamlit_app.py", "data/f107_history.csv", "reports/metrics/test.csv",
                 "forecasts/log.csv", "forecasts/scores.csv", "forecasts/recent.csv", "forecasts/noaa_live.csv",
                 "forecasts/storm_log.csv", "forecasts/past_forecasts.csv.gz",
+                "forecasts/monitor.json",
+                "reports/forecast/metrics/test_leads.csv",
+                "reports/forecast/metrics/validation_leads.csv",
+                "reports/forecast/metrics/recent_leads.csv",
+                "reports/forecast/metrics/test_storms.csv",
+                "reports/forecast/metrics/validation_storms.csv",
+                "reports/forecast/metrics/recent_storms.csv",
+                "reports/forecast/metrics/test_storm_warning.csv",
+                "reports/forecast/metrics/validation_storm_warning.csv",
+                "reports/forecast/metrics/recent_storm_warning.csv",
+                "reports/forecast/metrics/test_interval_coverage.csv",
+                "reports/forecast/metrics/monitor_test_windows.csv",
+                "reports/forecast/figures/01_skill_vs_lead.png",
+                "reports/forecast/figures/02_storm_skill_vs_lead.png",
+                "reports/forecast/figures/03_interval_coverage_test.png",
+                "reports/forecast/figures/04_may2024_case_study.png",
                 "reports/figures/14_may2024_nowcast.png"]
 
 
@@ -43,7 +59,13 @@ def model_files(portable: Path) -> dict:
     return {"README.md": HERE / "model_card.md", "requirements.txt": HERE / "requirements.txt",
             "models/current.joblib": ROOT / "models" / "current.joblib",
             "models/current_portable.npz": portable,
-            "data/f107_history.csv": ROOT / "data" / "f107_history.csv", **_src_files()}
+            "data/f107_history.csv": ROOT / "data" / "f107_history.csv", **_forecast_model_files(), **_src_files()}
+
+
+def _forecast_model_files() -> dict:
+    """The 7-day forecaster's saved models and settings (models/forecast/)."""
+    folder = ROOT / "models" / "forecast"
+    return {f"models/forecast/{p.name}": p for p in sorted(folder.glob("*")) if p.suffix in (".joblib", ".json")}
 
 
 def build_space(dest: Path, portable: Path) -> dict:

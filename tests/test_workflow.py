@@ -14,7 +14,7 @@ def test_daily_workflow_parses_and_has_its_steps():
     assert len(crons) >= 4                                  # GitHub delays schedules by hours (D-35)
     assert min(int(c.split()[1]) for c in crons) == 0       # first slot right after GFZ's ~23:45 UTC update
     names = [s.get("name") for s in wf["jobs"]["forecast"]["steps"]]
-    for step in ["Issue, save NOAA, score", "Commit forecasts"]:
+    for step in ["Issue, save NOAA, score", "Commit forecasts", "Publish to Hugging Face"]:
         assert step in names
     run = next(s["run"] for s in wf["jobs"]["forecast"]["steps"] if s.get("name") == "Commit forecasts")
     assert "git add forecasts" in run and "git pull --rebase" in run

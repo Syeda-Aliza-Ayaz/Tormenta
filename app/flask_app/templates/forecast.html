@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tormenta 7-day Forecast</title>
+  <style>
+    :root { --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #5d6676; --line: #dfe3ea; --accent: #2f5fb3;
+            --warn: #b3261e; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #12151b; --card: #1b2029; --text: #e6e9ef; --muted: #9aa3b2; --line: #2c3340; --accent: #7aa7f0;
+              --warn: #f28b82; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+    main { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { margin: 0 0 4px; font-size: 26px; }
+    .sub { color: var(--muted); margin: 0 0 20px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 16px;
+            overflow-x: auto; }
+    .card h2 { margin: 0 0 12px; font-size: 17px; }
+    table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+    th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-weight: 600; font-size: 13px; }
+    .range { color: var(--muted); font-size: 12px; }
+    .warn { color: var(--warn); font-weight: 700; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Tormenta 7-day forecast</h1>
+  <p class="sub">Daily Ap and max Kp for the next 7 days · <a href="/">nowcast</a> · <a href="/api/forecast">JSON</a></p>
+  {% if error %}
+    <div class="card"><p class="warn">{{ error }}</p></div>
+  {% else %}
+    <p class="sub">Issued {{ fc.issued_at }} from GFZ data up to {{ fc.origin }}.</p>
+    {% if fc.storm %}
+    <div class="card">
+      <h2>Storm risk (chance of a G1+ day, max Kp ≥ 5−)</h2>
+      <table>
+        <tr><th>Day</th>{% for s in fc.storm %}<th>{{ s.date[5:] }}</th>{% endfor %}</tr>
+        <tr><td>Chance</td>{% for s in fc.storm %}<td>{{ "%.0f"|format(s.storm_prob * 100) }}%</td>{% endfor %}</tr>
+        <tr><td>Warning</td>{% for s in fc.storm %}
+          <td>{% if s.warning %}<span class="warn">⚠ warning</span>{% else %}–{% endif %}</td>{% endfor %}</tr>
+      </table>
+    </div>
+    {% endif %}
+    {% for target, label in [("ap", "Daily Ap"), ("kpmax", "Daily max Kp")] %}
+    <div class="card">
+      <h2>{{ label }} <span class="range">(80% range in small print where available)</span></h2>
+      <table>
+        <tr><th>Model</th>{% for row in fc.models[fc.headline] %}<th>{{ row.date[5:] }}</th>{% endfor %}</tr>
+        {% for name, rows in fc.models.items() %}
+        <tr><td>{{ names.get(name, name) }}</td>
+          {% for row in rows %}<td>{{ "%.1f"|format(row[target]) }}
+            {% if row[target ~ "_lo"] is not none %}<br><span class="range">{{ "%.1f"|format(row[target ~ "_lo"]) }}–{{ "%.1f"|format(row[target ~ "_hi"]) }}</span>{% endif %}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endfor %}
+  {% endif %}
+</main>
+</body>
+</html>

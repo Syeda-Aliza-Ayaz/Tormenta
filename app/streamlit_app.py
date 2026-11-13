@@ -406,6 +406,72 @@ def apply_try_preset(name: str, base: pd.DataFrame):
     st.session_state["try_editor_version"] = st.session_state.get("try_editor_version", 0) + 1
 
 
+# ── Scorecard ────────────────────────────────────────────────────────────────
+SC_PERIODS = {"Test 2020 – Jun 2026 (scored once)": "test", "Validation 2017–2019": "validation",
+              "Recent Jul – Nov 2026 (hindcast)": "recent"}
+SC_STATUS = {"histgb": "✅ live (headline)", "arimax": "✅ live", "storm_warning": "✅ live (storm warning)",
+             "arima": "❌ failed its rule", "sarima": "❌ failed its rule", "chronos": "❌ failed its rule",
+             "noaa": "benchmark (official)", "trailing27": "reference", "persistence": "reference",
+             "recurrence27": "reference", "climatology": "reference"}
+SC_NAMES = {**FC_SERIES, "storm_warning": "Storm warning (classifier)", "chronos": "Chronos (transformer)"}
+SC_FIGURES = {"Skill vs lead day": "01_skill_vs_lead.png", "Storm skill vs lead day": "02_storm_skill_vs_lead.png",
+              "80% range coverage (test)": "03_interval_coverage_test.png",
+              "May 2024 superstorm": "04_may2024_case_study.png"}
+
+
+def report_path(*parts):
+    return ROOT.joinpath("reports", "forecast", *parts)
+
+
+@st.cache_data(ttl=3600)
+def read_report(*parts) -> pd.DataFrame:
+    path = report_path(*parts)
+    return pd.read_csv(path) if path.exists() else pd.DataFrame()
+
+
+def comparison_table(period: str) -> pd.DataFrame:
+    leads = read_report("metrics", f"{period}_leads.csv")
+    if not len(leads):
+        return pd.DataFrame()
+    ap, kp = leads[leads["target"] == "ap"], leads[leads["target"] == "kpmax"]
+    rows = []
+    for m, g in ap.groupby("model"):
+        rmse = g.set_index("lead")["rmse"]
+        rows.append({"Model": SC_NAMES.get(m, m), "Status": SC_STATUS.get(m, ""),
+                     "Ap error day 1": rmse.get(1), "Ap error day 3": rmse.get(3), "Ap error day 7": rmse.get(7),
+                     "Skill vs 27-day avg": g["skill_vs_trailing27"].mean(),
+                     "Max Kp error (days 1–7)": kp[kp["model"] == m]["rmse"].mean() if (kp["model"] == m).any() else None})
+    return pd.DataFrame(rows).sort_values("Skill vs 27-day avg", ascending=False).reset_index(drop=True)
+
+
+def storm_table_for(period: str, lead: int) -> pd.DataFrame:
+    t = pd.concat([read_report("metrics", f"{period}_storms.csv"),
+                   read_report("metrics", f"{period}_storm_warning.csv")], ignore_index=True)
+    if not len(t):
+        return t
+    t = t[(t["lead"] == lead) & (t["model"] != "noaa")].copy()
+    t["Model"] = t["model"].map(lambda m: SC_NAMES.get(m, m))
+    t = t.sort_values("hss", ascending=False)
+    out = t[["Model", "hits", "misses", "false_alarms", "correct_negatives", "pod", "far", "hss"]]
+    return out.rename(columns={"hits": "Caught", "misses": "Missed", "false_alarms": "False alarm",
+                               "correct_negatives": "Correct quiet", "pod": "Detection rate",
+                               "far": "False-alarm ratio", "hss": "Heidke skill"}).reset_index(drop=True)
+
+
+def monitor_chart(windows: pd.DataFrame, floor: float) -> alt.LayerChart:
+    df = windows.assign(time=pd.to_datetime(windows["window_end"]).dt.tz_localize("UTC"))
+    x = alt.X("time:T", scale=alt.Scale(type="utc"), title=None, axis=alt.Axis(format="%Y", grid=False))
+    line = alt.Chart(df).mark_line(strokeWidth=2, color=FC_COLORS[0]).encode(
+        x=x, y=alt.Y("skill:Q", title="56-day skill vs 27-day average"),
+        tooltip=[alt.Tooltip("window_end:N", title="Window ends"), alt.Tooltip("skill:Q", format=".2f")])
+    fl = alt.Chart(pd.DataFrame({"v": [floor], "t": [f"degraded below {floor:.2f}"]}))
+    due = alt.Chart(df[df["retrain_due"]]).mark_point(filled=True, size=70, color="#d03b3b").encode(
+        x=x, y="skill:Q", tooltip=[alt.Tooltip("window_end:N", title="Retrain would be due")])
+    return alt.layer(fl.mark_rule(strokeDash=[4, 4], color=MUTED).encode(y="v:Q"),
+                     fl.mark_text(align="left", dx=4, dy=-7, color=MUTED, fontSize=11).encode(
+                         y="v:Q", text="t:N", x=alt.value(0)), line, due).properties(height=260)
+
+
 # ── Data ─────────────────────────────────────────────────────────────────────
 @st.cache_resource
 def get_bundle():
@@ -463,9 +529,79 @@ st.caption("**7-day forecast** of geomagnetic activity (daily Ap and max Kp), sc
            "arrives, and a **live nowcast** of the Kp index (0–9) from the solar wind measured about an hour upstream "
            "of Earth. GFZ Kp since 1932, NASA OMNI and live NOAA SWPC data.")
 
-forecast_tab, try_tab, live_tab, manual_tab, about_tab = st.tabs(
-    ["📅 7-day forecast", "🎛️ Try the forecaster", "🛰️ Live nowcast", "🧪 What-if explorer",
+forecast_tab, try_tab, score_tab, live_tab, manual_tab, about_tab = st.tabs(
+    ["📅 7-day forecast", "🎛️ Try the forecaster", "🏆 Scorecard", "🛰️ Live nowcast", "🧪 What-if explorer",
      "📊 About the nowcast model"])
+
+with score_tab:
+    test_leads = read_report("metrics", "test_leads.csv")
+    if len(test_leads):
+        ap = test_leads[test_leads["target"] == "ap"]
+        hist = ap[ap["model"] == "histgb"]
+        cov = read_report("metrics", "test_interval_coverage.csv")
+        cov = cov[(cov["model"] == "histgb") & (cov["target"] == "ap")]["coverage"] if len(cov) else pd.Series()
+        warn = read_report("metrics", "test_storm_warning.csv")
+        a, b, c, d = st.columns(4)
+        a.metric("Skill vs 27-day average", f"{hist['skill_vs_trailing27'].mean():+.2f}",
+                 help="HistGB, Ap, mean over lead days 1–7. Above 0 beats the simple average of the last 27 days.")
+        a1 = hist.set_index("lead")["rmse"].get(1)
+        n1 = ap[ap["model"] == "noaa"].set_index("lead")["rmse"].get(1)
+        b.metric("Day-1 Ap error vs NOAA", f"{a1:.2f} vs {n1:.2f}" if n1 else f"{a1:.2f}",
+                 help="RMSE. On days 1–3 HistGB and NOAA are level overall (HistGB ahead on day 1, NOAA on day 2).")
+        c.metric("80% range coverage", f"{cov.mean():.0%}" if len(cov) else "—",
+                 help="Share of days whose real Ap fell inside HistGB's 80% range (target 80%).")
+        d.metric("Storm warning skill", f"{warn['hss'].min():.2f}–{warn['hss'].max():.2f}" if len(warn) else "—",
+                 help="Heidke skill score of the storm warning across lead days 1–7 (0 = no skill).")
+        st.caption("Test period 1 Jan 2020 – 30 Jun 2026 (2,379 issue days, 325 storm days), scored once after the "
+                   "headline model was fixed. Models trained on 1947–2019.")
+
+    period_label = st.radio("Period", list(SC_PERIODS), horizontal=True, label_visibility="collapsed")
+    period = SC_PERIODS[period_label]
+    table = comparison_table(period)
+    if len(table):
+        st.markdown("**Model comparison** (Ap and max Kp RMSE; skill = 1 − MSE / MSE of the 27-day average)")
+        st.dataframe(table.style.format({c: "{:.2f}" for c in table.columns if c not in ("Model", "Status")},
+                                        na_rep="—").format({"Skill vs 27-day avg": "{:+.3f}"}),
+                     width="stretch", hide_index=True)
+        if period == "recent":
+            st.caption("Recent days use GFZ's provisional values; only the live models are run on them.")
+
+    st.markdown("**Storm days: who caught them?** (storm day = max Kp ≥ 5−)")
+    lead = st.select_slider("Lead day", options=config.FORECAST_LEADS, value=1, key="score_lead")
+    storms = storm_table_for(period, lead)
+    if len(storms):
+        st.dataframe(storms.style.format({"Detection rate": "{:.0%}", "False-alarm ratio": "{:.0%}",
+                                          "Heidke skill": "{:.2f}"}, na_rep="—"), width="stretch", hide_index=True)
+
+    st.markdown("**Figures**")
+    fig_tabs = st.tabs(list(SC_FIGURES))
+    for tab, (label, name) in zip(fig_tabs, SC_FIGURES.items()):
+        path = report_path("figures", name)
+        if path.exists():
+            tab.image(str(path))
+
+    st.markdown("**Model health: retrain only when performance drops**")
+    state_path = ROOT / "forecasts" / "monitor.json"
+    windows = read_report("metrics", "monitor_test_windows.csv")
+    if state_path.exists():
+        import json
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        last = state["checks"][-1] if state["checks"] else None
+        if last:
+            label = {"healthy": "🟢 healthy", "degraded": "🔴 degraded",
+                     "insufficient_data": "⚪ not enough live data yet"}[last["status"]]
+            st.markdown(f"Latest weekly check ({last['checked_on']}): **{label}**, "
+                        f"{last['pairs']} scored forecasts, skill "
+                        f"{'—' if last['skill'] is None else format(last['skill'], '+.2f')} "
+                        f"(degraded below {last['floor']:.2f}). Retrains so far: {len(state['retrains'])}.")
+    if len(windows):
+        st.altair_chart(monitor_chart(windows, float(windows["skill"].quantile(0.05))), width="stretch")
+        st.caption("What the monitor would have seen on the test period: HistGB's 56-day skill against the 27-day "
+                   "average. A retrain is due only after two weekly checks in a row below the line (red points), "
+                   "and even then the new model must beat the current one on the newest 6 months before it replaces "
+                   "it. The nowcaster has its own check: it retrains only if its skill against persistence drops "
+                   "more than 0.10 below its test score.")
+
 
 with try_tab:
     mode = st.radio("Mode", ["✏️ Edit the inputs", "🕰️ Pick a past date"], horizontal=True,

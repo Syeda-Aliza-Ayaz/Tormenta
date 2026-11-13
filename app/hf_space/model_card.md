@@ -14,7 +14,7 @@ metrics:
 - r2
 ---
 
-# Tormenta: geomagnetic Kp nowcast
+# Tormenta: geomagnetic Kp nowcast and 7-day forecast
 
 Tormenta predicts the planetary **Kp index** (0–9, the standard 3-hourly measure of geomagnetic
 disturbance) from the solar wind measured upstream of Earth. It is a CT-378 Machine Learning project
@@ -28,7 +28,7 @@ disturbance) from the solar wind measured upstream of Earth. It is a CT-378 Mach
 | **Model** | scikit-learn `HistGradientBoostingRegressor` (point), plus q10/q90 quantile models with a conformal (CQR) margin |
 | **Inputs** | IMF \|B\|, Bx, By, Bz (GSM), proton speed, density, temperature, F10.7 solar flux; 66 engineered features (derived physics, lags, trailing means, position in the 3-h Kp block, time of day/year) |
 | **Not used as inputs** | Any geomagnetic index (Kp, Dst, AE, …), so the nowcast does not wait for magnetometer data |
-| **Training data** | NASA OMNI2 hourly from 1998, up to 6 months before the newest definitive Kp (retrained weekly; cutoff in `models/metrics_history.json`); labels are GFZ Potsdam definitive Kp |
+| **Training data** | NASA OMNI2 hourly from 1998, up to 6 months before the newest definitive Kp (retrained only when a weekly health check finds its skill degraded; cutoff in `models/metrics_history.json`); labels are GFZ Potsdam definitive Kp |
 | **Selection** | Time-ordered CV in 1998–2016, validation 2017–2019, one final test on 2020 to 2026-01 |
 | **Live inputs** | NOAA SWPC propagated solar wind (1-min, time-shifted to Earth), averaged to hours like OMNI |
 
@@ -51,6 +51,34 @@ disturbance) from the solar wind measured upstream of Earth. It is a CT-378 Mach
 - **Lead time:** at most about 1 h, the travel time of the solar wind from L1 to Earth.
 - **Manual inputs** (`predict_steady`) are assumed to have held steady for the past 3 days, because the model also
   uses lags and 24-h averages.
+
+## 7-day forecaster
+
+Tormenta also forecasts **daily Ap and daily max Kp for the next 7 days**, issued every morning by a GitHub
+Actions job and scored against GFZ data as it arrives.
+
+| | |
+|---|---|
+| **Models** | `models/forecast/histgb.joblib`: 14 `HistGradientBoostingRegressor` (7 lead days × Ap and max Kp), the headline forecast · `arimax.joblib`: statsmodels SARIMAX with the 27-day recurrence and F10.7 as inputs · `storm.joblib`: 7 `HistGradientBoostingClassifier` giving P(storm day, max Kp ≥ 5−) with thresholds tuned for rare events · `intervals.json`: 80% ranges from out-of-sample errors |
+| **Inputs** | Past daily Ap and max Kp (last 7 days, means), the values 27/54/81 days before each target day (solar rotation), F10.7 and its 81-day mean (flare spikes removed), season |
+| **Training data** | GFZ Potsdam daily Kp/Ap, 1947-06-01 → 2019-12-31 (26,512 days) |
+| **Selection** | Each model had to beat the 27-day average on validation 2017–2019 by a rule fixed in advance; ARIMA, SARIMA and Chronos (a pretrained transformer) were tested and did not |
+| **Retraining** | Only when a weekly health check finds the live skill degraded twice in a row, behind a holdout gate |
+
+### Test results (2020-01-01 → 2026-06-30, 2,379 issue days, scored once)
+
+| Ap, root-mean-square error | day 1 | day 3 | day 7 |
+|---|---|---|---|
+| **HistGB** | **10.79** | **11.91** | **12.00** |
+| NOAA SWPC official forecast | 10.89 | 11.90 | – |
+| 27-day average (reference) | 12.27 | 12.45 | 12.48 |
+
+- Skill against the 27-day average: +0.10 averaged over lead days 1–7; level with NOAA on days 1–3.
+- The 80% ranges contain the observed Ap on 80–82% of days at every lead day.
+- Storm warning: Heidke skill 0.20–0.30 at every lead day, 29–54% of storm days caught, about 7 in 10 warnings
+  false. The value forecasts alone catch almost no storms after day 1.
+- **Limitation:** storms caused by sudden solar eruptions (e.g. the May 2024 superstorm) cannot be foreseen from
+  past values alone; their onset is missed and the risk rises only once the storm has begun.
 
 ## Use the model
 
