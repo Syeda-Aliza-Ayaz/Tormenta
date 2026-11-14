@@ -1,1 +1,2 @@
 issued_at,origin,model_version,lead,target_date,storm_prob,threshold,warning,kpmax_obs,obs_definitive,storm_obs
+2026-11-13 07:59:17,2026-11-12,until 2019-12-31,1,2026-11-13,0.0840539705967235,0.21,False,1.0,False,False
