@@ -312,11 +312,14 @@ def forecast_chart(long: pd.DataFrame, origin: pd.Timestamp, col: str, unit: str
     shade_text = alt.Chart(ahead).mark_text(align="left", dx=6, y=10, color=MUTED, fontSize=11).encode(
         x="start:T", text="text:N")
 
-    # Crosshair tooltips per region: past days list only what was observed, forecast days only the series that
-    # forecast them. One tooltip over both regions showed "null" for every series absent on that day.
+    # Hover: one invisible full-height column per day (no "nearest" search). Past columns list only what was
+    # observed, forecast columns only the series that forecast them, so no tooltip shows "null". Columns never
+    # overlap, so each region's hover works across the whole chart; two "nearest" layers did not, because the top
+    # layer's nearest-point search covered the whole chart and pinned the date to the last observed day (D-57).
     wide = df.pivot_table(index=["time", "label"], columns="series", values="value").reset_index()
     keys = {s: f"s{i}" for i, s in enumerate(present)}
     wide = wide.rename(columns=keys)
+    wide = wide.assign(start=wide["time"] - pd.Timedelta(hours=12), end=wide["time"] + pd.Timedelta(hours=12))
     is_past = wide["time"] <= origin.tz_localize("UTC")
     rules, hovers = [], []
     for region, name in [(wide[is_past], "hover_past"), (wide[~is_past], "hover_forecast")]:
@@ -325,12 +328,14 @@ def forecast_chart(long: pd.DataFrame, origin: pd.Timestamp, col: str, unit: str
         shown = [(s, k) for s, k in keys.items() if k in region and region[k].notna().all()]
         tips = [alt.Tooltip("label:N", title="Day")] + [
             alt.Tooltip(f"{k}:Q", title=s, format=".1f" if col == "kpmax" else ".0f") for s, k in shown]
-        hover = alt.selection_point(name=name, nearest=True, on="pointerover", fields=["time"], empty=False,
-                                    clear="pointerout")
+        hover = alt.selection_point(name=name, on="pointerover", fields=["time"], empty=False, clear="pointerout")
         hovers.append(hover)
-        rules.append(alt.Chart(region[["time", "label"] + [k for _, k in shown]]).mark_rule(
-            color=MUTED, strokeWidth=1).encode(
-            x="time:T", opacity=alt.condition(hover, alt.value(0.8), alt.value(0)), tooltip=tips).add_params(hover))
+        data = region[["time", "start", "end", "label"] + [k for _, k in shown]]
+        rules.append(alt.Chart(data).mark_rect(color=MUTED).encode(
+            x=alt.X("start:T", scale=alt.Scale(type="utc")), x2="end:T",
+            opacity=alt.condition(hover, alt.value(0.10), alt.value(0.001)), tooltip=tips).add_params(hover))
+        rules.append(alt.Chart(data).mark_rule(color=MUTED, strokeWidth=1).encode(
+            x="time:T", opacity=alt.condition(hover, alt.value(0.8), alt.value(0))))
     any_hover = hovers[0] if len(hovers) == 1 else hovers[0] | hovers[1]
     dots = alt.Chart(df).mark_point(filled=True, size=80).encode(
         x=x, y=y, color=colour, opacity=alt.condition(any_hover, alt.value(1), alt.value(0)))

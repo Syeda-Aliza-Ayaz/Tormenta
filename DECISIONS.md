@@ -863,3 +863,28 @@ Template:
     deleting them is for the report authors to decide.
 - **Result / consequence:** about 10 MB less in the working tree; git history keeps everything. The README now
   covers the forecaster, and `docs/report_notes.tex` has a forecaster section with viva points.
+
+### D-57 · Chart hover pinned to the last observed day in the forecast area (bug fix) · 2026-11-15 · ✅
+- **Problem** (reported by HRK): in the 7-day forecast chart (and the "Try the forecaster" chart, which uses the same
+  code), hovering over the forecast days showed the last observed day's date, and it didn't change while moving
+  across the forecast days.
+- **Cause:** the hover from D-36 used two "nearest point" layers, one for past days and one for forecast days. Each
+  layer's nearest-point search covers the whole chart, not just its own days. The past-days layer was on top, so in
+  the forecast area its nearest point was always the last observed day.
+- **Decision:** one invisible full-height column per day, one day wide, instead of a nearest-point search. Hovering
+  anywhere in a column selects that day. The columns never overlap. Past columns list only the observed value and
+  forecast columns only the models, so D-36's "no null" property is kept.
+- **Process:** the cause and fix were proposed first and applied after approval, on the dedicated `fixes` branch.
+- **Result / consequence:**
+  - Checked on the chart definition: no nearest search; 30 past and 7 forecast day columns; no overlap; no empty
+    tooltip values.
+  - The rendered chart looks unchanged, and the app runs without errors in both modes.
+  - Mouse movement can't be simulated here, so the final check is a hover on the deployed app after merging.
+
+### D-58 · ARIMAX's first live rows were added late on 12 Nov (origin 11 Nov) · 2026-11-15 · ✅
+- **Finding:** ARIMAX joined the live log after it passed its rule on 12 Nov (D-41). For origin 11 Nov, its rows
+  were added by a later run that day (16:16 UTC), after the other five models had been issued (about 07:00 UTC). That
+  is the "late addition on the same origin" that D-33 avoided for HistGB.
+- **Decision:** leave the log as it is. It is append-only (D-07), and every row records its own `issued_at`, so the
+  timing is visible. From origin 12 Nov on, all six models are issued together.
+- **Consequence:** live comparisons of ARIMAX for origin 11 Nov should note its later issue time.
