@@ -7,6 +7,8 @@ rare events instead of 0.5:
 
   tune      fit on data ≤ 2007, predict 2008–2016, choose per lead day the threshold that maximises the Heidke skill
             score (catches vs false alarms); no resampling, so the probabilities stay honest
+  calibrate on the same 2008–2016 probabilities, fit a per-lead logistic correction of the displayed chance
+            (D-64); thresholds pass through it, so warnings are unchanged
   validate  fit ≤ 2016, score 2017–2019 with those thresholds          (never used for any choice)
   produce   fit the production window (≤ PRODUCTION_END, D-63), save with the thresholds; score the recent hindcast
 
@@ -17,6 +19,7 @@ import numpy as np
 import pandas as pd
 import sklearn
 from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
 
 from src import config, scorecard
 from src.forecast import features as F
@@ -43,6 +46,7 @@ class StormClassifier:
     def __init__(self, params: dict = None):
         self.params = params or PARAMS
         self.thresholds_ = {h: 0.5 for h in config.FORECAST_LEADS}
+        self.calibration_ = None      # {lead: (a, b)}: displayed chance = sigmoid(a · logit(p) + b) (D-64)
         self.frozen = False
 
     def fit(self, daily: pd.DataFrame) -> "StormClassifier":
@@ -66,9 +70,18 @@ class StormClassifier:
             X = F.features(window, h).reindex(origins)[self.columns_]
             p = self.models_[h].predict_proba(X)[:, 1]
             parts.append(pd.DataFrame({"origin": origins, "lead": h, "target_date": origins + pd.Timedelta(days=h),
-                                       "storm_prob": p, "threshold": self.thresholds_[h],
+                                       "storm_prob": self.calibrate(p, h), "storm_prob_raw": p,
+                                       "threshold": float(self.calibrate(self.thresholds_[h], h)),
                                        "warning": p >= self.thresholds_[h]}))
         return pd.concat(parts, ignore_index=True).sort_values(["origin", "lead"], ignore_index=True)
+
+    def calibrate(self, p, h: int):
+        """Displayed chance for lead day h. Increasing in p, so `p >= threshold` gives the same warnings."""
+        if not getattr(self, "calibration_", None):
+            return p
+        a, b = self.calibration_[h]
+        logit = np.log(np.clip(p, 1e-6, 1 - 1e-6) / (1 - np.clip(p, 1e-6, 1 - 1e-6)))
+        return 1 / (1 + np.exp(-(a * logit + b)))
 
     def save(self, path=None, **meta):
         path = path or BUNDLE
@@ -90,6 +103,18 @@ def tune_thresholds(fc: pd.DataFrame) -> dict:
         scores = [(scorecard.contingency(g["storm_prob"].to_numpy() >= t, obs)["hss"], t) for t in THRESHOLD_GRID]
         best = max(s for s, _ in scores if not np.isnan(s))
         out[int(h)] = float(max(t for s, t in scores if s == best))
+    return out
+
+
+def fit_calibration(fc: pd.DataFrame) -> dict:
+    """Per lead day: logistic regression of the observed storm on logit(raw probability) (D-64)."""
+    out = {}
+    for h, g in fc.groupby("lead"):
+        p = np.clip(g["storm_prob_raw"].to_numpy(), 1e-6, 1 - 1e-6)
+        lr = LogisticRegression(C=1e6).fit(np.log(p / (1 - p)).reshape(-1, 1), g["storm_obs"].to_numpy(int))
+        a, b = float(lr.coef_[0, 0]), float(lr.intercept_[0])
+        assert a > 0, f"calibration for lead {h} is not increasing"
+        out[int(h)] = (a, b)
     return out
 
 
@@ -126,20 +151,33 @@ def main() -> dict:
     probs = probs[probs["target_date"].between(t0, t1) & probs["obs_definitive"]]
     thresholds = tune_thresholds(probs)
     print("thresholds by lead day (chosen on 2008-2016):", thresholds)
+    calibration = fit_calibration(probs)
+    print("calibration (a, b) by lead day (fitted on 2008-2016):", {h: tuple(round(x, 3) for x in v)
+                                                                    for h, v in calibration.items()})
 
     # 2. validation 2017–2019: fitted ≤ 2016, thresholds fixed from step 1
     v0, v1 = backtest.period("validation", daily)
     val_model = StormClassifier().fit(backtest.training_rows(daily, v0))
     val_model.thresholds_ = thresholds
+    val_model.calibration_ = calibration
     val = attach_obs(val_model.predict(daily, backtest.origins_for(v0, v1)), daily)
     val = val[val["target_date"].between(v0, v1) & val["obs_definitive"]]
+    brier_raw = float(np.mean((val["storm_prob_raw"] - val["storm_obs"]) ** 2))
+    brier_cal = float(np.mean((val["storm_prob"] - val["storm_obs"]) ** 2))
+    keep = brier_cal <= brier_raw                     # the rule fixed in advance (D-64)
+    print(f"validation Brier: raw {brier_raw:.4f}, calibrated {brier_cal:.4f} -> "
+          f"{'keep calibration' if keep else 'drop calibration'}")
+    if not keep:
+        calibration = val_model.calibration_ = None
+        val = val.assign(storm_prob=val["storm_prob_raw"], threshold=val["lead"].map(thresholds))
     val_table = table(val)
     val_table.to_csv(out / "validation_storm_warning.csv", index=False)
 
     # 3. production (≤ PRODUCTION_END) + recent hindcast
     prod = StormClassifier().fit(production_window(daily))
     prod.thresholds_ = thresholds
-    prod.save(thresholds=thresholds)
+    prod.calibration_ = calibration
+    prod.save(thresholds=thresholds, calibration=calibration)
     r0, r1 = backtest.period("recent", daily)
     rec = attach_obs(prod.predict(daily, backtest.origins_for(r0, r1)), daily)
     rec = rec[rec["target_date"].between(r0, r1)]

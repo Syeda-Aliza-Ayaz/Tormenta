@@ -26,9 +26,13 @@ def past_forecasts(daily: pd.DataFrame) -> pd.DataFrame:
     values = pd.concat([test, recent], ignore_index=True)
     values = values[values["model"].isin(MODELS)]
 
+    warn_model = storm.StormClassifier.load()
     warn_test = pd.read_csv(rep / "test_storm_warning_forecasts.csv.gz", parse_dates=["origin", "target_date"])
+    # the test run stored raw chances; show them on the same calibrated scale as the live ones (D-64)
+    warn_test = warn_test.assign(storm_prob=[warn_model.calibrate(p, h) for p, h in
+                                             zip(warn_test["storm_prob"], warn_test["lead"])])
     first, last = backtest.period("recent", daily)
-    warn_recent = storm.StormClassifier.load().predict(daily, backtest.origins_for(first, last))
+    warn_recent = warn_model.predict(daily, backtest.origins_for(first, last))
     warn = pd.concat([warn_test, warn_recent], ignore_index=True).assign(model=storm.NAME)
 
     out = pd.concat([values, warn], ignore_index=True).reindex(columns=COLUMNS)

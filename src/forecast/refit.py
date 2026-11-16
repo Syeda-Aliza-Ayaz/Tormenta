@@ -27,6 +27,7 @@ def main() -> dict:
     meta = {k: v for k, v in joblib.load(storm.BUNDLE).items() if k not in ("model", "sklearn_version", "refit")}
     warn = storm.StormClassifier().fit(rows)
     warn.thresholds_ = meta["thresholds"]
+    warn.calibration_ = meta.get("calibration")
     warn.save(**meta, refit="D-63")
     out["storm_warning"] = warn.trained_until_
 

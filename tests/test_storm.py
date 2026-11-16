@@ -53,3 +53,17 @@ def test_committed_bundle_loads():
         pytest.skip("no storm bundle")
     m = storm.StormClassifier.load()
     assert type(m) is storm.StormClassifier and set(m.thresholds_) == set(config.FORECAST_LEADS)
+
+
+def test_calibration_changes_the_chance_but_never_a_warning(model, daily):
+    """D-64: the displayed chance may be corrected, but thresholds pass through the same increasing map."""
+    import copy
+    model = copy.deepcopy(model)
+    model.thresholds_ = {h: 0.2 for h in config.FORECAST_LEADS}
+    origins = daily.index[400:460]
+    raw = model.predict(daily, origins)
+    model.calibration_ = {h: (1.1, -0.4) for h in config.FORECAST_LEADS}
+    cal = model.predict(daily, origins)
+    assert (cal["warning"] == raw["warning"]).all()
+    assert (cal["warning"] == (cal["storm_prob"] >= cal["threshold"])).all()
+    assert (cal["storm_prob"] < cal["storm_prob_raw"]).all()

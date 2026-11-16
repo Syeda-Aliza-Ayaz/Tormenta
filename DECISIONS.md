@@ -990,3 +990,23 @@ Template:
   - 80% ranges on the recent days: HistGB Ap 81–83%, max Kp 75–77%.
 - **Scope of the scores:** the test result (D-62) belongs to the ≤ 2019 models. The refitted models can't be scored
   on 2020–2026 (they learned from it); their evidence is the recent hindcast and the live log.
+
+### D-64 · Storm-risk % recalibrated (display only) · 2026-11-16 · ✅
+- **Problem (D-61):** the classifier's raw probabilities lean high in quiet periods (recent: mean 16.5% vs 11.9%
+  storm days), so the "storm risk %" in the app overstates the chance.
+- **Decision:** per lead day, a logistic correction of the raw probability, sigmoid(a · logit(p) + b), fitted on
+  2008–2016 probabilities of the model fitted ≤ 2007 (the same out-of-sample rows that chose the thresholds; never
+  validation, test or recent days). The correction is increasing (a > 0 is checked), and each threshold is passed
+  through it too, so **every warning stays exactly as before**; only the displayed chance changes. The raw
+  probability is kept as `storm_prob_raw`. The test result (D-62) stays as scored, on raw probabilities.
+- **Rule, written before fitting:** keep the correction only if the Brier score on validation 2017–2019 (model fitted
+  ≤ 2016, correction from 2008–2016) is no worse than with raw probabilities. The recent hindcast and the
+  reliability table are reported beside it.
+- **Result: correction dropped.** Validation Brier 0.0658 corrected vs 0.0656 raw, so the rule fails. Fitted
+  corrections lowered every lead day's chance (a 1.02–1.11, b −0.50 to −0.22).
+  - For the record, on the recent days it would have helped: Brier 0.0938 vs 0.0958, mean chance 11.2% vs 16.6%
+    against 11.6% storm days. The rule was fixed on validation, so that doesn't change the decision.
+  - Reading: the lean depends on the period (none in the 2017–2019 solar minimum, clear in 2008–2016 and recently),
+    so one fixed correction doesn't transfer reliably. The app keeps the raw chance; D-61's caveat stays.
+  - The code path stays (`StormClassifier.calibrate`, `storm_prob_raw`) but is inactive: the bundle has no
+    calibration, so every output equals the raw probability.

@@ -120,8 +120,8 @@ def retrain(daily: pd.DataFrame, state: dict, today: pd.Timestamp) -> dict:
         candidate.save(reason="monitor: degraded twice", holdout_rmse=rmse["candidate"])
         warn = storm.StormClassifier.load()
         refit = storm.StormClassifier().fit(definitive.loc[: hold_start - pd.Timedelta(days=1)])
-        refit.thresholds_ = warn.thresholds_
-        refit.save(thresholds=warn.thresholds_)
+        refit.thresholds_, refit.calibration_ = warn.thresholds_, getattr(warn, "calibration_", None)
+        refit.save(thresholds=warn.thresholds_, calibration=refit.calibration_)
     state["retrains"].append(record)
     return record
 

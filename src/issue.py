@@ -167,7 +167,8 @@ def issue_storm(daily: pd.DataFrame, origin: pd.Timestamp, issued_at: pd.Timesta
     if not storm.BUNDLE.exists():
         return None
     model = storm.StormClassifier.load()
-    fc = model.predict(daily, [origin]).assign(issued_at=issued_at, model_version=f"until {model.trained_until_}")
+    version = f"until {model.trained_until_}" + (", calibrated" if getattr(model, "calibration_", None) else "")
+    fc = model.predict(daily, [origin]).assign(issued_at=issued_at, model_version=version)
     return fc.reindex(columns=STORM_COLUMNS)
 
 
