@@ -946,3 +946,36 @@ Template:
   "storm risk %" reads somewhat high on quiet stretches. A recalibration fitted on 2008–2016 is a separate
   proposal, pending approval.
 
+
+### D-62 · Test period re-scored once for the D-59 models · 2026-11-16 · ✅
+- **Why a second run (`test_eval --force`):** D-59 fixed two bugs and retrained HistGB and the storm classifier.
+  The test score from D-52 describes the previous versions, which are no longer live.
+- **Why it's still a fair test:** the fixes were proposed from a code audit and approved before any test number of
+  the new models existed; tuning, the validation rule and the thresholds used only data up to 2019. Nothing in
+  D-59 was chosen by looking at test results, and no choice will be made from this run.
+- **Rule:** this run is reported as the test result of the current models, whatever it shows. The D-52 numbers
+  stay in git history for comparison.
+- **Result** (2020-01-01 → 2026-06-30, 2,379 issue days, 325 storm days):
+  - HistGB: practically unchanged. Ap RMSE day 1 10.785 → 10.779 (NOAA 10.89), days 2–7 within ±0.01; max Kp
+    within ±0.001. 80% range coverage 80–81% (Ap), 79–80% (max Kp). Every other model identical.
+  - Storm classifier, Heidke skill by lead day 1–7: 0.341 / 0.195 / 0.204 / 0.205 / 0.215 / 0.202 / 0.188
+    (D-52: 0.305 / 0.215 / 0.214 / 0.214 / 0.205 / 0.212 / 0.203). Day 1 improves (153 hits, 221 false alarms
+    vs 174 and 329); the other days move by −0.02 to +0.01. Brier unchanged (0.099–0.111). The changes follow
+    the new thresholds, not new information: as noted in D-59, the best threshold is poorly determined on a flat
+    curve.
+
+### D-63 · Live models refitted on every definitive day up to 2026-06-30 · 2026-11-16 · ✅
+- **Why:** D-27 fixed the live fitting window at 1947–2019 so the test period stayed unseen. The test is now scored
+  (D-62), so holding back 6.5 years of definitive data, the whole of solar cycle 25 so far, only costs the live
+  forecasts. Refitting on all data once the test is done is the standard last step.
+- **Decision:**
+  - `config.PRODUCTION_END = 2026-06-30` (GFZ's last definitive day); `production_window()` fits up to it.
+  - Refitted: HistGB, the storm classifier, ARIMAX and the baselines, with their selected settings unchanged.
+    The storm thresholds and the 80% ranges stay as calibrated (out-of-sample errors from fits ≤ 2007 / ≤ 2016).
+  - `test_eval` now fits its models afresh on ≤ 2019 instead of loading the live bundles, so the test stays
+    reproducible.
+  - The monitor's retrain needs its 6-month holdout to lie after the incumbent's training window. Until GFZ has
+    6 months of definitive data after 2026-06-30, a due retrain is recorded as skipped instead of failing.
+- **Rule, written before the refit:** keep the refit unless, on the recent hindcast (2026-07-01 onwards, unseen by
+  both versions), its mean Ap skill vs the 27-day average over lead days 1–7 is ≤ 0. The ≤ 2019 models are
+  reported beside it either way. This period is short (about 4.5 months), so it's a sanity check, not a contest.
