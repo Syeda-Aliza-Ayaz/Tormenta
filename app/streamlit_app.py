@@ -260,8 +260,8 @@ def storm_row(storm_log: pd.DataFrame, origin: pd.Timestamp, actual: pd.Series =
     if not caption:
         return
     st.caption("A separate storm classifier gives these chances. A warning is raised when the chance passes a "
-               "threshold tuned on 2008–2016 (about 21–29%, not 50%, because storms are rare): on 2017–2019 it caught "
-               "30–46% of storm days at every lead day, where the main forecast caught almost none after day 1.")
+               "threshold tuned on 2008–2016 (about 23–31%, not 50%, because storms are rare): on 2017–2019 it caught "
+               "29–44% of storm days at every lead day, where the main forecast caught almost none after day 1.")
 
 
 def forecast_long(latest: pd.DataFrame, recent: pd.DataFrame, noaa: pd.DataFrame, col: str,
@@ -558,7 +558,8 @@ with score_tab:
         d.metric("Storm warning skill", f"{warn['hss'].min():.2f}–{warn['hss'].max():.2f}" if len(warn) else "—",
                  help="Heidke skill score of the storm warning across lead days 1–7 (0 = no skill).")
         st.caption("Test period 1 Jan 2020 – 30 Jun 2026 (2,379 issue days, 325 storm days), scored once after the "
-                   "headline model was fixed. Models trained on 1947–2019.")
+                   "headline model was fixed, with models trained on 1947–2019. The live models were then refitted on "
+                   "data up to June 2026.")
 
     period_label = st.radio("Period", list(SC_PERIODS), horizontal=True, label_visibility="collapsed")
     period = SC_PERIODS[period_label]
@@ -666,8 +667,8 @@ with try_tab:
         past = get_past_forecasts()
         first, last = past["origin"].min().date(), past["origin"].max().date()
         st.markdown("Pick any issue day from 2020 on. The forecasts shown were made **without seeing that period**: "
-                    "the live models were trained on data up to 2019 and scored once on 2020–2026 (the test run), "
-                    "then on the newest days. Compare them with what actually happened.")
+                    "up to June 2026 they come from models trained on data up to 2019 (the test run, scored once); after that, "
+                    "from the live models, refitted on data up to June 2026. Compare them with what actually happened.")
         day = st.date_input("Issue day (forecast made at the end of this day)",
                             value=pd.Timestamp("2024-05-08").date(), min_value=first, max_value=last)
         origin = pd.Timestamp(day)

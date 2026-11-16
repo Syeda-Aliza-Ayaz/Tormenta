@@ -68,3 +68,17 @@ def test_healthy_nowcaster_is_not_retrained(monkeypatch):
                                                                 "status": "healthy"})
     monkeypatch.setattr(update.train, "fit_production", lambda *a, **k: pytest.fail("must not retrain"))
     assert update.run(dry_run=True)["status"] == "healthy_no_retrain"
+
+
+def test_retrain_is_skipped_while_the_holdout_overlaps_the_incumbent(monkeypatch):
+    """A candidate can only be judged on definitive days after the incumbent's training window (D-63)."""
+    from src.forecast import gbm
+    idx = pd.date_range("2025-01-01", "2026-06-30", freq="D", name="date")
+    daily = pd.DataFrame({"ap": 10.0, "kpmax": 2.0, "f107_obs": 100.0, "gfz_flag": 2, "definitive": True}, index=idx)
+    incumbent = gbm.HistGBDirect()
+    incumbent.trained_until_ = "2026-06-30"
+    monkeypatch.setattr(gbm.HistGBDirect, "load", staticmethod(lambda path=None: incumbent))
+    monkeypatch.setattr(gbm.HistGBDirect, "fit", lambda self, d: pytest.fail("must not fit a candidate"))
+    state = {"retrains": []}
+    record = M.retrain(daily, state, pd.Timestamp("2026-11-16"))
+    assert not record["promoted"] and "skipped" in record and state["retrains"] == [record]

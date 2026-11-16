@@ -8,7 +8,7 @@ rare events instead of 0.5:
   tune      fit on data ≤ 2007, predict 2008–2016, choose per lead day the threshold that maximises the Heidke skill
             score (catches vs false alarms); no resampling, so the probabilities stay honest
   validate  fit ≤ 2016, score 2017–2019 with those thresholds          (never used for any choice)
-  produce   fit the production window (≤ 2019, D-27), save with the thresholds; score the recent hindcast
+  produce   fit the production window (≤ PRODUCTION_END, D-63), save with the thresholds; score the recent hindcast
 
     python -m src.forecast.storm
 """
@@ -136,7 +136,7 @@ def main() -> dict:
     val_table = table(val)
     val_table.to_csv(out / "validation_storm_warning.csv", index=False)
 
-    # 3. production (≤ 2019) + recent hindcast
+    # 3. production (≤ PRODUCTION_END) + recent hindcast
     prod = StormClassifier().fit(production_window(daily))
     prod.thresholds_ = thresholds
     prod.save(thresholds=thresholds)

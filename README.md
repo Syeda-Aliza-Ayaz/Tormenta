@@ -18,7 +18,7 @@ CT-378 Machine Learning, NED University, Fall 2026 · **Alizeh & HRK**.
 
 | Daily Ap, RMSE | day 1 | day 3 | day 7 | skill vs 27-day average (days 1–7) |
 |---|---|---|---|---|
-| **HistGB (headline)** | **10.79** | **11.91** | **12.00** | **+0.100** |
+| **HistGB (headline)** | **10.78** | **11.91** | **12.01** | **+0.100** |
 | NOAA SWPC official forecast | 10.89 | 11.90 | – | +0.134 (days 1–3 only) |
 | ARIMAX | 10.96 | 12.15 | 12.17 | +0.069 |
 | ARIMA | 10.97 | 12.20 | 12.22 | +0.062 |
@@ -28,9 +28,11 @@ CT-378 Machine Learning, NED University, Fall 2026 · **Alizeh & HRK**.
 
 - **HistGB is the best of the project's models at every lead day** and level with NOAA's official forecast on days
   1–3 (ahead on day 1, behind on day 2, tied on day 3).
-- **80% ranges** contain the observed value on 80–82% of days at every lead day.
-- **Storm warning** (separate classifier, thresholds tuned for rare events): Heidke skill 0.20–0.30 at every lead
-  day, catching 29–54% of storm days. The value forecasts alone catch almost none after day 1.
+- **80% ranges** contain the observed value on 80–81% of days at every lead day.
+- **Storm warning** (separate classifier, thresholds tuned for rare events): Heidke skill 0.19–0.34 at every lead
+  day, catching 24–47% of storm days. The value forecasts alone catch almost none after day 1.
+- These are the scores of the models fitted up to 2019 (D-62). After the test, the live models were refitted on
+  data up to June 2026 (D-63); their evidence is the recent hindcast and the live log.
 - **Limit:** storms caused by sudden solar eruptions (e.g. May 2024) cannot be foreseen from past values alone.
 - Model choice used validation 2017–2019 only, by a rule fixed in advance; ARIMA, SARIMA and Chronos did not pass it
   and are not issued live. Per-day storm tables: [`reports/forecast/storm_tables.md`](reports/forecast/storm_tables.md).
@@ -41,7 +43,7 @@ CT-378 Machine Learning, NED University, Fall 2026 · **Alizeh & HRK**.
 ```
 GFZ daily Kp/Ap/F10.7 (1932→) ─► src/daily.py ─► src/forecast/features.py (causal: lags, 27/54/81-day recurrence,
                                                    F10.7, season)
-   train 1947-06 → 2016 · validation 2017–2019 · test 2020 → 2026-06 (once) · live models refit on 1947–2019
+   train 1947-06 → 2016 · validation 2017–2019 · test 2020 → 2026-06 (once) · live models refit on 1947 → 2026-06
    ├─► HistGB (14 direct models) · ARIMAX · storm classifier (7) · 80% ranges   ─► models/forecast/
    └─► daily GitHub Actions job (src/issue.py) ─► forecasts/log.csv (append-only) + storm_log.csv + scores
                                                 ─► Streamlit · Flask · HF Space · weekly health check
@@ -135,6 +137,7 @@ python -m src.forecast.gbm --reuse-params    &:: retrain HistGB with the tuned s
 python -m src.forecast.arima --reuse-settings
 python -m src.forecast.storm                 &:: storm classifier and its thresholds
 python -m src.forecast.intervals             &:: 80% ranges
+python -m src.forecast.refit                 &:: refit the live models up to PRODUCTION_END (D-63)
 python -m src.issue                          &:: what the daily job runs
 python -m src.forecast.monitor               &:: weekly health check (add --act to allow a retrain)
 python -m src.forecast.figures ; python -m src.forecast.tables

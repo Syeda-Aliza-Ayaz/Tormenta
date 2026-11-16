@@ -1,7 +1,7 @@
 """Files the app's "Try it yourself" panel reads (no model training, no network):
 
   forecasts/past_forecasts.csv.gz   out-of-sample forecasts for every issue day from 2020-01-01: the one-time test
-                                    run (models fitted ≤ 2019, D-52) followed by the recent hindcast (D-43). The
+                                    run (models fitted ≤ 2019, D-62) followed by the recent hindcast of the live models (D-43, D-63). The
                                     storm classifier's chances are stored as model "storm_warning".
   forecasts/recent.csv              observed Ap / max Kp / F10.7 since RECENT_START (also refreshed by the daily job)
 

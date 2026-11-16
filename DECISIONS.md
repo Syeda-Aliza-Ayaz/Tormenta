@@ -301,6 +301,7 @@ Template:
   - NOAA failures are only warnings, because NOAA is a benchmark.
 
 ### D-27 · Live models are fitted on a fixed window (train + validation) · 2026-11-10 · ✅
+- **Superseded by D-63** (2026-11-16): after the test was scored, the window was extended to 2026-06-30.
 - **Decision:** the daily job fits each model on definitive days from 1947-06-01 to 2019-12-31, the same data
   every day.
 - **Why:**
@@ -979,3 +980,13 @@ Template:
 - **Rule, written before the refit:** keep the refit unless, on the recent hindcast (2026-07-01 onwards, unseen by
   both versions), its mean Ap skill vs the 27-day average over lead days 1–7 is ≤ 0. The ≤ 2019 models are
   reported beside it either way. This period is short (about 4.5 months), so it's a sanity check, not a contest.
+- **Result** (`python -m src.forecast.refit`; recent hindcast 2026-07-01 → 2026-11-15, 144 issue days, both
+  versions on the same days):
+  - HistGB mean Ap skill vs the 27-day average: **+0.083** refitted vs +0.075 for the ≤ 2019 model → **rule passed,
+    refit kept.** Ap RMSE lower at every lead day (day 1 8.94 → 8.89); max Kp skill +0.135 vs +0.136.
+  - Storm classifier: mean Heidke skill 0.263 vs 0.219 (40 hits / 75 false alarms vs 34 / 74); Brier 0.0958 vs
+    0.0961. Few storm days (16 per lead), so this is indicative only.
+  - ARIMAX: practically unchanged (Ap skill +0.001 vs 0.000).
+  - 80% ranges on the recent days: HistGB Ap 81–83%, max Kp 75–77%.
+- **Scope of the scores:** the test result (D-62) belongs to the ≤ 2019 models. The refitted models can't be scored
+  on 2020–2026 (they learned from it); their evidence is the recent hindcast and the live log.

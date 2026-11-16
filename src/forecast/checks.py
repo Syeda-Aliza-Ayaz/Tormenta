@@ -6,7 +6,7 @@
                live issue day, the production models forecast twice: from those inputs, and from the same days as
                GFZ publishes them now. The differences are reported per model and lead day, beside the size of the
                input revisions. Until GFZ marks those days definitive this measures the early revisions only.
-  reliability  The storm classifier learned on 1947–2019 (22% storm days); recent years have fewer storms. Its
+  reliability  The storm classifier learned on years with 22% storm days; recent years have fewer storms. Its
                probabilities are grouped into bins and compared with how often a storm happened, on periods it
                never trained on: 2008–2016 (fitted ≤ 2007), validation 2017–2019 (fitted ≤ 2016) and the recent
                hindcast (production model). The test period is not used.

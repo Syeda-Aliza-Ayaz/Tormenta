@@ -37,8 +37,8 @@ def choose_origin(daily: pd.DataFrame, today: pd.Timestamp):
 
 
 def production_window(daily: pd.DataFrame) -> pd.DataFrame:
-    """Fixed fitting window for the live models: train + validation (everything before the test years)."""
-    return backtest.training_rows(daily, pd.Timestamp(f"{config.TEST_START_YEAR}-01-01"))
+    """Fixed fitting window for the live models: every definitive day up to PRODUCTION_END (DECISIONS D-63)."""
+    return backtest.training_rows(daily, pd.Timestamp(config.PRODUCTION_END) + pd.Timedelta(days=1))
 
 
 def issue(daily: pd.DataFrame, origin: pd.Timestamp, models, issued_at: pd.Timestamp) -> pd.DataFrame:

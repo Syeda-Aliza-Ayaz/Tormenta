@@ -7,7 +7,7 @@ The test period (2020 → last definitive day) is scored once per model version,
 day 6 — not from this command (DECISIONS D-08).
 
 "recent" (DECISIONS D-43) covers the days GFZ has published since its last definitive day (provisional / nowcast
-values): in neither validation nor test, and after every live model's training data (≤ 2019). It runs the
+values): in neither validation nor test, and after every live model's training data (≤ PRODUCTION_END, D-63). It runs the
 production models exactly as the daily job does, issued in hindsight but from data up to each origin only. It gives
 statistics now; the live log stays the proof that forecasts were written before their days.
 """

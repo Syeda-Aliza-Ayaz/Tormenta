@@ -133,6 +133,9 @@ FORECAST_TRAIN_START = "1947-06-01"
 # Days of history read before an issue day (or before FORECAST_TRAIN_START) for the lag and rolling-window
 # features: 81 + 27 days at most, rounded up (DECISIONS D-59)
 FORECAST_HISTORY_DAYS = 130
+# Live models are fitted on every definitive day up to here, after the test period was scored with models fitted
+# up to the end of validation (DECISIONS D-27, D-63)
+PRODUCTION_END = "2026-06-30"
 FORECAST_REPORTS_DIR = REPORTS_DIR / "forecast"
 
 # NOAA SWPC forecasts: benchmark only, never model inputs (DECISIONS D-06)
