@@ -9,6 +9,15 @@
       "floor": -0.2577,
       "status": "insufficient_data",
       "retrain_due": false
+    },
+    {
+      "checked_on": "2026-11-16",
+      "window_end": "2026-11-15",
+      "skill": null,
+      "pairs": 12,
+      "floor": -0.2577,
+      "status": "insufficient_data",
+      "retrain_due": false
     }
   ],
   "retrains": []
