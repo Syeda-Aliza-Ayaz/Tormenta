@@ -703,6 +703,8 @@ Template:
   - The app shows "storm risk %" per day, with ⚠️ above the threshold.
 - **Alternatives considered:**
   - Sample weighting (the nowcaster's `1 + Kp/3` didn't help there).
+- **Addendum (D-61):** the raw probabilities lean high in quiet periods (training has more storm days than recent
+  years). Warnings are unaffected, because the thresholds were chosen on those same raw probabilities.
   - Oversampling (distorts the probabilities).
   - Thresholding the regression forecast (no probability to tune).
 - **Result / consequence** (Heidke skill):
@@ -888,3 +890,59 @@ Template:
 - **Decision:** leave the log as it is. It is append-only (D-07), and every row records its own `issued_at`, so the
   timing is visible. From origin 12 Nov on, all six models are issued together.
 - **Consequence:** live comparisons of ARIMAX for origin 11 Nov should note its later issue time.
+
+### D-59 · Tuning folds with a gap; features built on the full history (bug fixes) · 2026-11-16 · ✅
+- **Problem 1 (tuning, introduced in the day-3 commit):** HistGB's `TimeSeriesSplit` had no gap. A row is an issue
+  day D with a target on D+h (h ≤ 7), so the last training rows of each fold had targets inside the next
+  validation fold. The CV scores were slightly optimistic. Validation and test were never affected.
+- **Problem 2 (features, a side effect of D-19):** `training_rows()` cut the history at 1947-06-01 *before* the
+  features were built, so 80 of 26,512 training days had empty lag or long-window features although GFZ data exists
+  from 1932.
+- **Decision:**
+  - `gbm.cv_folds()` uses `gap = max lead (7)`.
+  - `training_rows()` now prepends `FORECAST_HISTORY_DAYS` (130) days flagged `lead_in`. HistGB and the storm
+    classifier use them for features only. `base.sample_rows()` drops them for every model that learns from the rows
+    themselves (climatology, the ARIMA family), so D-19's common start date is kept.
+  - Tests: no fold's training targets reach its validation fold; the first training day's features equal those
+    built from the full history.
+- **Process:** proposed in the audit notes, approved by HRK, done on the `fixes` branch; one retraining run.
+- **Result:**
+  - Tuning: every CV score rises by 0.01–0.06% (the removed optimism); **the same settings are chosen**, raw Ap target.
+  - HistGB validation: mean Ap skill vs the 27-day average +0.177, **PASS**, unchanged. RMSE per lead day moves by
+    at most ±0.006 (Ap) and ±0.004 (max Kp), in both directions.
+  - Storm classifier: thresholds now 0.26 / 0.25 / 0.29 / 0.23 / 0.24 / 0.23 / 0.31 (were 0.21–0.29). The
+    Heidke-vs-threshold curve is flat near its peak, so small probability changes move the best threshold.
+    Validation Heidke skill is equal or higher at every lead day (day 1: 0.365 → 0.395); Brier unchanged.
+  - Other models: identical validation results, as intended.
+  - 80% ranges recalibrated; recent coverage unchanged (Ap 81–83%, max Kp 76–78%).
+- **Not done:** the test period was scored once with the previous HistGB and classifier (D-52). It is not re-scored
+  here; the app's past forecasts show the test run (previous version) followed by the recent hindcast (this
+  version).
+
+### D-60 · Measured: preliminary inputs vs revised inputs (PLAN.md §3) · 2026-11-16 · ✅
+- **Question:** live forecasts read GFZ's newest, still preliminary values; the models trained on definitive ones.
+  How much does that change a forecast?
+- **Method:** `python -m src.forecast.checks skew`. The daily job commits the observations it used
+  (`forecasts/recent.csv`), so git history holds each day's inputs as first published. For each live issue day,
+  the production models forecast from those inputs and from the same days as GFZ publishes them now.
+- **Result (5 issue days, 10–14 Nov):** one input value revised (a max Kp by ⅓). HistGB forecasts change by at most
+  0.12 Ap and 0.04 max Kp; storm probability by at most 0.004; ARIMAX max Kp by at most 0.18. Negligible next to
+  the models' errors (Ap RMSE about 9 on recent days).
+- **Limit:** this covers the early revisions (nowcast → provisional) only. GFZ is definitive to 2026-06-30, so the
+  final revision of the live period can be measured only when those days become definitive; the same command
+  will then measure it.
+
+### D-61 · Measured: storm probability calibration (prior shift, D-48) · 2026-11-16 · ✅
+- **Question:** training has 22% storm days, recent years 8–14%. Do the raw probabilities lean high?
+- **Method:** `python -m src.forecast.checks reliability`: probabilities grouped in bins and compared with the
+  observed storm frequency, on 2008–2016 (fit ≤ 2007), validation 2017–2019 (fit ≤ 2016) and the recent hindcast
+  (production model). The test period is not used.
+- **Result:**
+  - Validation is close to calibrated (mean probability 0.093 vs 8.3% storm days).
+  - 2008–2016 and recent lean high: mean probability 0.138 vs 9.3%, and 0.165 vs 11.9%. In the 10–30% bins
+    storms happen about two thirds as often as forecast (e.g. recent 10–20%: forecast 14%, observed 11%).
+  - Above 40% the probabilities are about right.
+- **Consequence:** warnings are unaffected (thresholds chosen on these same raw probabilities). The displayed
+  "storm risk %" reads somewhat high on quiet stretches. A recalibration fitted on 2008–2016 is a separate
+  proposal, pending approval.
+

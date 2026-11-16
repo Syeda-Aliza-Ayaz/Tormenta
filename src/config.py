@@ -130,6 +130,9 @@ RECURRENCE_DAYS = 27                             # solar rotation seen from Eart
 # Same year boundaries as the nowcaster; history starts once the 81-day trailing F10.7 mean exists
 # (GFZ F10.7 starts 1947-02-14 → +81 d), so every model trains on the same days (DECISIONS D-19)
 FORECAST_TRAIN_START = "1947-06-01"
+# Days of history read before an issue day (or before FORECAST_TRAIN_START) for the lag and rolling-window
+# features: 81 + 27 days at most, rounded up (DECISIONS D-59)
+FORECAST_HISTORY_DAYS = 130
 FORECAST_REPORTS_DIR = REPORTS_DIR / "forecast"
 
 # NOAA SWPC forecasts: benchmark only, never model inputs (DECISIONS D-06)

@@ -138,6 +138,8 @@ python -m src.forecast.intervals             &:: 80% ranges
 python -m src.issue                          &:: what the daily job runs
 python -m src.forecast.monitor               &:: weekly health check (add --act to allow a retrain)
 python -m src.forecast.figures ; python -m src.forecast.tables
+python -m src.forecast.checks skew          &:: preliminary vs revised inputs (D-60)
+python -m src.forecast.checks reliability   &:: storm probability vs observed frequency (D-61)
 ```
 `python -m src.forecast.test_eval` scored the test period once; it refuses to run again without `--force`.
 

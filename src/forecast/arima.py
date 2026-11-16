@@ -24,7 +24,7 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 from src import config
 from src.features import mask_flares
-from src.forecast.base import Forecaster, as_origins, stack
+from src.forecast.base import Forecaster, as_origins, sample_rows, stack
 
 BUNDLE_DIR = config.MODELS_DIR / "forecast"
 SETTINGS_JSON = BUNDLE_DIR / "arima_settings.json"
@@ -79,7 +79,7 @@ class StateSpaceForecaster(Forecaster):
         for t in config.FORECAST_TARGETS:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")              # convergence chatter; checked via AIC and backtest
-                res = self._model(daily, t).fit(disp=False, maxiter=200)
+                res = self._model(sample_rows(daily), t).fit(disp=False, maxiter=200)
             self.params_[t] = res.params
             self.aic_ = getattr(self, "aic_", {}) | {t: float(res.aic)}
         self.trained_until_ = str(daily.index.max().date())

@@ -32,6 +32,8 @@ NAME = "storm_warning"
 def _xy(daily: pd.DataFrame, h: int):
     X, kp = F.features(daily, h), F.targets(daily, h)["kpmax"]
     keep = kp.notna() & X[["ap_lag0", "kpmax_lag0"]].notna().all(axis=1)
+    if "lead_in" in daily:                                 # history for the features only (DECISIONS D-59)
+        keep &= ~daily["lead_in"]
     return X[keep], (kp[keep] >= config.STORM_THRESHOLD).astype(int)
 
 
@@ -58,7 +60,7 @@ class StormClassifier:
 
     def predict(self, daily: pd.DataFrame, origins) -> pd.DataFrame:
         origins = pd.DatetimeIndex(origins)
-        window = daily.loc[origins.min() - pd.Timedelta(days=130): origins.max()]
+        window = daily.loc[origins.min() - pd.Timedelta(days=config.FORECAST_HISTORY_DAYS): origins.max()]
         parts = []
         for h in config.FORECAST_LEADS:
             X = F.features(window, h).reindex(origins)[self.columns_]

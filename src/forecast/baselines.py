@@ -8,7 +8,7 @@
 import pandas as pd
 
 from src import config
-from src.forecast.base import Forecaster, as_origins, stack
+from src.forecast.base import Forecaster, as_origins, sample_rows, stack
 
 TARGETS = config.FORECAST_TARGETS
 
@@ -47,6 +47,7 @@ class Climatology(Forecaster):
     name = "climatology"
 
     def fit(self, daily):
+        daily = sample_rows(daily)
         self.monthly_ = daily[TARGETS].groupby(daily.index.month).mean()
         return self
 

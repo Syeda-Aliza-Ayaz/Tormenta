@@ -10,9 +10,9 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
-| **Storm warning (classifier)** | 42 | 49 | 66 | 938 | 46% | 61% | 0.36 |
+| **Storm warning (classifier)** | 40 | 51 | 49 | 955 | 44% | 55% | 0.39 |
 | persistence | 35 | 56 | 56 | 948 | 38% | 62% | 0.33 |
-| HistGB | 17 | 74 | 13 | 991 | 19% | 43% | 0.25 |
+| HistGB | 17 | 74 | 12 | 992 | 19% | 41% | 0.25 |
 | recurrence | 24 | 67 | 71 | 933 | 26% | 75% | 0.19 |
 | ARIMAX | 12 | 79 | 9 | 995 | 13% | 43% | 0.19 |
 | SARIMA | 9 | 82 | 5 | 999 | 10% | 36% | 0.15 |
@@ -25,7 +25,7 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
-| **Storm warning (classifier)** | 34 | 57 | 60 | 944 | 37% | 64% | 0.31 |
+| **Storm warning (classifier)** | 35 | 56 | 60 | 944 | 38% | 63% | 0.32 |
 | recurrence | 24 | 67 | 71 | 933 | 26% | 75% | 0.19 |
 | persistence | 14 | 77 | 77 | 927 | 15% | 85% | 0.08 |
 | HistGB | 1 | 90 | 6 | 998 | 1% | 86% | 0.01 |
@@ -40,22 +40,22 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
-| **Storm warning (classifier)** | 35 | 56 | 59 | 945 | 38% | 63% | 0.32 |
+| **Storm warning (classifier)** | 31 | 60 | 45 | 959 | 34% | 59% | 0.32 |
 | recurrence | 24 | 67 | 71 | 933 | 26% | 75% | 0.19 |
 | persistence | 12 | 79 | 79 | 925 | 13% | 87% | 0.05 |
+| HistGB | 1 | 90 | 2 | 1002 | 1% | 67% | 0.02 |
 | ARIMA | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
 | ARIMAX | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
 | Chronos | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
 | climatology | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
 | SARIMA | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
 | 27-day average | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
-| HistGB | 0 | 91 | 2 | 1002 | 0% | 100% | 0.00 |
 
 ### Day 4
 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
-| **Storm warning (classifier)** | 34 | 57 | 72 | 932 | 37% | 68% | 0.28 |
+| **Storm warning (classifier)** | 35 | 56 | 75 | 929 | 38% | 68% | 0.28 |
 | recurrence | 24 | 67 | 71 | 933 | 26% | 75% | 0.19 |
 | persistence | 10 | 81 | 81 | 923 | 11% | 89% | 0.03 |
 | HistGB | 1 | 90 | 0 | 1004 | 1% | 0% | 0.02 |
@@ -70,7 +70,7 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
-| **Storm warning (classifier)** | 35 | 56 | 73 | 931 | 38% | 68% | 0.29 |
+| **Storm warning (classifier)** | 36 | 55 | 73 | 931 | 40% | 67% | 0.30 |
 | recurrence | 24 | 67 | 71 | 933 | 26% | 75% | 0.19 |
 | HistGB | 1 | 90 | 0 | 1004 | 1% | 0% | 0.02 |
 | persistence | 9 | 82 | 82 | 922 | 10% | 90% | 0.02 |
@@ -85,13 +85,13 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
-| **Storm warning (classifier)** | 37 | 54 | 66 | 938 | 41% | 64% | 0.32 |
+| **Storm warning (classifier)** | 39 | 52 | 72 | 932 | 43% | 65% | 0.32 |
 | recurrence | 24 | 67 | 71 | 933 | 26% | 75% | 0.19 |
+| HistGB | 1 | 90 | 0 | 1004 | 1% | 0% | 0.02 |
 | ARIMA | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
 | ARIMAX | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
 | Chronos | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
 | climatology | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
-| HistGB | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
 | SARIMA | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
 | 27-day average | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
 | persistence | 6 | 85 | 86 | 918 | 7% | 93% | -0.02 |
@@ -100,7 +100,7 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
-| **Storm warning (classifier)** | 27 | 64 | 41 | 963 | 30% | 60% | 0.29 |
+| **Storm warning (classifier)** | 26 | 65 | 33 | 971 | 29% | 56% | 0.30 |
 | recurrence | 24 | 67 | 71 | 933 | 26% | 75% | 0.19 |
 | HistGB | 1 | 90 | 0 | 1004 | 1% | 0% | 0.02 |
 | ARIMA | 0 | 91 | 0 | 1004 | 0% | — | 0.00 |
@@ -119,7 +119,7 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
-| **Storm warning (classifier)** | 9 | 7 | 14 | 105 | 56% | 61% | 0.37 |
+| **Storm warning (classifier)** | 8 | 8 | 10 | 109 | 50% | 56% | 0.39 |
 | recurrence | 5 | 11 | 11 | 108 | 31% | 69% | 0.22 |
 | persistence | 5 | 11 | 12 | 107 | 31% | 71% | 0.21 |
 | HistGB | 2 | 14 | 4 | 115 | 12% | 67% | 0.13 |
@@ -132,8 +132,8 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
-| **Storm warning (classifier)** | 6 | 10 | 11 | 108 | 38% | 65% | 0.28 |
-| recurrence | 5 | 11 | 11 | 108 | 31% | 69% | 0.22 |
+| **recurrence** | 5 | 11 | 11 | 108 | 31% | 69% | 0.22 |
+| Storm warning (classifier) | 4 | 12 | 9 | 110 | 25% | 69% | 0.19 |
 | ARIMAX | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
 | climatology | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
 | HistGB | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
@@ -145,7 +145,7 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
-| **Storm warning (classifier)** | 5 | 11 | 9 | 110 | 31% | 64% | 0.25 |
+| **Storm warning (classifier)** | 4 | 12 | 6 | 113 | 25% | 60% | 0.24 |
 | recurrence | 5 | 11 | 11 | 108 | 31% | 69% | 0.22 |
 | ARIMAX | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
 | climatology | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
@@ -159,7 +159,7 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
 | **recurrence** | 5 | 11 | 11 | 108 | 31% | 69% | 0.22 |
-| Storm warning (classifier) | 3 | 13 | 12 | 107 | 19% | 80% | 0.09 |
+| Storm warning (classifier) | 5 | 11 | 14 | 105 | 31% | 74% | 0.18 |
 | ARIMAX | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
 | climatology | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
 | HistGB | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
@@ -172,7 +172,7 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
 | **recurrence** | 5 | 11 | 11 | 108 | 31% | 69% | 0.22 |
-| Storm warning (classifier) | 3 | 13 | 10 | 109 | 19% | 77% | 0.11 |
+| Storm warning (classifier) | 4 | 12 | 11 | 108 | 25% | 73% | 0.16 |
 | ARIMAX | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
 | climatology | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
 | HistGB | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
@@ -185,7 +185,7 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
 | **recurrence** | 5 | 11 | 11 | 108 | 31% | 69% | 0.22 |
-| Storm warning (classifier) | 5 | 11 | 14 | 105 | 31% | 74% | 0.18 |
+| Storm warning (classifier) | 6 | 10 | 18 | 101 | 38% | 75% | 0.18 |
 | persistence | 3 | 13 | 13 | 106 | 19% | 81% | 0.08 |
 | ARIMAX | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
 | climatology | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
@@ -198,7 +198,7 @@ Storm day = daily max Kp ≥ 5− (G1+). Bold = best Heidke skill for that day. 
 | Model | Caught | Missed | False alarm | Correct quiet | Detection rate | False-alarm ratio | Heidke skill |
 |---|---|---|---|---|---|---|---|
 | **recurrence** | 5 | 11 | 11 | 108 | 31% | 69% | 0.22 |
-| Storm warning (classifier) | 3 | 13 | 7 | 112 | 19% | 70% | 0.15 |
+| Storm warning (classifier) | 3 | 13 | 6 | 113 | 19% | 67% | 0.17 |
 | persistence | 2 | 14 | 14 | 105 | 12% | 88% | 0.01 |
 | ARIMAX | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
 | climatology | 0 | 16 | 0 | 119 | 0% | — | 0.00 |
