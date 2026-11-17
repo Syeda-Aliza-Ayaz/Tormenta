@@ -97,7 +97,8 @@ src/              config, ingest (OMNI, GFZ, live SWPC, NOAA forecasts), preproc
 src/forecast/     features, baselines, gbm (HistGB), arima, chronos_model, intervals, storm, monitor, test_eval,
                   figures, tables, app_data, registry
 notebooks/        01 preprocessing · 02 EDA · 03 modelling · 04 v1→v2 · 05 final round · 06 live nowcast
-app/              streamlit_app.py · flask_app/ · hf_space/ (model card, in-browser Space page, sync_hf.py, Gradio app)
+app/              streamlit_app.py (entry) · tormenta_ui/ (theme, hero scenes, pages, charts) · static/ (images,
+                  cursors) · flask_app/ · hf_space/ (model card, in-browser Space page, sync_hf.py, Gradio app)
 models/           current.joblib (nowcaster) + versions + metrics_history.json · forecast/ (forecaster models)
 forecasts/        live forecast log (append-only), storm log, scores, NOAA copies, monitor state, app data
 reports/          nowcaster figures/ and metrics/ (v1, v2 archives) · forecast/ (metrics, figures, storm tables)
@@ -206,7 +207,26 @@ Pyodide).
   `reports/figures`, `reports/v1/figures` and `reports/v2/figures` at the same relative paths.
 - `TORMENTA_BUILD_PLAN.md`: the nowcaster's original plan, decision log and checklist.
 
-## Data credits
+## The dashboard
+Six pages, each with its own link (`?page=overview|forecast|explore|scorecard|nowcast|method`, plus `&theme=dark`
+or `light`): Overview (live conditions, the week ahead), Forecast, Explore (replay any issue day since 2020, or edit
+the recent days), Scorecard, Nowcast (live Kp and the what-if explorer) and Method.
+- Two themes: Carbon & Ice (dark) and Flight Manual (light). Every page opens with an animated night-sky hero; the
+  Overview's aurora follows the live Kp level, red tops appearing in storms.
+- Images are served from `app/static` (`server.enableStaticServing` in `.streamlit/config.toml`); the in-browser
+  Space loads them from GitHub instead.
+- `tests/test_dashboard.py` renders every offline page in both themes and fails on any exception.
+
+## Data and image credits
 NASA/GSFC Space Physics Data Facility OMNIWeb (OMNI2) · GFZ German Research Centre for Geosciences, Kp, Ap and
 F10.7 (CC BY 4.0) · NOAA Space Weather Prediction Center real-time data and forecasts · Amazon Chronos-Bolt
 (Apache 2.0). Not an operational warning service.
+
+| Image (`app/static`) | Credit | Licence |
+|---|---|---|
+| `milkyway-eso0932a.jpg`, page background | ESO/S. Brunier ([eso0932a](https://www.eso.org/public/images/eso0932a/)), resized | CC BY 4.0 |
+| `blackhole-pia25440.jpg`, Method hero | NASA/JPL-Caltech, "A Black Hole Destroys a Star" ([PIA25440](https://photojournal.jpl.nasa.gov/catalog/PIA25440)), mirrored and resized | Free use with credit (JPL image policy) |
+| `earth-epic.webp`, Nowcast hero | NASA EPIC Team, DSCOVR EPIC images of 14 Nov 2026 ([epic.gsfc.nasa.gov](https://epic.gsfc.nasa.gov)), blended into a loop | Public domain (NASA) |
+
+The aurora, solar flare, nebula and dust scenes, the icons and the cursors are drawn in code for this project. Fonts:
+IBM Plex Sans and IBM Plex Mono (SIL Open Font License), loaded from Google Fonts.

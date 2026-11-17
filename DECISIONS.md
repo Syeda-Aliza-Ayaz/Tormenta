@@ -1010,3 +1010,22 @@ Template:
     so one fixed correction doesn't transfer reliably. The app keeps the raw chance; D-61's caveat stays.
   - The code path stays (`StormClassifier.calibrate`, `storm_prob_raw`) but is inactive: the bundle has no
     calibration, so every output equals the raw probability.
+
+### D-65 · Dashboard redesign · 2026-11-17 · ✅
+- **Why:** the old dashboard was Streamlit's default look with emoji labels; HRK asked for a rebuild that reads as
+  designer-made, previewed as HTML before any code, then built and checked on localhost before merging.
+- **Decision:**
+  - Designed first on a canvas (palettes, then every screen), approved, then built in Streamlit (restyled, not
+    replaced, so the Streamlit Cloud app and the in-browser Space keep working).
+  - Themes: Carbon & Ice (dark, default) and Flight Manual (light), chosen by HRK; one primary colour for data and
+    controls, one alert colour reserved for warnings and always paired with a text label.
+  - Six pages linked through the URL (`?page=…&theme=…`): Overview, Forecast, Explore, Scorecard, Nowcast, Method.
+  - Animated night-sky heroes: the Overview aurora follows the live Kp level; other pages use a solar flare, a real
+    NASA EPIC Earth loop, a nebula, interplanetary dust and a NASA/JPL black-hole illustration. Real images are
+    credited in the README with their licences.
+  - Custom cursor and trailing ring, scrollbar and hover states; reduced-motion users get no animation; a phone
+    layout below 720 px.
+  - No logic changed: the pages call the same data loaders and models as before (moved to `app/tormenta_ui`).
+- **Checks:** every offline page renders in both themes without an exception (`tests/test_dashboard.py`); the
+  Explore edit mode and the Nowcast what-if were exercised headlessly; each page was screenshot at desktop width and
+  the Overview at phone width.

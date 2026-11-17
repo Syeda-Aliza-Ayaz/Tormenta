@@ -45,7 +45,8 @@ def test_space_build_has_every_file_the_app_loads(sync_hf, portable, tmp_path):
     page = (tmp_path / "index.html").read_text(encoding="utf-8")
     listed = json.loads(re.search(r"Object\.fromEntries\((\[.*?\])\.map", page).group(1))
     assert set(listed) == set(files) - {"index.html", "README.md"}
-    app = (config.ROOT / "app" / "streamlit_app.py").read_text(encoding="utf-8")
+    app = "".join(p.read_text(encoding="utf-8") for p in [config.ROOT / "app" / "streamlit_app.py",
+                                                          *sorted((config.ROOT / "app" / "tormenta_ui").glob("*.py"))])
     loaded = re.findall(r'ROOT / "([^"]+)" / "([^"]+)"(?: / "([^"]+)")?', app)
     for parts in loaded:
         assert "/".join(p for p in parts if p) in listed, parts
@@ -64,7 +65,8 @@ def _top_level_imports(path) -> set:
 
 def test_browser_app_needs_no_heavy_packages():
     """Everything the dashboard imports at module level must work without scikit-learn/matplotlib/joblib."""
-    modules = ["app/streamlit_app.py", "src/config.py", "src/features.py", "src/predict.py", "src/portable.py",
+    modules = ["app/streamlit_app.py", *(f"app/tormenta_ui/{p.name}" for p in (config.ROOT / "app" / "tormenta_ui").glob("*.py")),
+               "src/config.py", "src/features.py", "src/predict.py", "src/portable.py",
                "src/scoring.py", "src/ingest/fetch_live.py"]
     for rel in modules:
         assert not _top_level_imports(config.ROOT / rel) & HEAVY, rel
