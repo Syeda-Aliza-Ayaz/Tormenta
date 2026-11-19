@@ -1029,3 +1029,138 @@ Template:
 - **Checks:** every offline page renders in both themes without an exception (`tests/test_dashboard.py`); the
   Explore edit mode and the Nowcast what-if were exercised headlessly; each page was screenshot at desktop width and
   the Overview at phone width.
+
+### D-66 · Training start year: keep 1947 · 2026-11-18 · ❌ (shorter history rejected)
+- **Question:** solar cycle 25 is quieter than the mid-century cycles (training 22% storm days, recent years 8–14%).
+  Does a shorter, more recent training history fit the present better?
+- **Method:** `python -m src.forecast.start_year`. Start years 1947, 1980, 1995 and 2010, all trained to 2022-12-31.
+  Settings and storm thresholds chosen inside each variant's own years (5 time-ordered folds, 7-day gap), scored on
+  2023-01-01 → last definitive day. No live file touched.
+- **Result:**
+
+  | Start | Train days | Ap skill 1–7 | Max Kp skill 1–7 | Storm Heidke day 1 | Heidke mean 1–7 |
+  |---|---|---|---|---|---|
+  | **1947** | 27,608 | **0.103** | **0.095** | **0.367** | **0.211** |
+  | 1980 | 15,706 | 0.094 | 0.093 | 0.368 | 0.186 |
+  | 1995 | 10,227 | 0.095 | 0.094 | 0.344 | 0.134 |
+  | 2010 | 4,748 | 0.049 | 0.046 | 0.272 | 0.095 |
+
+  Every shorter history is worse, and 2010 loses half the skill. Storms are rare, so the model needs every cycle's
+  storms. The base-rate difference is already handled by the thresholds.
+- **Decision:** no change; training keeps starting at 1947-06-01 (D-19).
+- **Caveat:** the scoring window 2023 → is inside the test period, which D-62 had already scored. This run only
+  confirmed the existing setting, so no test number was used to adopt anything. Later candidate changes are judged
+  on 2011–2019 only (D-68).
+
+### D-67 · CME catalogue features (NASA DONKI) · 2026-11-18 · ❌
+- **Question:** coronal mass ejections cause the largest storms, 1–4 days after eruption. Do CME catalogue features
+  add skill for lead days 1–3?
+- **Data:** NASA DONKI through api.nasa.gov (`python -m src.ingest.fetch_donki`, key from `NASA_API_KEY`, never
+  stored). Only information available at issue time is used: an entry counts from its `submissionTime`, and an
+  arrival prediction from its model run's completion time. DONKI is kept in real time from April 2014 only, so
+  the features are blank before then. Raw CME counts are excluded because logging practice changed after 2021.
+- **Features:** fast CMEs (≥ 800 km/s) and the fastest speed in the last 3 days, Earth-facing wide CMEs, and
+  WSA-ENLIL predicted arrivals (on the target day, within ±1 day, highest predicted Kp).
+- **Result:**
+  - First run (`cme_experiment.py`, trained ≤ 2022, scored 2023 →): Ap skill 0.103 → 0.108, storm Heidke day 1
+    0.367 → 0.398, mean Heidke 1–7 0.211 → 0.180.
+  - Yearly validation (D-68, 2015–2019): Ap skill +0.0005, max Kp +0.0006, but storm Heidke day 1
+    0.369 → 0.312 and days 1–3 −0.0096. It meets the D-68 rule only by 0.0004 on the Heidke condition.
+  - Added to the best solar-wind variant (D-68, `sw_rec_poisson_cme`): Heidke days 1–3 −0.023, **fails the rule**.
+- **Decision:** not adopted. The gain is within noise, the two evaluations disagree on its sign for storms, and it
+  would add a keyed external dependency to the daily job.
+- **Caveat:** like D-66, the first run scored on 2023 →, inside the test period; it led to no adoption.
+- **Kept:** `fetch_donki.py` and `cme_experiment.py` as the record. `data/raw/donki_cme/` stays untracked.
+
+### D-68 · Yearly validation of forecaster changes; solar wind + 27-day echo + Poisson loss passes · 2026-11-19 · ⏳
+- **Why a new harness:** D-66 and D-67 scored on 2023 →, which is inside the spent test period, and one
+  validation block (2017–2019, solar minimum) is too short to judge small changes.
+- **Method:** `python -m src.forecast.validate_yearly`. For each year 2011–2019: train on definitive days whose
+  target is before 1 January of that year, then forecast the whole year. That gives nine years, 362 storm days and
+  a full solar cycle. HistGB settings stay as live; only the tested change differs. Storm thresholds are chosen on
+  2011–2014 and Heidke is scored on 2015–2019. The test period is never read (asserted in `run_block`).
+- **Rule, fixed before any run:** keep a change only if (1) pooled skill vs the 27-day average improves (Ap, or max
+  Kp for Kp-targeted changes), (2) it wins in at least 2/3 of the years (6 of 9; CME 4 of 5), and (3) storm Heidke
+  days 1–3 does not drop by more than 0.01.
+- **Result:**
+
+  | Variant | Ap skill | Max Kp skill | Ap wins | Kp wins | Heidke 1–3 Δ | Rule |
+  |---|---|---|---|---|---|---|
+  | baseline (live) | 0.089 | 0.099 | — | — | — | — |
+  | Poisson loss | 0.093 | 0.100 | 6/9 | 5/9 | 0 | pass |
+  | log(Ap) target | 0.103 | 0.099 | 5/9 | 0/9 | 0 | fail |
+  | storm classifier retuned | 0.089 | 0.099 | — | — | +0.007 | fail (no value gain) |
+  | CME (D-67) | 0.089 | 0.100 | 5/5 | 4/5 | −0.010 | pass (barely) |
+  | solar wind (day D, D−1) | 0.106 | 0.118 | 8/9 | 8/9 | −0.001 | pass |
+  | solar wind + 27-day echo | 0.107 | 0.124 | 8/9 | 9/9 | +0.017 | pass |
+  | **solar wind + echo + Poisson** | **0.112** | **0.124** | **9/9** | **9/9** | **+0.017** | **pass** |
+  | the same + CME | 0.112 | 0.124 | 5/5 | 5/5 | −0.023 | fail |
+
+  - Solar-wind features: daily means/extremes of speed, Bz, V·Bs, density, |B| and peak pressure for issue day D
+    (plus speed and V·Bs of D−1, speed change), from OMNI hourly, 1998 onward (blank before).
+  - The 27-day echo: speed (and By) one solar rotation before the target day, which captures recurring fast
+    streams and sector structure.
+  - The gain is spread over all lead days, not only day 1: Ap skill per lead day goes from 0.232 / 0.078 /
+    0.066 / 0.062 / 0.061 / 0.062 / 0.059 to 0.264 / 0.099 / 0.086 / 0.083 / 0.087 / 0.083 / 0.083. This revises the
+    expectation in D-05 ("helps only day 1"): the stream that is passing on day D tells the model how long the
+    disturbance may last.
+  - Weak years remain: 2011 and 2014 (solar maximum) are still below the 27-day average (−0.009, −0.035; baseline
+    −0.058, −0.123).
+- **Status:** the winner `sw_rec_poisson` is a candidate, not adopted. It was validated on OMNI, a corrected
+  archive, while live forecasts would read NOAA's real-time feed (7 days of data). Adoption depends on D-69.
+- **Not adopted:** log(Ap), the storm classifier retune, and CME (D-67).
+- **Files:** `reports/forecast/experiments/yearly/summary.csv` and `ap_skill_by_year.csv` are committed. The
+  per-variant `forecasts.csv` / `storm_probs.csv` (about 4 MB each) are regenerated by the command and not
+  committed.
+
+### D-69 · Solar-wind candidate with live-like inputs: stress test · 2026-11-19 · ⏳
+- **Question:** `sw_rec_poisson` (D-68) learned from OMNI. Live, it would read NOAA's real-time feed: 7 days only,
+  with gaps, different instruments and no reprocessing. Does the gain survive?
+- **Why synthetic:** the real check (archived DSCOVR real-time data for 2017–2019 vs OMNI) could not be run:
+  NOAA's servers timed out, and no netCDF reader is installed. It is listed in [TODO.md](TODO.md).
+- **Method:** `python -m src.forecast.sw_live_stress`. The models are fitted as in D-68 on clean OMNI, and only the
+  forecast inputs are degraded. Same years, rule and scoring as D-68. Degradation sizes are assumptions, chosen
+  on the pessimistic side:
+  - `gaps`: 10% of hours lost; in fast or dense hours (> 600 km/s or > 15 cm⁻³) 30% of plasma values lost; 3% of
+    days lost entirely.
+  - `noise`: hourly speed × N(1.02, 0.03), density and pressure × 1.25, Bz and By + N(0, 1 nT), |B| + N(0, 0.5 nT).
+  - `no_archive`: the 27-day echo blank (the live feed holds 7 days).
+  - `worst`: all three together.
+  - `no_sw`: every solar-wind input blank (feed down).
+- **Result:**
+
+  | Scenario | Ap skill | Ap wins | Max Kp skill | Kp wins | Heidke d1 | Heidke 1–3 | D-68 rule |
+  |---|---|---|---|---|---|---|---|
+  | live model (baseline) | 0.089 | — | 0.099 | — | 0.369 | 0.294 | — |
+  | clean (= D-68) | 0.112 | 9/9 | 0.124 | 9/9 | 0.390 | 0.311 | pass |
+  | gaps | 0.111 | 8/9 | 0.124 | 9/9 | 0.395 | 0.312 | pass |
+  | noise | 0.108 | 8/9 | 0.122 | 9/9 | 0.348 | 0.274 | **fail** (Heidke −0.020) |
+  | no_archive | 0.102 | 6/9 | 0.106 | 6/9 | 0.370 | 0.297 | pass |
+  | worst | 0.098 | 6/9 | 0.102 | 6/9 | 0.393 | 0.306 | pass |
+  | no_sw (feed down) | **0.075** | 0/9 | **0.075** | 0/9 | 0.365 | 0.281 | **fail** |
+
+- **Reading:**
+  - Gaps cost almost nothing.
+  - The value forecasts keep most of their gain under noise and bias. Storm warnings do not: under `noise`, Heidke
+    days 1–3 falls below the live model. Its `worst` result is fine, so the warnings react to the input bias in
+    an unstable way. The thresholds are sensitive to a shift in the input scale.
+  - Without the 27-day archive, about half the gain is lost: still 6/9 years, barely passing.
+  - **With the feed down, the candidate is worse than the live model** (0.075 vs 0.089). A model that learned to
+    lean on solar wind does poorly without it.
+- **Consequences, if the candidate is adopted:**
+  1. Archive the daily solar-wind summary in the daily job, so the 27-day echo is available after 27 days.
+  2. Keep the current model as the fallback, and use it whenever the day's solar wind is missing.
+  3. Run the candidate in shadow mode (logged, not shown as the main forecast) and compare it with the live
+     model on the same days. Do the real DSCOVR-vs-OMNI check (TODO.md). If real-time inputs are biased against
+     OMNI, rescale them before forecasting.
+- **Status:** candidate, not adopted. Shadow run approved and built (2026-11-19):
+  - `src/ingest/sw_archive.py`: the daily job keeps NOAA's real-time solar wind hour by hour in
+    `forecasts/solar_wind_hourly.csv`. Real-time data only, never overwritten with OMNI, so the archive later gives
+    the real-time vs OMNI comparison on the same hours. A later fetch only fills gaps.
+  - `src/forecast/sw_shadow.py`: `sw_rec_poisson` fitted on the live window (definitive days to `PRODUCTION_END`),
+    OMNI solar wind for training, saved as `models/forecast/sw_shadow.joblib`. Features checked identical to the
+    validated variant. Each run appends to `forecasts/shadow_log.csv`: the candidate's values and storm
+    probability, the live HistGB values, and `sw_status` (`full`, `no_echo` while the archive is shorter than 27
+    days, `no_sw`). With `no_sw` the served value is the live HistGB forecast (fallback). A failure in the shadow
+    step never blocks the live forecast.
+  - Adoption still needs: several weeks of shadow scores, and the real-time vs OMNI check with rescaling if biased.
