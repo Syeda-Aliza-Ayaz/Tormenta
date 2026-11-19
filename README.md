@@ -18,7 +18,7 @@ CT-378 Machine Learning, NED University, Fall 2026 · **Alizeh & HRK**.
 
 | Daily Ap, RMSE | day 1 | day 3 | day 7 | skill vs 27-day average (days 1–7) |
 |---|---|---|---|---|
-| **HistGB (headline)** | **10.79** | **11.91** | **12.00** | **+0.100** |
+| **HistGB (headline)** | **10.78** | **11.91** | **12.01** | **+0.100** |
 | NOAA SWPC official forecast | 10.89 | 11.90 | – | +0.134 (days 1–3 only) |
 | ARIMAX | 10.96 | 12.15 | 12.17 | +0.069 |
 | ARIMA | 10.97 | 12.20 | 12.22 | +0.062 |
@@ -28,9 +28,11 @@ CT-378 Machine Learning, NED University, Fall 2026 · **Alizeh & HRK**.
 
 - **HistGB is the best of the project's models at every lead day** and level with NOAA's official forecast on days
   1–3 (ahead on day 1, behind on day 2, tied on day 3).
-- **80% ranges** contain the observed value on 80–82% of days at every lead day.
-- **Storm warning** (separate classifier, thresholds tuned for rare events): Heidke skill 0.20–0.30 at every lead
-  day, catching 29–54% of storm days. The value forecasts alone catch almost none after day 1.
+- **80% ranges** contain the observed value on 80–81% of days at every lead day.
+- **Storm warning** (separate classifier, thresholds tuned for rare events): Heidke skill 0.19–0.34 at every lead
+  day, catching 24–47% of storm days. The value forecasts alone catch almost none after day 1.
+- These are the scores of the models fitted up to 2019 (D-62). After the test, the live models were refitted on
+  data up to June 2026 (D-63); their evidence is the recent hindcast and the live log.
 - **Limit:** storms caused by sudden solar eruptions (e.g. May 2024) cannot be foreseen from past values alone.
 - Model choice used validation 2017–2019 only, by a rule fixed in advance; ARIMA, SARIMA and Chronos did not pass it
   and are not issued live. Per-day storm tables: [`reports/forecast/storm_tables.md`](reports/forecast/storm_tables.md).
@@ -41,7 +43,7 @@ CT-378 Machine Learning, NED University, Fall 2026 · **Alizeh & HRK**.
 ```
 GFZ daily Kp/Ap/F10.7 (1932→) ─► src/daily.py ─► src/forecast/features.py (causal: lags, 27/54/81-day recurrence,
                                                    F10.7, season)
-   train 1947-06 → 2016 · validation 2017–2019 · test 2020 → 2026-06 (once) · live models refit on 1947–2019
+   train 1947-06 → 2016 · validation 2017–2019 · test 2020 → 2026-06 (once) · live models refit on 1947 → 2026-06
    ├─► HistGB (14 direct models) · ARIMAX · storm classifier (7) · 80% ranges   ─► models/forecast/
    └─► daily GitHub Actions job (src/issue.py) ─► forecasts/log.csv (append-only) + storm_log.csv + scores
                                                 ─► Streamlit · Flask · HF Space · weekly health check
@@ -95,7 +97,8 @@ src/              config, ingest (OMNI, GFZ, live SWPC, NOAA forecasts), preproc
 src/forecast/     features, baselines, gbm (HistGB), arima, chronos_model, intervals, storm, monitor, test_eval,
                   figures, tables, app_data, registry
 notebooks/        01 preprocessing · 02 EDA · 03 modelling · 04 v1→v2 · 05 final round · 06 live nowcast
-app/              streamlit_app.py · flask_app/ · hf_space/ (model card, in-browser Space page, sync_hf.py, Gradio app)
+app/              streamlit_app.py (entry) · tormenta_ui/ (theme, hero scenes, pages, charts) · static/ (images,
+                  cursors) · flask_app/ · hf_space/ (model card, in-browser Space page, sync_hf.py, Gradio app)
 models/           current.joblib (nowcaster) + versions + metrics_history.json · forecast/ (forecaster models)
 forecasts/        live forecast log (append-only), storm log, scores, NOAA copies, monitor state, app data
 reports/          nowcaster figures/ and metrics/ (v1, v2 archives) · forecast/ (metrics, figures, storm tables)
@@ -135,9 +138,12 @@ python -m src.forecast.gbm --reuse-params    &:: retrain HistGB with the tuned s
 python -m src.forecast.arima --reuse-settings
 python -m src.forecast.storm                 &:: storm classifier and its thresholds
 python -m src.forecast.intervals             &:: 80% ranges
+python -m src.forecast.refit                 &:: refit the live models up to PRODUCTION_END (D-63)
 python -m src.issue                          &:: what the daily job runs
 python -m src.forecast.monitor               &:: weekly health check (add --act to allow a retrain)
 python -m src.forecast.figures ; python -m src.forecast.tables
+python -m src.forecast.checks skew          &:: preliminary vs revised inputs (D-60)
+python -m src.forecast.checks reliability   &:: storm probability vs observed frequency (D-61)
 ```
 `python -m src.forecast.test_eval` scored the test period once; it refuses to run again without `--force`.
 
@@ -201,7 +207,26 @@ Pyodide).
   `reports/figures`, `reports/v1/figures` and `reports/v2/figures` at the same relative paths.
 - `TORMENTA_BUILD_PLAN.md`: the nowcaster's original plan, decision log and checklist.
 
-## Data credits
+## The dashboard
+Six pages, each with its own link (`?page=overview|forecast|explore|scorecard|nowcast|method`, plus `&theme=dark`
+or `light`): Overview (live conditions, the week ahead), Forecast, Explore (replay any issue day since 2020, or edit
+the recent days), Scorecard, Nowcast (live Kp and the what-if explorer) and Method.
+- Two themes: Carbon & Ice (dark) and Flight Manual (light). Every page opens with an animated night-sky hero; the
+  Overview's aurora follows the live Kp level, red tops appearing in storms.
+- Images are served from `app/static` (`server.enableStaticServing` in `.streamlit/config.toml`); the in-browser
+  Space loads them from GitHub instead.
+- `tests/test_dashboard.py` renders every offline page in both themes and fails on any exception.
+
+## Data and image credits
 NASA/GSFC Space Physics Data Facility OMNIWeb (OMNI2) · GFZ German Research Centre for Geosciences, Kp, Ap and
 F10.7 (CC BY 4.0) · NOAA Space Weather Prediction Center real-time data and forecasts · Amazon Chronos-Bolt
 (Apache 2.0). Not an operational warning service.
+
+| Image (`app/static`) | Credit | Licence |
+|---|---|---|
+| `milkyway-eso0932a.jpg`, page background | ESO/S. Brunier ([eso0932a](https://www.eso.org/public/images/eso0932a/)), resized | CC BY 4.0 |
+| `blackhole-pia25440.jpg`, Method hero | NASA/JPL-Caltech, "A Black Hole Destroys a Star" ([PIA25440](https://photojournal.jpl.nasa.gov/catalog/PIA25440)), mirrored and resized | Free use with credit (JPL image policy) |
+| `earth-epic.webp`, Nowcast hero | NASA EPIC Team, DSCOVR EPIC images of 14 Nov 2026 ([epic.gsfc.nasa.gov](https://epic.gsfc.nasa.gov)), blended into a loop | Public domain (NASA) |
+
+The aurora, solar flare, nebula and dust scenes, the icons and the cursors are drawn in code for this project. Fonts:
+IBM Plex Sans and IBM Plex Mono (SIL Open Font License), loaded from Google Fonts.

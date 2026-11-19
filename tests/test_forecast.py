@@ -103,3 +103,30 @@ def test_recent_hindcast_stays_outside_validation_and_test(daily):
     fc = backtest.hindcast(d, first, last)
     assert len(fc) and fc["target_date"].min() >= first and not fc["obs_definitive"].any()
     assert set(fc["model"]) == {m.name for m in registry.production_models()}
+
+
+def test_tuning_folds_leave_a_gap_of_the_longest_lead():
+    """No training row of a CV fold may have its target (up to 7 days ahead) inside the validation fold (D-59)."""
+    from src.forecast import gbm
+    X = pd.DataFrame({"x": range(3000)}, index=pd.date_range("2000-01-01", periods=3000, freq="D"))
+    for tr, te in gbm.cv_folds(X):
+        assert X.index[tr].max() + pd.Timedelta(days=max(config.FORECAST_LEADS)) < X.index[te].min()
+
+
+def test_first_training_day_has_its_full_feature_history():
+    """Features of the first training day equal those computed from the full history; lead-in days are never
+    training samples (D-59)."""
+    from src.forecast import features as F, gbm, storm
+    from src.forecast.base import sample_rows
+    rng = np.random.default_rng(2)
+    idx = pd.date_range("1946-01-01", "1948-12-31", freq="D", name="date")
+    ap = rng.gamma(2, 6, len(idx)).round()
+    full = pd.DataFrame({"ap": ap, "kpmax": np.clip(1 + ap / 8, 0, 9), "f107_obs": rng.uniform(70, 200, len(idx)),
+                         "gfz_flag": 2, "definitive": True}, index=idx)
+    start = pd.Timestamp(config.FORECAST_TRAIN_START)
+    train = backtest.training_rows(full, pd.Timestamp("1948-06-01"))
+    assert sample_rows(train).index.min() == start
+    for h in config.FORECAST_LEADS:
+        pd.testing.assert_series_equal(F.features(train, h).loc[start], F.features(full, h).loc[start])
+        assert gbm._xy(train, h, "ap")[0].index.min() == start
+        assert storm._xy(train, h)[0].index.min() == start

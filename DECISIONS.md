@@ -301,6 +301,7 @@ Template:
   - NOAA failures are only warnings, because NOAA is a benchmark.
 
 ### D-27 · Live models are fitted on a fixed window (train + validation) · 2026-11-10 · ✅
+- **Superseded by D-63** (2026-11-16): after the test was scored, the window was extended to 2026-06-30.
 - **Decision:** the daily job fits each model on definitive days from 1947-06-01 to 2019-12-31, the same data
   every day.
 - **Why:**
@@ -703,6 +704,8 @@ Template:
   - The app shows "storm risk %" per day, with ⚠️ above the threshold.
 - **Alternatives considered:**
   - Sample weighting (the nowcaster's `1 + Kp/3` didn't help there).
+- **Addendum (D-61):** the raw probabilities lean high in quiet periods (training has more storm days than recent
+  years). Warnings are unaffected, because the thresholds were chosen on those same raw probabilities.
   - Oversampling (distorts the probabilities).
   - Thresholding the regression forecast (no probability to tune).
 - **Result / consequence** (Heidke skill):
@@ -863,3 +866,301 @@ Template:
     deleting them is for the report authors to decide.
 - **Result / consequence:** about 10 MB less in the working tree; git history keeps everything. The README now
   covers the forecaster, and `docs/report_notes.tex` has a forecaster section with viva points.
+
+### D-57 · Chart hover pinned to the last observed day in the forecast area (bug fix) · 2026-11-15 · ✅
+- **Problem** (reported by HRK): in the 7-day forecast chart (and the "Try the forecaster" chart, which uses the same
+  code), hovering over the forecast days showed the last observed day's date, and it didn't change while moving
+  across the forecast days.
+- **Cause:** the hover from D-36 used two "nearest point" layers, one for past days and one for forecast days. Each
+  layer's nearest-point search covers the whole chart, not just its own days. The past-days layer was on top, so in
+  the forecast area its nearest point was always the last observed day.
+- **Decision:** one invisible full-height column per day, one day wide, instead of a nearest-point search. Hovering
+  anywhere in a column selects that day. The columns never overlap. Past columns list only the observed value and
+  forecast columns only the models, so D-36's "no null" property is kept.
+- **Process:** the cause and fix were proposed first and applied after approval, on the dedicated `fixes` branch.
+- **Result / consequence:**
+  - Checked on the chart definition: no nearest search; 30 past and 7 forecast day columns; no overlap; no empty
+    tooltip values.
+  - The rendered chart looks unchanged, and the app runs without errors in both modes.
+  - Mouse movement can't be simulated here, so the final check is a hover on the deployed app after merging.
+
+### D-58 · ARIMAX's first live rows were added late on 12 Nov (origin 11 Nov) · 2026-11-15 · ✅
+- **Finding:** ARIMAX joined the live log after it passed its rule on 12 Nov (D-41). For origin 11 Nov, its rows
+  were added by a later run that day (16:16 UTC), after the other five models had been issued (about 07:00 UTC). That
+  is the "late addition on the same origin" that D-33 avoided for HistGB.
+- **Decision:** leave the log as it is. It is append-only (D-07), and every row records its own `issued_at`, so the
+  timing is visible. From origin 12 Nov on, all six models are issued together.
+- **Consequence:** live comparisons of ARIMAX for origin 11 Nov should note its later issue time.
+
+### D-59 · Tuning folds with a gap; features built on the full history (bug fixes) · 2026-11-16 · ✅
+- **Problem 1 (tuning, introduced in the day-3 commit):** HistGB's `TimeSeriesSplit` had no gap. A row is an issue
+  day D with a target on D+h (h ≤ 7), so the last training rows of each fold had targets inside the next
+  validation fold. The CV scores were slightly optimistic. Validation and test were never affected.
+- **Problem 2 (features, a side effect of D-19):** `training_rows()` cut the history at 1947-06-01 *before* the
+  features were built, so 80 of 26,512 training days had empty lag or long-window features although GFZ data exists
+  from 1932.
+- **Decision:**
+  - `gbm.cv_folds()` uses `gap = max lead (7)`.
+  - `training_rows()` now prepends `FORECAST_HISTORY_DAYS` (130) days flagged `lead_in`. HistGB and the storm
+    classifier use them for features only. `base.sample_rows()` drops them for every model that learns from the rows
+    themselves (climatology, the ARIMA family), so D-19's common start date is kept.
+  - Tests: no fold's training targets reach its validation fold; the first training day's features equal those
+    built from the full history.
+- **Process:** proposed in the audit notes, approved by HRK, done on the `fixes` branch; one retraining run.
+- **Result:**
+  - Tuning: every CV score rises by 0.01–0.06% (the removed optimism); **the same settings are chosen**, raw Ap target.
+  - HistGB validation: mean Ap skill vs the 27-day average +0.177, **PASS**, unchanged. RMSE per lead day moves by
+    at most ±0.006 (Ap) and ±0.004 (max Kp), in both directions.
+  - Storm classifier: thresholds now 0.26 / 0.25 / 0.29 / 0.23 / 0.24 / 0.23 / 0.31 (were 0.21–0.29). The
+    Heidke-vs-threshold curve is flat near its peak, so small probability changes move the best threshold.
+    Validation Heidke skill is equal or higher at every lead day (day 1: 0.365 → 0.395); Brier unchanged.
+  - Other models: identical validation results, as intended.
+  - 80% ranges recalibrated; recent coverage unchanged (Ap 81–83%, max Kp 76–78%).
+- **Not done:** the test period was scored once with the previous HistGB and classifier (D-52). It is not re-scored
+  here; the app's past forecasts show the test run (previous version) followed by the recent hindcast (this
+  version).
+
+### D-60 · Measured: preliminary inputs vs revised inputs (PLAN.md §3) · 2026-11-16 · ✅
+- **Question:** live forecasts read GFZ's newest, still preliminary values; the models trained on definitive ones.
+  How much does that change a forecast?
+- **Method:** `python -m src.forecast.checks skew`. The daily job commits the observations it used
+  (`forecasts/recent.csv`), so git history holds each day's inputs as first published. For each live issue day,
+  the production models forecast from those inputs and from the same days as GFZ publishes them now.
+- **Result (5 issue days, 10–14 Nov):** one input value revised (a max Kp by ⅓). HistGB forecasts change by at most
+  0.12 Ap and 0.04 max Kp; storm probability by at most 0.004; ARIMAX max Kp by at most 0.18. Negligible next to
+  the models' errors (Ap RMSE about 9 on recent days).
+- **Limit:** this covers the early revisions (nowcast → provisional) only. GFZ is definitive to 2026-06-30, so the
+  final revision of the live period can be measured only when those days become definitive; the same command
+  will then measure it.
+
+### D-61 · Measured: storm probability calibration (prior shift, D-48) · 2026-11-16 · ✅
+- **Question:** training has 22% storm days, recent years 8–14%. Do the raw probabilities lean high?
+- **Method:** `python -m src.forecast.checks reliability`: probabilities grouped in bins and compared with the
+  observed storm frequency, on 2008–2016 (fit ≤ 2007), validation 2017–2019 (fit ≤ 2016) and the recent hindcast
+  (production model). The test period is not used.
+- **Result:**
+  - Validation is close to calibrated (mean probability 0.093 vs 8.3% storm days).
+  - 2008–2016 and recent lean high: mean probability 0.138 vs 9.3%, and 0.165 vs 11.9%. In the 10–30% bins
+    storms happen about two thirds as often as forecast (e.g. recent 10–20%: forecast 14%, observed 11%).
+  - Above 40% the probabilities are about right.
+- **Consequence:** warnings are unaffected (thresholds chosen on these same raw probabilities). The displayed
+  "storm risk %" reads somewhat high on quiet stretches. A recalibration fitted on 2008–2016 is a separate
+  proposal, pending approval.
+
+
+### D-62 · Test period re-scored once for the D-59 models · 2026-11-16 · ✅
+- **Why a second run (`test_eval --force`):** D-59 fixed two bugs and retrained HistGB and the storm classifier.
+  The test score from D-52 describes the previous versions, which are no longer live.
+- **Why it's still a fair test:** the fixes were proposed from a code audit and approved before any test number of
+  the new models existed; tuning, the validation rule and the thresholds used only data up to 2019. Nothing in
+  D-59 was chosen by looking at test results, and no choice will be made from this run.
+- **Rule:** this run is reported as the test result of the current models, whatever it shows. The D-52 numbers
+  stay in git history for comparison.
+- **Result** (2020-01-01 → 2026-06-30, 2,379 issue days, 325 storm days):
+  - HistGB: practically unchanged. Ap RMSE day 1 10.785 → 10.779 (NOAA 10.89), days 2–7 within ±0.01; max Kp
+    within ±0.001. 80% range coverage 80–81% (Ap), 79–80% (max Kp). Every other model identical.
+  - Storm classifier, Heidke skill by lead day 1–7: 0.341 / 0.195 / 0.204 / 0.205 / 0.215 / 0.202 / 0.188
+    (D-52: 0.305 / 0.215 / 0.214 / 0.214 / 0.205 / 0.212 / 0.203). Day 1 improves (153 hits, 221 false alarms
+    vs 174 and 329); the other days move by −0.02 to +0.01. Brier unchanged (0.099–0.111). The changes follow
+    the new thresholds, not new information: as noted in D-59, the best threshold is poorly determined on a flat
+    curve.
+
+### D-63 · Live models refitted on every definitive day up to 2026-06-30 · 2026-11-16 · ✅
+- **Why:** D-27 fixed the live fitting window at 1947–2019 so the test period stayed unseen. The test is now scored
+  (D-62), so holding back 6.5 years of definitive data, the whole of solar cycle 25 so far, only costs the live
+  forecasts. Refitting on all data once the test is done is the standard last step.
+- **Decision:**
+  - `config.PRODUCTION_END = 2026-06-30` (GFZ's last definitive day); `production_window()` fits up to it.
+  - Refitted: HistGB, the storm classifier, ARIMAX and the baselines, with their selected settings unchanged.
+    The storm thresholds and the 80% ranges stay as calibrated (out-of-sample errors from fits ≤ 2007 / ≤ 2016).
+  - `test_eval` now fits its models afresh on ≤ 2019 instead of loading the live bundles, so the test stays
+    reproducible.
+  - The monitor's retrain needs its 6-month holdout to lie after the incumbent's training window. Until GFZ has
+    6 months of definitive data after 2026-06-30, a due retrain is recorded as skipped instead of failing.
+- **Rule, written before the refit:** keep the refit unless, on the recent hindcast (2026-07-01 onwards, unseen by
+  both versions), its mean Ap skill vs the 27-day average over lead days 1–7 is ≤ 0. The ≤ 2019 models are
+  reported beside it either way. This period is short (about 4.5 months), so it's a sanity check, not a contest.
+- **Result** (`python -m src.forecast.refit`; recent hindcast 2026-07-01 → 2026-11-15, 144 issue days, both
+  versions on the same days):
+  - HistGB mean Ap skill vs the 27-day average: **+0.083** refitted vs +0.075 for the ≤ 2019 model → **rule passed,
+    refit kept.** Ap RMSE lower at every lead day (day 1 8.94 → 8.89); max Kp skill +0.135 vs +0.136.
+  - Storm classifier: mean Heidke skill 0.263 vs 0.219 (40 hits / 75 false alarms vs 34 / 74); Brier 0.0958 vs
+    0.0961. Few storm days (16 per lead), so this is indicative only.
+  - ARIMAX: practically unchanged (Ap skill +0.001 vs 0.000).
+  - 80% ranges on the recent days: HistGB Ap 81–83%, max Kp 75–77%.
+- **Scope of the scores:** the test result (D-62) belongs to the ≤ 2019 models. The refitted models can't be scored
+  on 2020–2026 (they learned from it); their evidence is the recent hindcast and the live log.
+
+### D-64 · Storm-risk % recalibrated (display only) · 2026-11-16 · ✅
+- **Problem (D-61):** the classifier's raw probabilities lean high in quiet periods (recent: mean 16.5% vs 11.9%
+  storm days), so the "storm risk %" in the app overstates the chance.
+- **Decision:** per lead day, a logistic correction of the raw probability, sigmoid(a · logit(p) + b), fitted on
+  2008–2016 probabilities of the model fitted ≤ 2007 (the same out-of-sample rows that chose the thresholds; never
+  validation, test or recent days). The correction is increasing (a > 0 is checked), and each threshold is passed
+  through it too, so **every warning stays exactly as before**; only the displayed chance changes. The raw
+  probability is kept as `storm_prob_raw`. The test result (D-62) stays as scored, on raw probabilities.
+- **Rule, written before fitting:** keep the correction only if the Brier score on validation 2017–2019 (model fitted
+  ≤ 2016, correction from 2008–2016) is no worse than with raw probabilities. The recent hindcast and the
+  reliability table are reported beside it.
+- **Result: correction dropped.** Validation Brier 0.0658 corrected vs 0.0656 raw, so the rule fails. Fitted
+  corrections lowered every lead day's chance (a 1.02–1.11, b −0.50 to −0.22).
+  - For the record, on the recent days it would have helped: Brier 0.0938 vs 0.0958, mean chance 11.2% vs 16.6%
+    against 11.6% storm days. The rule was fixed on validation, so that doesn't change the decision.
+  - Reading: the lean depends on the period (none in the 2017–2019 solar minimum, clear in 2008–2016 and recently),
+    so one fixed correction doesn't transfer reliably. The app keeps the raw chance; D-61's caveat stays.
+  - The code path stays (`StormClassifier.calibrate`, `storm_prob_raw`) but is inactive: the bundle has no
+    calibration, so every output equals the raw probability.
+
+### D-65 · Dashboard redesign · 2026-11-17 · ✅
+- **Why:** the old dashboard was Streamlit's default look with emoji labels; HRK asked for a rebuild that reads as
+  designer-made, previewed as HTML before any code, then built and checked on localhost before merging.
+- **Decision:**
+  - Designed first on a canvas (palettes, then every screen), approved, then built in Streamlit (restyled, not
+    replaced, so the Streamlit Cloud app and the in-browser Space keep working).
+  - Themes: Carbon & Ice (dark, default) and Flight Manual (light), chosen by HRK; one primary colour for data and
+    controls, one alert colour reserved for warnings and always paired with a text label.
+  - Six pages linked through the URL (`?page=…&theme=…`): Overview, Forecast, Explore, Scorecard, Nowcast, Method.
+  - Animated night-sky heroes: the Overview aurora follows the live Kp level; other pages use a solar flare, a real
+    NASA EPIC Earth loop, a nebula, interplanetary dust and a NASA/JPL black-hole illustration. Real images are
+    credited in the README with their licences.
+  - Custom cursor and trailing ring, scrollbar and hover states; reduced-motion users get no animation; a phone
+    layout below 720 px.
+  - No logic changed: the pages call the same data loaders and models as before (moved to `app/tormenta_ui`).
+- **Checks:** every offline page renders in both themes without an exception (`tests/test_dashboard.py`); the
+  Explore edit mode and the Nowcast what-if were exercised headlessly; each page was screenshot at desktop width and
+  the Overview at phone width.
+
+### D-66 · Training start year: keep 1947 · 2026-11-18 · ❌ (shorter history rejected)
+- **Question:** solar cycle 25 is quieter than the mid-century cycles (training 22% storm days, recent years 8–14%).
+  Does a shorter, more recent training history fit the present better?
+- **Method:** `python -m src.forecast.start_year`. Start years 1947, 1980, 1995 and 2010, all trained to 2022-12-31.
+  Settings and storm thresholds chosen inside each variant's own years (5 time-ordered folds, 7-day gap), scored on
+  2023-01-01 → last definitive day. No live file touched.
+- **Result:**
+
+  | Start | Train days | Ap skill 1–7 | Max Kp skill 1–7 | Storm Heidke day 1 | Heidke mean 1–7 |
+  |---|---|---|---|---|---|
+  | **1947** | 27,608 | **0.103** | **0.095** | **0.367** | **0.211** |
+  | 1980 | 15,706 | 0.094 | 0.093 | 0.368 | 0.186 |
+  | 1995 | 10,227 | 0.095 | 0.094 | 0.344 | 0.134 |
+  | 2010 | 4,748 | 0.049 | 0.046 | 0.272 | 0.095 |
+
+  Every shorter history is worse, and 2010 loses half the skill. Storms are rare, so the model needs every cycle's
+  storms. The base-rate difference is already handled by the thresholds.
+- **Decision:** no change; training keeps starting at 1947-06-01 (D-19).
+- **Caveat:** the scoring window 2023 → is inside the test period, which D-62 had already scored. This run only
+  confirmed the existing setting, so no test number was used to adopt anything. Later candidate changes are judged
+  on 2011–2019 only (D-68).
+
+### D-67 · CME catalogue features (NASA DONKI) · 2026-11-18 · ❌
+- **Question:** coronal mass ejections cause the largest storms, 1–4 days after eruption. Do CME catalogue features
+  add skill for lead days 1–3?
+- **Data:** NASA DONKI through api.nasa.gov (`python -m src.ingest.fetch_donki`, key from `NASA_API_KEY`, never
+  stored). Only information available at issue time is used: an entry counts from its `submissionTime`, and an
+  arrival prediction from its model run's completion time. DONKI is kept in real time from April 2014 only, so
+  the features are blank before then. Raw CME counts are excluded because logging practice changed after 2021.
+- **Features:** fast CMEs (≥ 800 km/s) and the fastest speed in the last 3 days, Earth-facing wide CMEs, and
+  WSA-ENLIL predicted arrivals (on the target day, within ±1 day, highest predicted Kp).
+- **Result:**
+  - First run (`cme_experiment.py`, trained ≤ 2022, scored 2023 →): Ap skill 0.103 → 0.108, storm Heidke day 1
+    0.367 → 0.398, mean Heidke 1–7 0.211 → 0.180.
+  - Yearly validation (D-68, 2015–2019): Ap skill +0.0005, max Kp +0.0006, but storm Heidke day 1
+    0.369 → 0.312 and days 1–3 −0.0096. It meets the D-68 rule only by 0.0004 on the Heidke condition.
+  - Added to the best solar-wind variant (D-68, `sw_rec_poisson_cme`): Heidke days 1–3 −0.023, **fails the rule**.
+- **Decision:** not adopted. The gain is within noise, the two evaluations disagree on its sign for storms, and it
+  would add a keyed external dependency to the daily job.
+- **Caveat:** like D-66, the first run scored on 2023 →, inside the test period; it led to no adoption.
+- **Kept:** `fetch_donki.py` and `cme_experiment.py` as the record. `data/raw/donki_cme/` stays untracked.
+
+### D-68 · Yearly validation of forecaster changes; solar wind + 27-day echo + Poisson loss passes · 2026-11-19 · ⏳
+- **Why a new harness:** D-66 and D-67 scored on 2023 →, which is inside the spent test period, and one
+  validation block (2017–2019, solar minimum) is too short to judge small changes.
+- **Method:** `python -m src.forecast.validate_yearly`. For each year 2011–2019: train on definitive days whose
+  target is before 1 January of that year, then forecast the whole year. That gives nine years, 362 storm days and
+  a full solar cycle. HistGB settings stay as live; only the tested change differs. Storm thresholds are chosen on
+  2011–2014 and Heidke is scored on 2015–2019. The test period is never read (asserted in `run_block`).
+- **Rule, fixed before any run:** keep a change only if (1) pooled skill vs the 27-day average improves (Ap, or max
+  Kp for Kp-targeted changes), (2) it wins in at least 2/3 of the years (6 of 9; CME 4 of 5), and (3) storm Heidke
+  days 1–3 does not drop by more than 0.01.
+- **Result:**
+
+  | Variant | Ap skill | Max Kp skill | Ap wins | Kp wins | Heidke 1–3 Δ | Rule |
+  |---|---|---|---|---|---|---|
+  | baseline (live) | 0.089 | 0.099 | — | — | — | — |
+  | Poisson loss | 0.093 | 0.100 | 6/9 | 5/9 | 0 | pass |
+  | log(Ap) target | 0.103 | 0.099 | 5/9 | 0/9 | 0 | fail |
+  | storm classifier retuned | 0.089 | 0.099 | — | — | +0.007 | fail (no value gain) |
+  | CME (D-67) | 0.089 | 0.100 | 5/5 | 4/5 | −0.010 | pass (barely) |
+  | solar wind (day D, D−1) | 0.106 | 0.118 | 8/9 | 8/9 | −0.001 | pass |
+  | solar wind + 27-day echo | 0.107 | 0.124 | 8/9 | 9/9 | +0.017 | pass |
+  | **solar wind + echo + Poisson** | **0.112** | **0.124** | **9/9** | **9/9** | **+0.017** | **pass** |
+  | the same + CME | 0.112 | 0.124 | 5/5 | 5/5 | −0.023 | fail |
+
+  - Solar-wind features: daily means/extremes of speed, Bz, V·Bs, density, |B| and peak pressure for issue day D
+    (plus speed and V·Bs of D−1, speed change), from OMNI hourly, 1998 onward (blank before).
+  - The 27-day echo: speed (and By) one solar rotation before the target day, which captures recurring fast
+    streams and sector structure.
+  - The gain is spread over all lead days, not only day 1: Ap skill per lead day goes from 0.232 / 0.078 /
+    0.066 / 0.062 / 0.061 / 0.062 / 0.059 to 0.264 / 0.099 / 0.086 / 0.083 / 0.087 / 0.083 / 0.083. This revises the
+    expectation in D-05 ("helps only day 1"): the stream that is passing on day D tells the model how long the
+    disturbance may last.
+  - Weak years remain: 2011 and 2014 (solar maximum) are still below the 27-day average (−0.009, −0.035; baseline
+    −0.058, −0.123).
+- **Status:** the winner `sw_rec_poisson` is a candidate, not adopted. It was validated on OMNI, a corrected
+  archive, while live forecasts would read NOAA's real-time feed (7 days of data). Adoption depends on D-69.
+- **Not adopted:** log(Ap), the storm classifier retune, and CME (D-67).
+- **Files:** `reports/forecast/experiments/yearly/summary.csv` and `ap_skill_by_year.csv` are committed. The
+  per-variant `forecasts.csv` / `storm_probs.csv` (about 4 MB each) are regenerated by the command and not
+  committed.
+
+### D-69 · Solar-wind candidate with live-like inputs: stress test · 2026-11-19 · ⏳
+- **Question:** `sw_rec_poisson` (D-68) learned from OMNI. Live, it would read NOAA's real-time feed: 7 days only,
+  with gaps, different instruments and no reprocessing. Does the gain survive?
+- **Why synthetic:** the real check (archived DSCOVR real-time data for 2017–2019 vs OMNI) could not be run:
+  NOAA's servers timed out, and no netCDF reader is installed. It is listed in [TODO.md](TODO.md).
+- **Method:** `python -m src.forecast.sw_live_stress`. The models are fitted as in D-68 on clean OMNI, and only the
+  forecast inputs are degraded. Same years, rule and scoring as D-68. Degradation sizes are assumptions, chosen
+  on the pessimistic side:
+  - `gaps`: 10% of hours lost; in fast or dense hours (> 600 km/s or > 15 cm⁻³) 30% of plasma values lost; 3% of
+    days lost entirely.
+  - `noise`: hourly speed × N(1.02, 0.03), density and pressure × 1.25, Bz and By + N(0, 1 nT), |B| + N(0, 0.5 nT).
+  - `no_archive`: the 27-day echo blank (the live feed holds 7 days).
+  - `worst`: all three together.
+  - `no_sw`: every solar-wind input blank (feed down).
+- **Result:**
+
+  | Scenario | Ap skill | Ap wins | Max Kp skill | Kp wins | Heidke d1 | Heidke 1–3 | D-68 rule |
+  |---|---|---|---|---|---|---|---|
+  | live model (baseline) | 0.089 | — | 0.099 | — | 0.369 | 0.294 | — |
+  | clean (= D-68) | 0.112 | 9/9 | 0.124 | 9/9 | 0.390 | 0.311 | pass |
+  | gaps | 0.111 | 8/9 | 0.124 | 9/9 | 0.395 | 0.312 | pass |
+  | noise | 0.108 | 8/9 | 0.122 | 9/9 | 0.348 | 0.274 | **fail** (Heidke −0.020) |
+  | no_archive | 0.102 | 6/9 | 0.106 | 6/9 | 0.370 | 0.297 | pass |
+  | worst | 0.098 | 6/9 | 0.102 | 6/9 | 0.393 | 0.306 | pass |
+  | no_sw (feed down) | **0.075** | 0/9 | **0.075** | 0/9 | 0.365 | 0.281 | **fail** |
+
+- **Reading:**
+  - Gaps cost almost nothing.
+  - The value forecasts keep most of their gain under noise and bias. Storm warnings do not: under `noise`, Heidke
+    days 1–3 falls below the live model. Its `worst` result is fine, so the warnings react to the input bias in
+    an unstable way. The thresholds are sensitive to a shift in the input scale.
+  - Without the 27-day archive, about half the gain is lost: still 6/9 years, barely passing.
+  - **With the feed down, the candidate is worse than the live model** (0.075 vs 0.089). A model that learned to
+    lean on solar wind does poorly without it.
+- **Consequences, if the candidate is adopted:**
+  1. Archive the daily solar-wind summary in the daily job, so the 27-day echo is available after 27 days.
+  2. Keep the current model as the fallback, and use it whenever the day's solar wind is missing.
+  3. Run the candidate in shadow mode (logged, not shown as the main forecast) and compare it with the live
+     model on the same days. Do the real DSCOVR-vs-OMNI check (TODO.md). If real-time inputs are biased against
+     OMNI, rescale them before forecasting.
+- **Status:** candidate, not adopted. Shadow run approved and built (2026-11-19):
+  - `src/ingest/sw_archive.py`: the daily job keeps NOAA's real-time solar wind hour by hour in
+    `forecasts/solar_wind_hourly.csv`. Real-time data only, never overwritten with OMNI, so the archive later gives
+    the real-time vs OMNI comparison on the same hours. A later fetch only fills gaps.
+  - `src/forecast/sw_shadow.py`: `sw_rec_poisson` fitted on the live window (definitive days to `PRODUCTION_END`),
+    OMNI solar wind for training, saved as `models/forecast/sw_shadow.joblib`. Features checked identical to the
+    validated variant. Each run appends to `forecasts/shadow_log.csv`: the candidate's values and storm
+    probability, the live HistGB values, and `sw_status` (`full`, `no_echo` while the archive is shorter than 27
+    days, `no_sw`). With `no_sw` the served value is the live HistGB forecast (fallback). A failure in the shadow
+    step never blocks the live forecast.
+  - Adoption still needs: several weeks of shadow scores, and the real-time vs OMNI check with rescaling if biased.

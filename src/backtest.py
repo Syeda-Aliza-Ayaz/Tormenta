@@ -7,7 +7,7 @@ The test period (2020 → last definitive day) is scored once per model version,
 day 6 — not from this command (DECISIONS D-08).
 
 "recent" (DECISIONS D-43) covers the days GFZ has published since its last definitive day (provisional / nowcast
-values): in neither validation nor test, and after every live model's training data (≤ 2019). It runs the
+values): in neither validation nor test, and after every live model's training data (≤ PRODUCTION_END, D-63). It runs the
 production models exactly as the daily job does, issued in hindsight but from data up to each origin only. It gives
 statistics now; the live log stays the proof that forecasts were written before their days.
 """
@@ -33,9 +33,13 @@ def period(name: str, daily: pd.DataFrame) -> tuple:
 
 
 def training_rows(daily: pd.DataFrame, before: pd.Timestamp) -> pd.DataFrame:
-    """Definitive days from FORECAST_TRAIN_START up to the day before `before`."""
-    rows = daily.loc[config.FORECAST_TRAIN_START: before - pd.Timedelta(days=1)]
-    return rows[rows["definitive"]]
+    """Definitive days from FORECAST_TRAIN_START up to the day before `before`, preceded by FORECAST_HISTORY_DAYS
+    days flagged `lead_in`. Lead-in days only supply history to the features of the first training days; no model
+    learns from them as samples (base.sample_rows, DECISIONS D-59)."""
+    start = pd.Timestamp(config.FORECAST_TRAIN_START)
+    rows = daily.loc[start - pd.Timedelta(days=config.FORECAST_HISTORY_DAYS): before - pd.Timedelta(days=1)]
+    rows = rows[rows["definitive"]]
+    return rows.assign(lead_in=rows.index < start)
 
 
 def origins_for(first: pd.Timestamp, last: pd.Timestamp) -> pd.DatetimeIndex:

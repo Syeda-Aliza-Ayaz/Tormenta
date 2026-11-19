@@ -15,22 +15,28 @@ import json
 import pandas as pd
 
 from src import backtest, config, scorecard
-from src.forecast import arima, chronos_model, intervals, registry, storm
+from src.forecast import arima, chronos_model, gbm, intervals, registry, storm
 
 MARKER = config.FORECAST_REPORTS_DIR / "test_scored.json"
 HEADLINE = {"value": "histgb", "storm": storm.NAME}
 
 
+def rows_before_test(daily: pd.DataFrame) -> pd.DataFrame:
+    """Train + validation: everything before the test years."""
+    return backtest.training_rows(daily, pd.Timestamp(f"{config.TEST_START_YEAR}-01-01"))
+
+
 def _all_models_fitted_to_2019(daily):
-    """Live models as they run in production, plus the models that failed their rule (fitted the same way)."""
-    from src.issue import production_window
-    prod = registry.production_models()
-    names = {m.name for m in prod}
-    extra = [m for m in arima.default_models(arima.load_settings()) if m.name not in names]
-    if chronos_model.available() and "chronos" not in names:
-        extra.append(chronos_model.ChronosForecaster())
-    fit_rows = production_window(daily)
-    return [m.fit(fit_rows) for m in prod + extra]          # frozen bundles ignore fit(); baselines need it
+    """Every model with its selected settings, fitted on data up to 2019-12-31. Fitted afresh rather than loaded:
+    since D-63 the live bundles also cover the test years. Fitting is deterministic, so these are the models that
+    ran live before D-63."""
+    params, log_ap = gbm.load_params()
+    models = registry.baselines() + [gbm.HistGBDirect(params, log_ap=log_ap)]
+    models += arima.default_models(arima.load_settings())
+    if chronos_model.available():
+        models.append(chronos_model.ChronosForecaster())
+    fit_rows = rows_before_test(daily)
+    return [m.fit(fit_rows) for m in models]
 
 
 def main(force: bool = False) -> dict:
@@ -59,7 +65,8 @@ def main(force: bool = False) -> dict:
     cov.to_csv(out / "test_interval_coverage.csv", index=False)
     fc.to_csv(config.FORECAST_REPORTS_DIR / "test_forecasts.csv.gz", index=False)
 
-    warn_model = storm.StormClassifier.load()
+    warn_model = storm.StormClassifier().fit(rows_before_test(daily))
+    warn_model.thresholds_ = storm.StormClassifier.load().thresholds_     # chosen on 2008–2016
     w = storm.attach_obs(warn_model.predict(daily, origins), daily)
     w = w[w["target_date"].between(first, last) & w["obs_definitive"]]
     warn = storm.table(w)

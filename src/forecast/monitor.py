@@ -98,9 +98,14 @@ def retrain(daily: pd.DataFrame, state: dict, today: pd.Timestamp) -> dict:
     params, log_ap = gbm.load_params()
     definitive = backtest.training_rows(daily, pd.Timestamp(daily.index[daily["definitive"]].max()) + pd.Timedelta(days=1))
     hold_start = definitive.index.max() - pd.DateOffset(months=config.GATE_HOLDOUT_MONTHS)
-    candidate = gbm.HistGBDirect(params, log_ap=log_ap).fit(definitive.loc[: hold_start - pd.Timedelta(days=1)])
     incumbent = gbm.HistGBDirect.load()
-    assert pd.Timestamp(incumbent.trained_until_) < hold_start, "incumbent was trained on the holdout"
+    if pd.Timestamp(incumbent.trained_until_) >= hold_start:
+        # too little definitive data after the incumbent's training window for a fair holdout yet (D-63)
+        record = {"date": str(today.date()), "holdout_start": str(hold_start.date()), "promoted": False,
+                  "skipped": f"incumbent trained until {incumbent.trained_until_}; holdout not yet available"}
+        state["retrains"].append(record)
+        return record
+    candidate = gbm.HistGBDirect(params, log_ap=log_ap).fit(definitive.loc[: hold_start - pd.Timedelta(days=1)])
 
     origins = backtest.origins_for(hold_start, definitive.index.max())
     rmse = {}
@@ -115,8 +120,8 @@ def retrain(daily: pd.DataFrame, state: dict, today: pd.Timestamp) -> dict:
         candidate.save(reason="monitor: degraded twice", holdout_rmse=rmse["candidate"])
         warn = storm.StormClassifier.load()
         refit = storm.StormClassifier().fit(definitive.loc[: hold_start - pd.Timedelta(days=1)])
-        refit.thresholds_ = warn.thresholds_
-        refit.save(thresholds=warn.thresholds_)
+        refit.thresholds_, refit.calibration_ = warn.thresholds_, getattr(warn, "calibration_", None)
+        refit.save(thresholds=warn.thresholds_, calibration=refit.calibration_)
     state["retrains"].append(record)
     return record
 
@@ -132,8 +137,11 @@ def main(act: bool = False) -> dict:
           f"floor {entry['floor']}) -> retrain {'due' if entry['retrain_due'] else 'not needed'}")
     if entry["retrain_due"] and act:
         record = retrain(load_daily(), state, today)
-        print(f"retrain: candidate {record['candidate_rmse']} vs incumbent {record['incumbent_rmse']} "
-              f"-> {'promoted' if record['promoted'] else 'kept incumbent'}")
+        if "skipped" in record:
+            print(f"retrain skipped: {record['skipped']}")
+        else:
+            print(f"retrain: candidate {record['candidate_rmse']} vs incumbent {record['incumbent_rmse']} "
+                  f"-> {'promoted' if record['promoted'] else 'kept incumbent'}")
     save_state(state)
     return entry
 

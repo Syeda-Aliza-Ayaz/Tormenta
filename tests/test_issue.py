@@ -28,7 +28,8 @@ def gfz():
 def paths(tmp_path, monkeypatch):
     for name, rel in [("FORECASTS_DIR", ""), ("FORECAST_LOG", "log.csv"), ("FORECAST_SCORES", "scores.csv"),
                       ("FORECAST_RECENT", "recent.csv"), ("NOAA_LIVE_CSV", "noaa_live.csv"), ("NOAA_LIVE_DIR", "noaa"),
-                      ("STORM_LOG", "storm_log.csv"), ("STORM_SCORES", "storm_scores.csv")]:
+                      ("STORM_LOG", "storm_log.csv"), ("STORM_SCORES", "storm_scores.csv"),
+                      ("SHADOW_LOG", "shadow_log.csv"), ("SOLAR_WIND_ARCHIVE", "solar_wind_hourly.csv")]:
         monkeypatch.setattr(config, name, tmp_path / rel)
     return tmp_path
 

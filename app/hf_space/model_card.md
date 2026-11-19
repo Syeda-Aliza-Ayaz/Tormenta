@@ -61,7 +61,7 @@ Actions job and scored against GFZ data as it arrives.
 |---|---|
 | **Models** | `models/forecast/histgb.joblib`: 14 `HistGradientBoostingRegressor` (7 lead days × Ap and max Kp), the headline forecast · `arimax.joblib`: statsmodels SARIMAX with the 27-day recurrence and F10.7 as inputs · `storm.joblib`: 7 `HistGradientBoostingClassifier` giving P(storm day, max Kp ≥ 5−) with thresholds tuned for rare events · `intervals.json`: 80% ranges from out-of-sample errors |
 | **Inputs** | Past daily Ap and max Kp (last 7 days, means), the values 27/54/81 days before each target day (solar rotation), F10.7 and its 81-day mean (flare spikes removed), season |
-| **Training data** | GFZ Potsdam daily Kp/Ap, 1947-06-01 → 2019-12-31 (26,512 days) |
+| **Training data** | GFZ Potsdam daily Kp/Ap, 1947-06-01 → 2026-06-30 for the live models; the test below used models fitted to 2019-12-31 (26,512 days) |
 | **Selection** | Each model had to beat the 27-day average on validation 2017–2019 by a rule fixed in advance; ARIMA, SARIMA and Chronos (a pretrained transformer) were tested and did not |
 | **Retraining** | Only when a weekly health check finds the live skill degraded twice in a row, behind a holdout gate |
 
@@ -69,13 +69,13 @@ Actions job and scored against GFZ data as it arrives.
 
 | Ap, root-mean-square error | day 1 | day 3 | day 7 |
 |---|---|---|---|
-| **HistGB** | **10.79** | **11.91** | **12.00** |
+| **HistGB** | **10.78** | **11.91** | **12.01** |
 | NOAA SWPC official forecast | 10.89 | 11.90 | – |
 | 27-day average (reference) | 12.27 | 12.45 | 12.48 |
 
 - Skill against the 27-day average: +0.10 averaged over lead days 1–7; level with NOAA on days 1–3.
-- The 80% ranges contain the observed Ap on 80–82% of days at every lead day.
-- Storm warning: Heidke skill 0.20–0.30 at every lead day, 29–54% of storm days caught, about 7 in 10 warnings
+- The 80% ranges contain the observed Ap on 80–81% of days at every lead day.
+- Storm warning: Heidke skill 0.19–0.34 at every lead day, 24–47% of storm days caught, 6 to 7 in 10 warnings
   false. The value forecasts alone catch almost no storms after day 1.
 - **Limitation:** storms caused by sudden solar eruptions (e.g. the May 2024 superstorm) cannot be foreseen from
   past values alone; their onset is missed and the risk rises only once the storm has begun.

@@ -28,7 +28,7 @@ from src.predict import load_bundle  # noqa: E402
 HERE = Path(__file__).parent
 # Pyodide packages the browser app needs (no scikit-learn: the model is the portable .npz, scores use numpy)
 BROWSER_REQUIREMENTS = ["numpy", "pandas", "altair", "requests"]
-SPACE_ASSETS = ["app/streamlit_app.py", "data/f107_history.csv", "reports/metrics/test.csv",
+SPACE_ASSETS = ["app/streamlit_app.py", "app/tormenta_ui/__init__.py", "app/tormenta_ui/data.py", "app/tormenta_ui/theme.py", "app/tormenta_ui/ui.py", "app/tormenta_ui/charts.py", "app/tormenta_ui/pages_live.py", "app/tormenta_ui/pages_models.py", "data/f107_history.csv", "reports/metrics/test.csv",
                 "forecasts/log.csv", "forecasts/scores.csv", "forecasts/recent.csv", "forecasts/noaa_live.csv",
                 "forecasts/storm_log.csv", "forecasts/past_forecasts.csv.gz",
                 "forecasts/monitor.json",

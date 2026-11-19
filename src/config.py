@@ -130,6 +130,12 @@ RECURRENCE_DAYS = 27                             # solar rotation seen from Eart
 # Same year boundaries as the nowcaster; history starts once the 81-day trailing F10.7 mean exists
 # (GFZ F10.7 starts 1947-02-14 → +81 d), so every model trains on the same days (DECISIONS D-19)
 FORECAST_TRAIN_START = "1947-06-01"
+# Days of history read before an issue day (or before FORECAST_TRAIN_START) for the lag and rolling-window
+# features: 81 + 27 days at most, rounded up (DECISIONS D-59)
+FORECAST_HISTORY_DAYS = 130
+# Live models are fitted on every definitive day up to here, after the test period was scored with models fitted
+# up to the end of validation (DECISIONS D-27, D-63)
+PRODUCTION_END = "2026-06-30"
 FORECAST_REPORTS_DIR = REPORTS_DIR / "forecast"
 
 # NOAA SWPC forecasts: benchmark only, never model inputs (DECISIONS D-06)
@@ -148,6 +154,8 @@ PAST_FORECASTS = FORECASTS_DIR / "past_forecasts.csv.gz"   # saved out-of-sample
 NOAA_LIVE_CSV = FORECASTS_DIR / "noaa_live.csv"   # NOAA 27-day outlook + 3-day forecast, parsed, saved every day
 NOAA_LIVE_DIR = FORECASTS_DIR / "noaa"            # the raw NOAA texts, as evidence
 STORM_LOG = FORECASTS_DIR / "storm_log.csv"       # APPEND-ONLY storm risk per lead day (src/forecast/storm.py, D-48)
+SHADOW_LOG = FORECASTS_DIR / "shadow_log.csv"        # APPEND-ONLY solar-wind candidate in shadow mode (src/forecast/sw_shadow.py, D-69)
+SOLAR_WIND_ARCHIVE = FORECASTS_DIR / "solar_wind_hourly.csv"  # hourly live solar wind kept past the 7-day feed (src/ingest/sw_archive.py)
 STORM_SCORES = FORECASTS_DIR / "storm_scores.csv" # storm_log rows whose day has arrived, with the observed max Kp
 RECENT_START = "2019-10-01"   # covers the test period and enough history (≥ 130 days) for interactive forecasts
 # Only issue when GFZ has published yesterday: a forecast issued late would already overlap its own lead day 1

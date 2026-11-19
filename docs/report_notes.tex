@@ -1339,7 +1339,7 @@ the storm line after day 1.
 \toprule
 Ap RMSE & day 1 & day 3 & day 7 & skill vs 27-day avg\\
 \midrule
-\textbf{HistGB} & \textbf{10.79} & \textbf{11.91} & \textbf{12.00} & $+0.100$\\
+\textbf{HistGB} & \textbf{10.78} & \textbf{11.91} & \textbf{12.01} & $+0.100$\\
 NOAA official (days 1--3) & 10.89 & 11.90 & -- & $+0.134$\\
 ARIMAX & 10.96 & 12.15 & 12.17 & $+0.069$\\
 Chronos-Bolt & 11.83 & 12.66 & 12.65 & $-0.015$\\
@@ -1349,9 +1349,11 @@ Chronos-Bolt & 11.83 & 12.66 & 12.65 & $-0.015$\\
 \end{center}
 \begin{itemize}[leftmargin=*]
 \item HistGB is the best of the project's models at every lead day and level with NOAA on days 1--3.
-\item 80\% ranges (from out-of-sample errors, Ap as log ratios) contain the observation on 80--82\% of days.
-\item Storm warning: Heidke skill 0.20--0.30 at every lead day; 29--54\% of storm days caught; about 7 in 10
+\item 80\% ranges (from out-of-sample errors, Ap as log ratios) contain the observation on 80--81\% of days.
+\item Storm warning: Heidke skill 0.19--0.34 at every lead day; 24--47\% of storm days caught; 6 to 7 in 10
 warnings false (the usual cost of warning about rare events).
+\item These scores belong to the models fitted up to 2019. After the test, the live models were refitted on data
+up to June 2026 (D-63).
 \item The skill drop from validation (quiet solar minimum) to test (active cycle 25) was expected and reported in
 advance.
 \end{itemize}

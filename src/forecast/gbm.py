@@ -30,6 +30,8 @@ SEARCH_SPACE = {"learning_rate": [0.02, 0.03, 0.05, 0.08], "max_iter": [200, 400
 def _xy(daily: pd.DataFrame, h: int, target: str):
     X, y = F.features(daily, h), F.targets(daily, h)[target]
     keep = y.notna() & X[["ap_lag0", "kpmax_lag0"]].notna().all(axis=1)
+    if "lead_in" in daily:                                 # history for the features only (DECISIONS D-59)
+        keep &= ~daily["lead_in"]
     return X[keep], y[keep]
 
 
@@ -61,7 +63,7 @@ class HistGBDirect(Forecaster):
     def predict(self, daily, origins):
         origins = as_origins(daily, origins)
         # features need up to 81 + 27 days of history before the earliest origin, nothing after the latest
-        window = daily.loc[origins.min() - pd.Timedelta(days=130): origins.max()]
+        window = daily.loc[origins.min() - pd.Timedelta(days=config.FORECAST_HISTORY_DAYS): origins.max()]
         per_lead = {}
         for h in config.FORECAST_LEADS:
             X = F.features(window, h).reindex(origins)
@@ -85,11 +87,17 @@ class HistGBDirect(Forecaster):
         return model
 
 
+def cv_folds(X: pd.DataFrame) -> list:
+    """Time-ordered folds with a gap of the longest lead: a row's target lies up to 7 days after its issue day, so
+    the last training rows before each validation fold would otherwise have targets inside it (DECISIONS D-59)."""
+    return list(TimeSeriesSplit(n_splits=config.CV_SPLITS, gap=max(config.FORECAST_LEADS)).split(X))
+
+
 def tune(train: pd.DataFrame, target: str, h: int = 3, n_iter: int = 12, log_ap: bool = False) -> tuple:
     """Random search with time-ordered CV on the training years, on one representative lead day.
     Scored as RMSE on the original scale, so log and raw targets are comparable."""
     X, y = _xy(train, h, target)
-    folds = list(TimeSeriesSplit(n_splits=config.CV_SPLITS).split(X))
+    folds = cv_folds(X)
     results = []
     for params in ParameterSampler(SEARCH_SPACE, n_iter=n_iter, random_state=config.RANDOM_STATE):
         errs = []

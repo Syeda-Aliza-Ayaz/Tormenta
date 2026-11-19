@@ -1,7 +1,8 @@
 """The interface every forecaster implements, so the backtest, the daily job and the apps treat them alike.
 
 Contract (tests/test_forecast.py enforces it for every registered model):
-  fit(daily)               learn from the rows given (the caller cuts them to the training period)
+  fit(daily)               learn from the rows given (the caller cuts them to the training period; rows flagged
+                           `lead_in` are history for features only, see sample_rows)
   predict(daily, origins)  for each origin day D, forecast D+1 … D+7 using ONLY rows on or before D
                            → long frame: origin, lead, target_date, ap, kpmax
 """
@@ -22,6 +23,11 @@ class Forecaster:
 
     def predict(self, daily: pd.DataFrame, origins) -> pd.DataFrame:
         raise NotImplementedError
+
+
+def sample_rows(daily: pd.DataFrame) -> pd.DataFrame:
+    """The rows a model learns from: training_rows() prepends history days flagged `lead_in` (DECISIONS D-59)."""
+    return daily[~daily["lead_in"]] if "lead_in" in daily else daily
 
 
 def as_origins(daily: pd.DataFrame, origins) -> pd.DatetimeIndex:

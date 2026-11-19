@@ -11,6 +11,8 @@ Files written (all in forecasts/, all committed):
                  observed value and its quality flag (it changes when provisional values become definitive).
   recent.csv     the last 60 days of observed Ap / max Kp, so the apps can draw history without calling GFZ.
   noaa_live.csv  NOAA's 27-day outlook and 3-day forecast, parsed; the raw texts go to forecasts/noaa/.
+  shadow_log.csv APPEND-ONLY. The solar-wind candidate in shadow mode, with its fallback (src/forecast/sw_shadow.py).
+  solar_wind_hourly.csv  hourly live solar wind, kept beyond the feed's 7 days (src/ingest/sw_archive.py).
 """
 import argparse
 
@@ -18,8 +20,8 @@ import pandas as pd
 
 from src import backtest, config
 from src.daily import build_daily, check
-from src.forecast import intervals, registry, storm
-from src.ingest import fetch_noaa
+from src.forecast import intervals, registry, storm, sw_shadow
+from src.ingest import fetch_noaa, sw_archive
 from src.ingest.fetch_gfz import download_gfz, load_gfz_daily
 
 LOG_COLUMNS = ["issued_at", "origin", "origin_flag", "model", "model_version", "lead", "target_date",
@@ -37,8 +39,8 @@ def choose_origin(daily: pd.DataFrame, today: pd.Timestamp):
 
 
 def production_window(daily: pd.DataFrame) -> pd.DataFrame:
-    """Fixed fitting window for the live models: train + validation (everything before the test years)."""
-    return backtest.training_rows(daily, pd.Timestamp(f"{config.TEST_START_YEAR}-01-01"))
+    """Fixed fitting window for the live models: every definitive day up to PRODUCTION_END (DECISIONS D-63)."""
+    return backtest.training_rows(daily, pd.Timestamp(config.PRODUCTION_END) + pd.Timedelta(days=1))
 
 
 def issue(daily: pd.DataFrame, origin: pd.Timestamp, models, issued_at: pd.Timestamp) -> pd.DataFrame:
@@ -125,6 +127,8 @@ def run(download: bool = True, now: pd.Timestamp = None, models=None) -> dict:
         download_gfz()
     daily = build_daily(load_gfz_daily())
     check(daily)
+    # keeps solar wind past the feed's 7 days, before issuing so the shadow model sees the latest day
+    sw = sw_archive.update() if download else sw_archive.load()
 
     log = load_log()
     origin = choose_origin(daily, now.normalize())
@@ -144,6 +148,12 @@ def run(download: bool = True, now: pd.Timestamp = None, models=None) -> dict:
         new_storm = issue_storm(daily, origin, now)
         if new_storm is not None:
             storm_log = append_storm(storm_log, new_storm)
+    shadow_log = sw_shadow.load_log()
+    if origin is not None and sw_shadow.BUNDLE.exists():
+        try:                                          # the shadow model must never block the live forecast
+            shadow_log = sw_shadow.append(shadow_log, sw_shadow.issue(daily, origin, new, sw, now))
+        except Exception as exc:                      # noqa: BLE001
+            print(f"WARNING: shadow forecast not issued ({type(exc).__name__}: {exc})")
 
     config.FORECASTS_DIR.mkdir(parents=True, exist_ok=True)
     log.to_csv(config.FORECAST_LOG, index=False)
@@ -154,6 +164,8 @@ def run(download: bool = True, now: pd.Timestamp = None, models=None) -> dict:
     noaa.to_csv(config.NOAA_LIVE_CSV, index=False)
     storm_log.reindex(columns=STORM_COLUMNS).to_csv(config.STORM_LOG, index=False)
     score_storm(storm_log, daily).to_csv(config.STORM_SCORES, index=False)
+    if len(shadow_log):
+        shadow_log.reindex(columns=sw_shadow.LOG_COLUMNS).to_csv(config.SHADOW_LOG, index=False)
     print(f"log {len(log)} rows | scored {len(scores)} | NOAA rows {len(noaa)} | storm log {len(storm_log)} rows")
     return {"origin": origin, "new_rows": n_new, "log": log, "scores": scores}
 
@@ -167,7 +179,8 @@ def issue_storm(daily: pd.DataFrame, origin: pd.Timestamp, issued_at: pd.Timesta
     if not storm.BUNDLE.exists():
         return None
     model = storm.StormClassifier.load()
-    fc = model.predict(daily, [origin]).assign(issued_at=issued_at, model_version=f"until {model.trained_until_}")
+    version = f"until {model.trained_until_}" + (", calibrated" if getattr(model, "calibration_", None) else "")
+    fc = model.predict(daily, [origin]).assign(issued_at=issued_at, model_version=version)
     return fc.reindex(columns=STORM_COLUMNS)
 
 
