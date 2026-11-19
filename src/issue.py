@@ -151,7 +151,12 @@ def run(download: bool = True, now: pd.Timestamp = None, models=None) -> dict:
     shadow_log = sw_shadow.load_log()
     if origin is not None and sw_shadow.BUNDLE.exists():
         try:                                          # the shadow model must never block the live forecast
-            shadow_log = sw_shadow.append(shadow_log, sw_shadow.issue(daily, origin, new, sw, now))
+            shadow_new = sw_shadow.issue(daily, origin, new, sw, now)
+            before_shadow = len(shadow_log)
+            shadow_log = sw_shadow.append(shadow_log, shadow_new)
+            print(f"shadow {sw_shadow.NAME}: origin {origin.date()}, solar wind {shadow_new['sw_status'].iloc[0]} "
+                  f"(echo days missing {shadow_new['echo_days_missing'].iloc[0]}), served "
+                  f"{shadow_new['served'].iloc[0]}, {len(shadow_log) - before_shadow} new rows")
         except Exception as exc:                      # noqa: BLE001
             print(f"WARNING: shadow forecast not issued ({type(exc).__name__}: {exc})")
 
