@@ -141,7 +141,7 @@ def scorecard(theme: str, now: pd.Timestamp):
             show_chart(monitor_chart(windows, float(windows["skill"].quantile(0.05)), theme), theme)
             st.caption("What the monitor would have seen on the test period. A retrain is due only after two weekly checks in a "
                        "row below the line, and the new model must also beat the current one on the newest 6 months.")
-    ui.show(ui.credits(t))
+    ui.show(ui.credits(t, theme))
 
 
 # ── Nowcast ──────────────────────────────────────────────────────────────────
@@ -178,7 +178,7 @@ def nowcast_page(theme: str, now: pd.Timestamp):
         past, ahead = live_df[~live_df["ahead"]], live_df[live_df["ahead"]]
         cur = past.iloc[-1]
         kp_now = float(cur["kp_pred"])
-        label = f"{past.index[-1]:%d %b %H:00} UTC · {level_of(kp_now)[3].lower()}"
+        label = f"{ui.pk(past.index[-1]):%d %b %H:00} PKT · {level_of(kp_now)[3].lower()}"
     ui.show(ui.hero("Nowcast", theme, f"{now:%H:%M:%S}", "earthphoto", scene_level(kp_now or 0), "NOWCAST", "Kp right now",
                     lead, f"Kp {kp_now:.1f}" if kp_now is not None else "—", label,
                     kp_now is not None and kp_now >= config.STORM_THRESHOLD), slot)
@@ -192,12 +192,12 @@ def nowcast_page(theme: str, now: pd.Timestamp):
         nxt = ""
         if len(ahead):
             a = ahead.iloc[-1]
-            nxt = (f'<span class="tm-sub">Next hour ({ahead.index[-1]:%H:00} UTC): Kp {a["kp_pred"]:.1f} '
+            nxt = (f'<span class="tm-sub">Next hour ({ui.pk(ahead.index[-1]):%H:00} PKT): Kp {a["kp_pred"]:.1f} '
                    f'({a["kp_lo"]:.1f}–{a["kp_hi"]:.1f}). That solar wind has already passed the spacecraft.</span>')
         readout = (f'<div class="tm-flat" style="padding:26px 28px;display:flex;flex-direction:column;gap:20px">'
                    f'<div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap"><span class="tm-mono" style="font-size:88px;line-height:.9;font-weight:600;letter-spacing:-0.03em">{kp_now:.1f}</span>'
                    f'<span style="display:flex;flex-direction:column;gap:6px;padding-bottom:6px">{ui.level_chip(kp_now, t)}'
-                   f'<span class="tm-sub" style="font-size:14px">Kp at {past.index[-1]:%H:00} UTC · 80% range {cur["kp_lo"]:.1f} – {cur["kp_hi"]:.1f}</span></span></div>'
+                   f'<span class="tm-sub" style="font-size:14px">Kp at {ui.pk(past.index[-1]):%H:00} PKT · 80% range {cur["kp_lo"]:.1f} – {cur["kp_hi"]:.1f}</span></span></div>'
                    f'{ui.kp_scale(kp_now, cur["kp_lo"], cur["kp_hi"], t)}<span style="font-size:14px;line-height:1.5">{ui.esc(lv[5])}</span>{nxt}</div>')
         w = hourly.dropna().iloc[-1]
         h24 = hourly.dropna().tail(24)
@@ -232,7 +232,7 @@ def nowcast_page(theme: str, now: pd.Timestamp):
 
         with ui.card("pages_models_5"):
             ui.show(ui.section_head("Last 5 days · nowcast vs observed Kp",
-                                    f"Shaded: 80% range. Data fetched {fetched:%H:%M} UTC; refreshed every 5 minutes."))
+                                    f"Shaded: 80% range. Data fetched {ui.pk(fetched):%H:%M} PKT; refreshed every 5 minutes."))
             show_chart(live_chart(live_df, theme), theme)
             c1, c2 = st.columns([1, 5])
             if c1.button("Refresh now"):
@@ -240,8 +240,8 @@ def nowcast_page(theme: str, now: pd.Timestamp):
                 st.rerun()
             with c2.expander("Hourly table"):
                 tab = live_df.tail(24).iloc[::-1]
-                ui.show(ui.table(["Hour (UTC)", "Kp", "80% low", "80% high", "Level"],
-                                 [[f"{i:%d %b %H:00}", f"{r.kp_pred:.2f}", f"{r.kp_lo:.2f}", f"{r.kp_hi:.2f}", level_of(r.kp_pred)[3]]
+                ui.show(ui.table(["Hour (PKT)", "Kp", "80% low", "80% high", "Level"],
+                                 [[f"{ui.pk(i):%d %b %H:00}", f"{r.kp_pred:.2f}", f"{r.kp_lo:.2f}", f"{r.kp_hi:.2f}", level_of(r.kp_pred)[3]]
                                   for i, r in zip(tab.index, tab.itertuples())], {1, 2, 3}))
 
     ui.show(ui.section_head("What if the solar wind changed?",
@@ -282,8 +282,8 @@ def nowcast_page(theme: str, now: pd.Timestamp):
             def predict(x):
                 return predict_on_history(bundle, hourly_h, f107_h, hour, edited_fields(x, shown))
             changed = edited_fields(values, shown)
-            title = (f"Kp at {hour:%d %b %H:00} UTC, real history" if not changed else
-                     f"Kp at {hour:%d %b %H:00} UTC with your {len(changed)} change{'s' if len(changed) > 1 else ''}")
+            title = (f"Kp at {ui.pk(hour):%d %b %H:00} PKT, real history" if not changed else
+                     f"Kp at {ui.pk(hour):%d %b %H:00} PKT with your {len(changed)} change{'s' if len(changed) > 1 else ''}")
         else:
             def predict(x):
                 return predict_steady(bundle, x)
@@ -306,7 +306,7 @@ def nowcast_page(theme: str, now: pd.Timestamp):
                 lab = st.radio("How does Kp respond to…", list(SWEEPS), horizontal=True, key="sweep_label")
                 show_chart(sweep_chart(values, lab, predict, theme), theme)
                 st.caption("Each point is a full model prediction with that one input changed and the others held at your values.")
-    ui.show(ui.credits(t))
+    ui.show(ui.credits(t, theme))
 
 
 # ── Method ───────────────────────────────────────────────────────────────────
@@ -399,4 +399,4 @@ def method(theme: str, now: pd.Timestamp):
         'degraded twice in a row.</p>'
         '<a class="tm-link" href="https://github.com/Syeda-Aliza-Ayaz/Tormenta/blob/main/DECISIONS.md" target="_blank" style="font-size:14px">Read the decision log on GitHub →</a>'
         '<a class="tm-link" href="https://huggingface.co/aliza-ayaz/tormenta" target="_blank" style="font-size:14px">Model card on Hugging Face →</a></article>'], 340))
-    ui.show(ui.credits(t))
+    ui.show(ui.credits(t, theme))

@@ -41,12 +41,41 @@ def fg_on(hex_color: str) -> str:
     return "#0B0F14" if lum > 0.25 else "#FFFFFF"
 
 
+def _svg_url(svg: str) -> str:
+    from urllib.parse import quote
+    return "data:image/svg+xml;utf8," + quote(svg)
+
+
+# faint dipole field lines across the light page, and a fine dot grid
+LIGHT_FIELD = _svg_url(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" fill="none" '
+    'stroke="#1D4E89" stroke-width="1.2" opacity="0.10">'
+    + "".join(f'<path d="M1180 360C{1180 - k * 120} {360 - k * 70} {1180 - k * 150} {640 + k * 70} 1180 640"></path>'
+              f'<path d="M1180 360C{1180 + k * 120} {360 - k * 70} {1180 + k * 150} {640 + k * 70} 1180 640"></path>'
+              for k in range(1, 8))
+    + '<circle cx="1180" cy="500" r="64" stroke-width="1.6"></circle></svg>')
+LIGHT_DOTS = _svg_url('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="1" cy="1" r="0.9" fill="#0D1B2A" opacity="0.07"></circle></svg>')
+SPINNER = _svg_url(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 32 32" fill="none">'
+    '<defs><linearGradient id="g" x1="2" y1="4" x2="30" y2="28" gradientUnits="userSpaceOnUse">'
+    '<stop offset="0" stop-color="#9CC9FF"/><stop offset="1" stop-color="#6FCF97"/></linearGradient></defs>'
+    '<g stroke="url(#g)" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="40" stroke-dashoffset="40">'
+    '<path d="M16 11.2C4.5 3 1.5 26 16 20.8"><animate attributeName="stroke-dashoffset" values="40;0;0;-40" dur="1.8s" repeatCount="indefinite"/></path>'
+    '<path d="M16 11.2C27.5 3 30.5 26 16 20.8"><animate attributeName="stroke-dashoffset" values="40;0;0;-40" dur="1.8s" begin="0.3s" repeatCount="indefinite"/></path></g>'
+    '<circle cx="16" cy="16" r="4.2" fill="url(#g)"><animate attributeName="r" values="3.6;4.4;3.6" dur="1.8s" repeatCount="indefinite"/></circle>'
+    '<circle r="1.6" fill="#9CC9FF"><animateMotion dur="1.6s" repeatCount="indefinite" path="M16 11.2C27.5 3 30.5 26 16 20.8C1.5 26 4.5 3 16 11.2"/></circle></svg>')
+
+
 def css(theme: str) -> str:
     t = TOKENS[theme]
     dark = theme == "dark"
     page_bg = (f"background: linear-gradient(rgba(4,6,10,0.42), rgba(4,6,10,0.42)), "
                f"url('{static('milkyway-eso0932a.jpg')}') center 38% / cover fixed, #04060A;") if dark else \
-        f"background: {t['ground']};"
+        (f"background: radial-gradient(1100px 620px at 88% -8%, rgba(29,78,137,0.13), transparent 62%) fixed, "
+         f"radial-gradient(900px 560px at -8% 34%, rgba(46,139,116,0.10), transparent 60%) fixed, "
+         f"radial-gradient(900px 620px at 55% 112%, rgba(123,94,167,0.09), transparent 62%) fixed, "
+         f"url(\"{LIGHT_FIELD}\") center top / 1600px auto no-repeat fixed, "
+         f"url(\"{LIGHT_DOTS}\") 0 0 / 22px 22px fixed, {t['ground']};")
     return f"""<style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
 :root {{ --tm-text:{t['text']}; --tm-muted:{t['muted']}; --tm-primary:{t['primary']}; --tm-surface:{t['surface']};
@@ -130,7 +159,7 @@ a {{ color: {t['link']}; }}
 .tm-table tbody tr:hover {{ background-color: rgba(156,201,255,0.07); }}
 .tm-table .num {{ text-align: right; font-family: 'IBM Plex Mono', monospace; }}
 .tm-scroll {{ overflow-x: auto; }}
-.tm-link {{ color: {t['link']}; text-decoration: none; background-image: linear-gradient(currentColor,currentColor);
+.tm-link {{ display: inline-block; width: fit-content; max-width: 100%; align-self: flex-start; color: {t['link']}; text-decoration: none; background-image: linear-gradient(currentColor,currentColor);
   background-size: 0% 1px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size .3s cubic-bezier(.2,.7,.2,1); }}
 .tm-link:hover {{ background-size: 100% 1px; }}
 .tm-nav a {{ transition: color .2s, border-color .25s; }}
@@ -148,33 +177,50 @@ a {{ color: {t['link']}; }}
 #vg-tooltip-element.vg-tooltip td.key {{ color: {t['muted']} !important; padding-right: 12px !important; }}
 #vg-tooltip-element.vg-tooltip td.value {{ color: {t['text']} !important; text-align: right !important; }}
 
-/* loader: a core with an orbiting arc, in place of Streamlit's spinner */
-[data-testid="stSpinner"] > div {{ display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-radius: 8px;
-  background: {t['surface']}; border: 1px solid {t['hair']}; color: {t['muted']}; font-size: 14px; }}
+/* loader: the logo's field lines draw while a particle orbits */
+[data-testid="stSpinner"] > div {{ display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 8px;
+  background: {t['surface']}; border: 1px solid {t['hair']}; color: {t['muted']}; font-size: 14px; width: fit-content; }}
 [data-testid="stSpinner"] i, [data-testid="stSpinner"] svg, [data-testid="stSpinnerIcon"] {{ display: none !important; }}
-[data-testid="stSpinner"] > div::before {{ content: ""; flex: 0 0 28px; height: 28px; border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, {t['primary']} 0 5px, transparent 5.5px),
-              conic-gradient(from 0deg, transparent 0 70%, {t['primary']} 100%);
-  -webkit-mask: radial-gradient(circle, #000 0 5px, transparent 5.5px 10.5px, #000 11px 14px);
-          mask: radial-gradient(circle, #000 0 5px, transparent 5.5px 10.5px, #000 11px 14px);
-  animation: tm-orbit 1.1s linear infinite; }}
-.tm-loader {{ display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-radius: 8px; background: {t['surface']};
-  border: 1px solid {t['hair']}; color: {t['muted']}; font-size: 14px; }}
-.tm-loader::before {{ content: ""; flex: 0 0 28px; height: 28px; border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, {t['primary']} 0 5px, transparent 5.5px),
-              conic-gradient(from 0deg, transparent 0 70%, {t['primary']} 100%);
-  -webkit-mask: radial-gradient(circle, #000 0 5px, transparent 5.5px 10.5px, #000 11px 14px);
-          mask: radial-gradient(circle, #000 0 5px, transparent 5.5px 10.5px, #000 11px 14px);
-  animation: tm-orbit 1.1s linear infinite; }}
-@keyframes tm-orbit {{ to {{ transform: rotate(360deg); }} }}
+[data-testid="stSpinner"] > div::before {{ content: ""; flex: 0 0 34px; height: 34px; background: url("{SPINNER}") center / contain no-repeat; }}
+.tm-loader {{ display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 8px; background: {t['surface']};
+  border: 1px solid {t['hair']}; color: {t['muted']}; font-size: 14px; width: fit-content; }}
+.tm-load-mark .tm-draw {{ stroke-dasharray: 40; animation: tm-draw 1.8s ease-in-out infinite; }}
+.tm-load-mark .tm-d2 {{ animation-delay: .3s; }}
+.tm-load-mark .tm-core {{ transform-box: fill-box; transform-origin: center; animation: tm-breathe 1.8s ease-in-out infinite; }}
+@keyframes tm-draw {{ 0% {{ stroke-dashoffset: 40; }} 45%, 60% {{ stroke-dashoffset: 0; }} 100% {{ stroke-dashoffset: -40; }} }}
+@keyframes tm-breathe {{ 0%, 100% {{ transform: scale(.88); }} 50% {{ transform: scale(1.06); }} }}
+.tm-splash {{ position: fixed; inset: 0; z-index: 99999; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(800px 500px at 50% 45%, #0E1726 0%, #05070A 70%);
+  animation: tm-splash-in .3s ease .5s both, tm-splash-out .6s ease 14s forwards; }}
+.tm-splash-in {{ display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; padding: 24px; }}
+.tm-splash-msg {{ font-size: 14px; color: #A9AFB8; }}
+.tm-splash-bar {{ width: 180px; height: 2px; border-radius: 2px; background: rgba(156,201,255,.15); overflow: hidden; }}
+.tm-splash-bar span {{ display: block; width: 40%; height: 100%; background: linear-gradient(90deg, #9CC9FF, #6FCF97);
+  animation: tm-bar 1.4s ease-in-out infinite; }}
+@keyframes tm-bar {{ 0% {{ transform: translateX(-110%); }} 100% {{ transform: translateX(260%); }} }}
+@keyframes tm-splash-in {{ from {{ opacity: 0; }} to {{ opacity: 1; }} }}
+@keyframes tm-splash-out {{ to {{ opacity: 0; visibility: hidden; }} }}
 .stApp [data-stale="true"] {{ opacity: .55; transition: opacity .3s; }}
+
+/* footer */
+.tm-footer ul {{ list-style: none !important; padding-left: 0 !important; margin: 0 !important; }}
+.tm-footer li {{ margin: 0 !important; padding: 0 !important; }}
+.tm-footer li::marker {{ content: none; }}
+.tm-foot-link {{ color: {t['muted']} !important; text-decoration: none !important; transition: color .2s; }}
+.tm-foot-link:hover {{ color: {t['text']} !important; }}
+.tm-gh {{ display: inline-flex; align-items: center; gap: 8px; width: fit-content; padding: 9px 14px; border-radius: 6px;
+  border: 1px solid {t['hair']}; background: {t['raised']}; color: {t['text']} !important; text-decoration: none !important; font-size: 13px;
+  transition: border-color .2s, transform .12s; }}
+.tm-gh:hover {{ border-color: {t['primary']}; }}
+.tm-gh:active {{ transform: translateY(1px); }}
 
 /* phones */
 @media (max-width: 720px) {{
   [data-testid="stMainBlockContainer"], .block-container {{ padding: 0 16px 48px !important; }}
   .tm-full header > div, .tm-full > div {{ padding-left: 16px !important; padding-right: 16px !important; }}
   .tm-nav {{ gap: 4px 16px !important; font-size: 13px !important; }}
-  .tm-navclock .tm-utc {{ display: none !important; }}
+  .tm-footer > div:first-child {{ grid-template-columns: 1fr 1fr !important; }}
+  .tm-footer > div:first-child > div:first-child {{ grid-column: 1 / -1; }}
   .tm-hero {{ -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 70px), transparent 100%);
     mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 70px), transparent 100%); }}
   .stApp [class*="st-key-card_"] {{ padding: 18px 16px; }}
@@ -231,6 +277,7 @@ html {{ scrollbar-width: thin; scrollbar-color: #4A515B transparent; }}
 @keyframes sh-stream2 {{ 0% {{ transform: translateX(0); opacity: 0; }} 8% {{ opacity: .9; }} 80% {{ opacity: .9; }} 100% {{ transform: translateX(840px); opacity: 0; }} }}
 @keyframes sh-breathe {{ from {{ opacity: .18; }} to {{ opacity: .32; }} }}
 @media (prefers-reduced-motion: reduce) {{
+  .tm-load-mark .tm-draw, .tm-load-mark .tm-core, .tm-splash-bar span {{ animation: none; stroke-dasharray: none; }}
   .sh-ray,.sh-star,.sh-dot,.sh-loop,.sh-flare,.sh-drift,.sh-flow,.sh-d1,.sh-d2,.sh-d3,.sh-kb,.sh-p2,.sh-earth-glow {{ animation: none; }}
   .tm-card, #tm-ring {{ transition: none; }} .tm-card:hover {{ transform: none; }}
 }}
@@ -243,9 +290,7 @@ CLIENT_JS = """<script>
   if (!w.__tmClock) {
     const tick = () => {
       const now = new Date();
-      const utc = now.toISOString().slice(11, 19);
       const pk = new Date(now.getTime() + 5 * 3600 * 1000).toISOString().slice(11, 19);   // Pakistan: UTC+5, no DST
-      d.querySelectorAll('.tm-clock').forEach(e => { e.textContent = utc; });
       d.querySelectorAll('.tm-clock-pk').forEach(e => { e.textContent = pk; });
     };
     w.__tmClock = setInterval(tick, 1000); tick();

@@ -22,6 +22,7 @@ st.set_page_config(page_title="Tormenta · Geomagnetic forecast", page_icon=str(
 
 from tormenta_ui import pages_live, pages_models  # noqa: E402
 from tormenta_ui.theme import CLIENT_JS, altair_ready, css  # noqa: E402
+from tormenta_ui.ui import splash as splash_html  # noqa: E402
 
 PAGES = {"overview": pages_live.overview, "forecast": pages_live.forecast, "explore": pages_live.explore,
          "scorecard": pages_models.scorecard, "nowcast": pages_models.nowcast_page, "method": pages_models.method}
@@ -33,7 +34,12 @@ theme = theme if theme in ("dark", "light") else "dark"
 
 altair_ready()
 st.markdown(css(theme), unsafe_allow_html=True)
+splash = st.empty()
+if not st.session_state.get("tm_booted"):        # full-screen loader on a visitor's first page load only
+    splash.markdown(splash_html(), unsafe_allow_html=True)
 PAGES[page](theme, pd.Timestamp.now("UTC"))
+splash.empty()
+st.session_state["tm_booted"] = True
 if hasattr(st, "iframe"):                       # live clock and cursor ring; a hidden helper frame
     st.iframe(CLIENT_JS, height=1)
 else:                                            # older Streamlit (in-browser build)

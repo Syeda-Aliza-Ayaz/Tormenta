@@ -45,7 +45,7 @@ ICONS = {
     "aurora": '<svg width="{s}" height="{s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 20h18"></path><path d="M5 17V9M9 17V5M13 17V7M17 17V4M21 17v-6"></path></svg>',
     "bolt": '<svg width="{s}" height="{s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"></path></svg>',
     "warn": '<svg width="{s}" height="{s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9.5 17h-19z"></path><path d="M12 10v4.5"></path><path d="M12 17.5v.5"></path></svg>',
-    "logo": '<svg width="{s}" height="{s}" viewBox="0 0 24 24" fill="none" stroke="#9CC9FF" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M2 12c3-6 17-6 20 0"></path><path d="M2 12c3 6 17 6 20 0"></path></svg>',
+    "logo": '<svg width="{s}" height="{s}" viewBox="0 0 32 32" fill="none" aria-hidden="true"><defs><linearGradient id="tm-lg" x1="2" y1="4" x2="30" y2="28" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9CC9FF"></stop><stop offset="1" stop-color="#6FCF97"></stop></linearGradient></defs><g stroke="url(#tm-lg)" stroke-width="1.7" stroke-linecap="round"><path d="M16 11.2C4.5 3 1.5 26 16 20.8"></path><path d="M16 11.2C27.5 3 30.5 26 16 20.8"></path><path d="M16 11.2C9.5 8 8.5 22.5 16 20.8" opacity=".6"></path><path d="M16 11.2C22.5 8 23.5 22.5 16 20.8" opacity=".6"></path></g><circle cx="16" cy="16" r="4.2" fill="url(#tm-lg)"></circle><path d="M12.6 10.1Q16 7.6 19.4 10.1" stroke="#6FCF97" stroke-width="1.5" stroke-linecap="round"></path></svg>',
     "moon": '<svg width="{s}" height="{s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg>',
     "sunny": '<svg width="{s}" height="{s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"></circle><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"></path></svg>',
 }
@@ -184,10 +184,22 @@ def _scene(scene: str, level: str, height: int) -> str:
     return photo + svg
 
 
+PKT_OFFSET_H = 5          # Pakistan Standard Time, UTC+5, no daylight saving
+
+
 def pk_time(now_label: str) -> str:
-    """Pakistan Standard Time (UTC+5, no daylight saving) for an HH:MM:SS UTC label."""
+    """HH:MM:SS in Pakistan time for an HH:MM:SS UTC label."""
     h, m, sec = (int(x) for x in now_label.split(":"))
-    return f"{(h + 5) % 24:02d}:{m:02d}:{sec:02d}"
+    return f"{(h + PKT_OFFSET_H) % 24:02d}:{m:02d}:{sec:02d}"
+
+
+def pk(ts):
+    """A UTC timestamp (naive or tz-aware) as naive Pakistan time, for display."""
+    import pandas as pd
+    ts = pd.Timestamp(ts)
+    if ts.tzinfo is not None:
+        ts = ts.tz_convert("UTC").tz_localize(None)
+    return ts + pd.Timedelta(hours=PKT_OFFSET_H)
 
 
 def _nav(active: str, theme: str, now_label: str) -> str:
@@ -199,13 +211,12 @@ def _nav(active: str, theme: str, now_label: str) -> str:
     label = "Switch to light theme" if theme == "dark" else "Switch to dark theme"
     return f"""<header class="tm-head" style="position:relative;z-index:2;border-bottom:1px solid rgba(255,255,255,0.08)">
 <div style="max-width:1280px;margin:0 auto;padding:0 40px;min-height:64px;display:flex;flex-wrap:wrap;align-items:center;gap:12px 36px">
-<a href="{href('Overview', theme)}" target="_self" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:#F1F2F4">{icon('logo', 22)}
+<a href="{href('Overview', theme)}" target="_self" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:#F1F2F4">{icon('logo', 28)}
 <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;letter-spacing:0.26em">TORMENTA</span></a>
 <nav class="tm-nav" aria-label="Main" style="display:flex;flex-wrap:wrap;gap:4px 26px;font-size:14px;align-self:stretch">{links}</nav>
 <span style="margin-left:auto;display:flex;align-items:center;gap:16px">
 <span class="tm-navclock" style="display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#C9CED6">
-<span class="sh-dot" style="width:7px;height:7px;border-radius:4px;background:#6FCF97"></span><span class="tm-utc"><span class="tm-clock">{now_label}</span> UTC</span>
-<span class="tm-utc" style="color:rgba(201,206,214,0.4)">·</span><span><span class="tm-clock-pk">{pk_time(now_label)}</span> PKT</span></span>
+<span class="sh-dot" style="width:7px;height:7px;border-radius:4px;background:#6FCF97"></span><span><span class="tm-clock-pk">{pk_time(now_label)}</span> PKT</span></span>
 <a href="{href(active, other)}" target="_self" aria-label="{label}" title="{label}" style="width:44px;height:44px;border-radius:6px;border:1px solid rgba(255,255,255,0.16);background:rgba(5,7,10,0.5);color:#F1F2F4;display:flex;align-items:center;justify-content:center">{icon('sunny' if theme == 'dark' else 'moon')}</a>
 </span></div></header>"""
 
@@ -252,8 +263,7 @@ def hero_overview(theme: str, now_label: str, date_label: str, level: str, kp: s
 <span style="font-size:17px;line-height:1.5;color:#C9CED6;max-width:560px">{esc(line)}</span>
 <span style="display:flex;flex-wrap:wrap;gap:8px 22px;font-family:'IBM Plex Mono',monospace;font-size:14px;color:#C9CED6;padding-top:6px">{stats}</span></div>
 <div class="tm-hero-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:16px;flex:0 1 380px">
-<span style="font-family:'IBM Plex Mono',monospace;font-size:34px;font-weight:500;letter-spacing:0.02em"><span class="tm-clock">{now_label}</span><span style="font-size:14px;color:#A9AFB8"> UTC</span></span>
-<span style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:500;color:#C9CED6"><span class="tm-clock-pk">{pk_time(now_label)}</span><span style="font-size:13px;color:#A9AFB8"> PKT · Pakistan</span></span>
+<span style="font-family:'IBM Plex Mono',monospace;font-size:34px;font-weight:500;letter-spacing:0.02em"><span class="tm-clock-pk">{pk_time(now_label)}</span><span style="font-size:14px;color:#A9AFB8"> PKT</span></span>
 <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#A9AFB8">{esc(date_label)}</span>{watch_html}</div></div>
 </section>"""
 
@@ -346,11 +356,6 @@ def sparkline(values: list, width: int, height: int, color: str, top: float = No
             f'<circle cx="{last_x}" cy="{last_y}" r="3.5" fill="{color}"></circle></svg>')
 
 
-def loader(text: str) -> str:
-    """Inline loading message with the orbit animation (theme.py, .tm-loader)."""
-    return f'<div class="tm-loader" role="status">{esc(text)}</div>'
-
-
 def tile(icon_name: str, title: str, value: str, unit: str, note: str, t: dict, extra: str = "") -> str:
     return (f'<article class="tm-card" style="padding:18px;display:flex;flex-direction:column;gap:10px;min-height:150px">'
             f'<span style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;letter-spacing:0.06em;color:{t["muted"]}">'
@@ -365,9 +370,58 @@ def card(name: str):
     return st.container(key=f"card_{name}")
 
 
-def credits(t: dict) -> str:
-    return (f'<div class="tm-credits" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;padding-top:20px;margin-top:12px;'
-            f'border-top:1px solid {t["hair"]};font-size:12px;color:{t["muted"]}">'
-            '<span>Data: GFZ Potsdam (Kp, Ap, F10.7, CC BY 4.0) · NOAA SWPC · NASA OMNIWeb. Images: Milky Way ESO/S. Brunier (CC BY 4.0) · '
-            'Earth NASA EPIC/DSCOVR · black hole NASA/JPL-Caltech.</span>'
-            '<span style="font-family:\'IBM Plex Mono\',monospace">Tormenta · CT-378 Machine Learning, NED University</span></div>')
+REPO = "https://github.com/Syeda-Aliza-Ayaz/Tormenta"
+
+
+def credits(t: dict, theme: str = "dark") -> str:
+    """Site footer: brand, pages, data sources, project links, then image credits."""
+    def col(title, links):
+        items = "".join(f'<li><a class="tm-foot-link" href="{u}" {"" if u.startswith("?") else "target=\"_blank\" rel=\"noopener\""}>{esc(n)}</a></li>'
+                        for n, u in links)
+        return (f'<div style="display:flex;flex-direction:column;gap:12px;min-width:0"><span class="tm-eyebrow" style="font-size:11px">{esc(title)}</span>'
+                f'<ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:14px">{items}</ul></div>')
+    pages = [(name, href(name, theme).replace("&amp;", "&")) for name in PAGES]
+    data = [("GFZ Potsdam · Kp, Ap, F10.7", "https://kp.gfz.de/en/"), ("NOAA SWPC · real-time solar wind", "https://www.swpc.noaa.gov/"),
+            ("NASA OMNIWeb · training archive", "https://omniweb.gsfc.nasa.gov/")]
+    project = [("GitHub repository", REPO), ("Decision log", REPO + "/blob/main/DECISIONS.md"),
+               ("Open work", REPO + "/blob/main/TODO.md"), ("Releases · v2.0", REPO + "/releases/tag/v2.0")]
+    gh = ('<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"></path></svg>')
+    return (f'<div class="tm-footer" role="contentinfo" style="margin-top:28px;border-top:1px solid {t["hair"]};padding-top:36px;display:flex;flex-direction:column;gap:28px">'
+            f'<div style="display:grid;grid-template-columns:minmax(240px,1.6fr) repeat(auto-fit,minmax(160px,1fr));gap:28px 36px">'
+            f'<div style="display:flex;flex-direction:column;gap:14px;max-width:340px">'
+            f'<span style="display:flex;align-items:center;gap:10px">{icon("logo", 30)}'
+            f'<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:600;font-size:15px;letter-spacing:0.26em;color:{t["text"]}">TORMENTA</span></span>'
+            f'<span style="font-size:14px;line-height:1.6;color:{t["muted"]}">Geomagnetic storm forecasts from ninety years of official records: '
+            f'a 7-day outlook issued every morning and an hourly nowcast from the solar wind.</span>'
+            f'<a class="tm-gh" href="{REPO}" target="_blank" rel="noopener">{gh}<span>View on GitHub</span></a></div>'
+            f'{col("PAGES", pages)}{col("DATA", data)}{col("PROJECT", project)}</div>'
+            f'<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 24px;padding:18px 0 4px;border-top:1px solid {t["hair"]};'
+            f'font-size:12px;line-height:1.6;color:{t["muted"]}">'
+            '<span>© 2026 Tormenta · CT-378 Machine Learning, NED University of Engineering &amp; Technology. A course project, '
+            'not an operational warning service: for official alerts use NOAA SWPC.</span>'
+            '<span>Images: Milky Way ESO/S. Brunier (CC BY 4.0) · Earth NASA EPIC/DSCOVR · black hole NASA/JPL-Caltech. '
+            'Data CC BY 4.0 (GFZ). Times in Pakistan time (PKT, UTC+5).</span></div></div>')
+
+
+LOADER_SVG = ('<svg width="{s}" height="{s}" viewBox="0 0 32 32" fill="none" aria-hidden="true" class="tm-load-mark">'
+              '<defs><linearGradient id="tm-lg2" x1="2" y1="4" x2="30" y2="28" gradientUnits="userSpaceOnUse">'
+              '<stop offset="0" stop-color="#9CC9FF"></stop><stop offset="1" stop-color="#6FCF97"></stop></linearGradient></defs>'
+              '<g stroke="url(#tm-lg2)" stroke-width="1.7" stroke-linecap="round" fill="none">'
+              '<path class="tm-draw" d="M16 11.2C4.5 3 1.5 26 16 20.8"></path><path class="tm-draw tm-d2" d="M16 11.2C27.5 3 30.5 26 16 20.8"></path></g>'
+              '<circle class="tm-core" cx="16" cy="16" r="4.2" fill="url(#tm-lg2)"></circle>'
+              '<circle r="1.6" fill="#F1F2F4"><animateMotion dur="1.6s" repeatCount="indefinite" '
+              'path="M16 11.2C27.5 3 30.5 26 16 20.8C1.5 26 4.5 3 16 11.2"></animateMotion></circle></svg>')
+
+
+def loader(text: str) -> str:
+    """Inline loading message with the animated mark."""
+    return f'<div class="tm-loader" role="status">{LOADER_SVG.replace("{s}", "34")}<span>{esc(text)}</span></div>'
+
+
+def splash() -> str:
+    """Full-screen loader for a visitor's first page load; it also fades out on its own after a while."""
+    return ('<div class="tm-splash" role="status" aria-label="Loading Tormenta"><div class="tm-splash-in">'
+            f'{LOADER_SVG.replace("{s}", "88")}'
+            '<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:600;font-size:15px;letter-spacing:0.32em;color:#F1F2F4">TORMENTA</span>'
+            '<span class="tm-splash-msg">Reading the solar wind and loading the forecast</span>'
+            '<span class="tm-splash-bar"><span></span></span></div></div>')
