@@ -41,7 +41,7 @@ def overview(theme: str, now: pd.Timestamp):
     t = TOKENS[theme]
     today = now.tz_localize(None).normalize()
     slot = st.empty()
-    ui.show(ui.hero_overview(theme, f"{now:%H:%M:%S}", f"{now:%A} {now.day} {now:%b %Y}", "quiet", "…", "Fetching live data",
+    ui.show(ui.hero_overview(theme, f"{now:%H:%M:%S}", f"{ui.pk(now):%A} {ui.pk(now).day} {ui.pk(now):%b %Y}", "quiet", "…", "Fetching live data",
                              0.0, "Reading the latest solar wind from NOAA.", [], None, live_ok=False), slot)
     live = try_live()
     issue = latest_issue()
@@ -87,7 +87,7 @@ def overview(theme: str, now: pd.Timestamp):
                 watch = (f"Storm watch · {label}", body)
                 break
     line = lv[5] if kp_now is not None else "Live solar-wind data is unavailable right now; showing today's forecast."
-    ui.show(ui.hero_overview(theme, f"{now:%H:%M:%S}", f"{now:%A} {now.day} {now:%b %Y}", scene_level(kp_show),
+    ui.show(ui.hero_overview(theme, f"{now:%H:%M:%S}", f"{ui.pk(now):%A} {ui.pk(now).day} {ui.pk(now):%b %Y}", scene_level(kp_show),
                              f"{kp_show:.1f}", lv[3] if not lv[2].startswith("G") else f"{lv[3]} · {lv[2]}", kp_show,
                              line, today_stats, watch, live_ok=kp_now is not None), slot)
 
@@ -118,7 +118,7 @@ def overview(theme: str, now: pd.Timestamp):
                 f'<a class="tm-link" href="{ui.href("Forecast", theme)}" target="_self" style="font-size:13px">Full forecast →</a></div>{rows_html}'
                 f'<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:10px 22px 14px;font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:{t["muted"]}">'
                 f'<span>Bar: 80% range on the Kp 0–9 scale · orange line: storm level (Kp 5−)</span>'
-                f'<span>Issued {origin_rows["issued_at"].max():%d %b %H:%M} UTC</span></div></div>')
+                f'<span>Issued {ui.pk(origin_rows["issued_at"].max()):%d %b %H:%M} PKT</span></div></div>')
 
     tiles = []
     if hourly is not None:
@@ -143,7 +143,7 @@ def overview(theme: str, now: pd.Timestamp):
         last = past["kp_pred"].tail(24)
         spark = (f'<article class="tm-card" style="padding:22px 24px;display:flex;flex-direction:column;gap:12px">'
                  f'<span style="display:flex;justify-content:space-between" class="tm-eyebrow"><span>NOWCAST · LAST 24 HOURS</span>'
-                 f'<span>max {last.max():.1f}</span></span>{ui.sparkline(list(last), 480, 110, t["primary"], top=max(3.0, float(last.max())), labels=(f"{last.index[0]:%H:00} UTC", f"{last.index[-1]:%H:00} UTC"), unit=" Kp")}'
+                 f'<span>max {last.max():.1f}</span></span>{ui.sparkline(list(last), 480, 110, t["primary"], top=max(3.0, float(last.max())), labels=(f"{ui.pk(last.index[0]):%H:00} PKT", f"{ui.pk(last.index[-1]):%H:00} PKT"), unit=" Kp")}'
                  f'<a class="tm-link" href="{ui.href("Nowcast", theme)}" target="_self" style="font-size:13px">Open the nowcast →</a></article>')
     trust = ""
     if head and head[0]:
@@ -153,7 +153,7 @@ def overview(theme: str, now: pd.Timestamp):
                  f'The warning caught {head[2]:.0%} of storm days a day ahead.</span>'
                  f'<a class="tm-link" href="{ui.href("Scorecard", theme)}" target="_self" style="font-size:13px">See the scorecard →</a></article>')
     ui.show(ui.grid([x for x in (spark, trust) if x], 340))
-    ui.show(ui.credits(t))
+    ui.show(ui.credits(t, theme))
 
 
 # ── Forecast ─────────────────────────────────────────────────────────────────
@@ -227,14 +227,14 @@ def forecast(theme: str, now: pd.Timestamp):
 
     issued, flag = latest["issued_at"].max(), int(latest["origin_flag"].iloc[0])
     late_h = (issued - (origin + pd.Timedelta(days=1))) / pd.Timedelta(hours=1)
-    note = (f"Issued {issued:%d %b %H:%M} UTC from GFZ data up to {origin:%d %b} ({GFZ_FLAGS.get(flag, flag)} values)."
+    note = (f"Issued {ui.pk(issued):%d %b %H:%M} PKT from GFZ data up to {origin:%d %b} ({GFZ_FLAGS.get(flag, flag)} values)."
             + (f" This issue went out {late_h:.0f} h into its first day because the scheduler started late; the models "
                "use no data from that day." if late_h > 3 else ""))
 
     d1 = hist.iloc[0]
     top_risk = warn_rows.loc[warn_rows["storm_prob"].idxmax()] if len(warn_rows) else None
     obs_last = recent.dropna(subset=["kpmax"]).iloc[-1]
-    # day 1 is today when the issue goes out after midnight UTC, which is the usual case
+    # day 1 is today when the issue goes out after midnight (GFZ days are UTC days), which is the usual case
     gap = (d1["target_date"].normalize() - now.tz_localize(None).normalize()).days
     d1_name = {0: "Today", 1: "Tomorrow"}.get(gap, f"{d1['target_date']:%A}")
     kpis = [ui.kpi(f"{d1_name} · {d1['target_date']:%a} {d1['target_date'].day}", f"Kp {d1['kpmax']:.1f}",
@@ -299,7 +299,7 @@ def forecast(theme: str, now: pd.Timestamp):
         cols = list(table.columns)
         rows = [[f"{d:%a %d %b}"] + [f"{v:.2f}" if col == "kpmax" else f"{v:.1f}" for v in r] for d, r in table.iterrows()]
         ui.show(ui.table(["Day"] + [FC_SERIES.get(c, c) for c in cols], rows, set(range(1, len(cols) + 1))))
-    ui.show(ui.credits(t))
+    ui.show(ui.credits(t, theme))
 
 
 # ── Explore ──────────────────────────────────────────────────────────────────
@@ -362,7 +362,7 @@ def explore(theme: str, now: pd.Timestamp):
         _replay(t, theme, past, recent_obs, pd.Timestamp(st.session_state["explore_day"]))
     else:
         _edit(t, theme, recent_obs)
-    ui.show(ui.credits(t))
+    ui.show(ui.credits(t, theme))
 
 
 def _replay(t, theme, past, recent_obs, origin):

@@ -104,8 +104,9 @@ def forecast_chart(long: pd.DataFrame, origin: pd.Timestamp, col: str, unit: str
 
 def _utc(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    out["label"] = out.index.strftime("%d %b %H:00 UTC")
-    out["time"] = out.index.tz_localize("UTC")
+    pk = out.index + pd.Timedelta(hours=5)                 # shown in Pakistan time (UTC+5)
+    out["label"] = pk.strftime("%d %b %H:00 PKT")
+    out["time"] = pk.tz_localize("UTC")                     # a UTC axis over shifted times prints PKT
     return out.reset_index(drop=True)
 
 
