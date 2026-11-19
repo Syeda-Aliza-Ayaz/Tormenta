@@ -57,16 +57,21 @@ html, body, .stApp {{ {page_bg} color: {t['text']}; }}
 .stApp h2.tm-h2, .stApp .stMarkdown h2.tm-h2 {{ font-size: 18px !important; font-weight: 600 !important; line-height: 1.3 !important; padding: 0 !important; margin: 0 !important; letter-spacing: 0 !important; }}
 .stApp .stMarkdown h3 {{ padding: 0 !important; line-height: 1.3 !important; }}
 .stApp .stMarkdown h1 {{ padding: 0 !important; }}
-.stApp [class*="st-key-card_"] {{ background: {t['surface']}; border: 1px solid {t['hair']}; border-radius: 6px; padding: 18px 20px; }}
+.stApp [class*="st-key-card_"] {{ background: {t['surface']}; border: 1px solid {t['hair']}; border-radius: 8px; padding: 22px 24px; gap: 14px; }}
 .stApp code, .tm-mono {{ font-family: 'IBM Plex Mono', monospace !important; }}
 header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], #MainMenu, footer,
 [data-testid="stStatusWidget"] {{ display: none !important; }}
 [data-testid="stMainBlockContainer"], .block-container {{ max-width: 1280px; padding: 0 40px 64px !important; }}
 [data-testid="stAppViewContainer"] > .main, section.main {{ background: transparent; }}
-.stApp [data-testid="stVerticalBlock"] {{ gap: 14px; }}
+.stApp [data-testid="stVerticalBlock"] {{ gap: 20px; }}
+.stApp [data-testid="stHorizontalBlock"] {{ gap: 16px; }}
+.stApp .stMarkdown, .stApp [data-testid="stMarkdown"], .stApp [data-testid="stMarkdownContainer"] {{ margin-bottom: 0 !important; }}
+.stApp [data-testid="stMarkdownContainer"] > div:last-child {{ margin-bottom: 0; }}
 .element-container:has(iframe[height="0"]), [data-testid="stElementContainer"]:has(iframe[srcdoc*="tmClock"]), .element-container:has(iframe[srcdoc*="tmClock"]) {{ display: none !important; }}
 .tm-full {{ width: 100vw; margin-left: calc(50% - 50vw); }}
-.tm-gap {{ margin-bottom: 18px; }}
+.tm-gap {{ margin-bottom: 8px; }}
+.tm-hero {{ -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 120px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 120px), transparent 100%); }}
 .tm-head {{ background: rgba(5,7,10,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }}
 a {{ color: {t['link']}; }}
 
@@ -108,15 +113,19 @@ a {{ color: {t['link']}; }}
 [data-testid="stSliderTickBarMin"], [data-testid="stSliderTickBarMax"] {{ color: {t['muted']}; }}
 
 /* own components */
-.tm-card {{ background: {t['surface']}; border: 1px solid {t['hair']}; border-radius: 6px;
+.tm-card {{ background: {t['surface']}; border: 1px solid {t['hair']}; border-radius: 8px; box-sizing: border-box; min-width: 0;
   transition: transform .28s cubic-bezier(.2,.7,.2,1), border-color .28s, box-shadow .28s; }}
 .tm-card:hover {{ transform: translateY(-3px); border-color: rgba(156,201,255,0.5); box-shadow: 0 18px 40px -24px rgba(156,201,255,0.45); }}
-.tm-flat {{ background: {t['surface']}; border: 1px solid {t['hair']}; border-radius: 6px; }}
+.tm-flat {{ background: {t['surface']}; border: 1px solid {t['hair']}; border-radius: 8px; box-sizing: border-box; }}
+.tm-flat > .tm-table th:first-child, .tm-flat > .tm-table td:first-child {{ padding-left: 20px; }}
+.tm-flat > .tm-table th:last-child, .tm-flat > .tm-table td:last-child {{ padding-right: 20px; }}
+.tm-flat > .tm-table caption {{ padding: 20px 20px 8px !important; }}
+.tm-flat > p.tm-sub {{ padding: 14px 20px 18px !important; }}
 .tm-cell, .tm-row {{ transition: background-color .2s; }}
 .tm-cell:hover, .tm-row:hover {{ background-color: rgba(156,201,255,0.07) !important; }}
 .tm-table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
-.tm-table th {{ text-align: left; color: {t['muted']}; font-weight: 500; font-size: 12px; padding: 10px 12px; border-bottom: 1px solid {t['hair']}; }}
-.tm-table td {{ padding: 11px 12px; border-bottom: 1px solid {t['grid']}; color: {t['text']}; }}
+.tm-table th {{ text-align: left; color: {t['muted']}; font-weight: 500; font-size: 12px; padding: 12px 14px; border-bottom: 1px solid {t['hair']}; }}
+.tm-table td {{ padding: 12px 14px; border-bottom: 1px solid {t['grid']}; color: {t['text']}; }}
 .tm-table tbody tr {{ transition: background-color .2s; }}
 .tm-table tbody tr:hover {{ background-color: rgba(156,201,255,0.07); }}
 .tm-table .num {{ text-align: right; font-family: 'IBM Plex Mono', monospace; }}
@@ -132,12 +141,43 @@ a {{ color: {t['link']}; }}
 .tm-sub {{ font-size: 13px; color: {t['muted']}; line-height: 1.5; }}
 :focus-visible {{ outline: 2px solid {t['primary']}; outline-offset: 2px; }}
 
+/* chart tooltips */
+#vg-tooltip-element.vg-tooltip {{ background: {t['raised']} !important; color: {t['text']} !important; border: 1px solid {t['hair']} !important;
+  border-radius: 6px !important; padding: 10px 12px !important; box-shadow: 0 12px 32px -12px rgba(0,0,0,.55) !important;
+  font-family: 'IBM Plex Mono', monospace !important; font-size: 12px !important; }}
+#vg-tooltip-element.vg-tooltip td.key {{ color: {t['muted']} !important; padding-right: 12px !important; }}
+#vg-tooltip-element.vg-tooltip td.value {{ color: {t['text']} !important; text-align: right !important; }}
+
+/* loader: a core with an orbiting arc, in place of Streamlit's spinner */
+[data-testid="stSpinner"] > div {{ display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-radius: 8px;
+  background: {t['surface']}; border: 1px solid {t['hair']}; color: {t['muted']}; font-size: 14px; }}
+[data-testid="stSpinner"] i, [data-testid="stSpinner"] svg, [data-testid="stSpinnerIcon"] {{ display: none !important; }}
+[data-testid="stSpinner"] > div::before {{ content: ""; flex: 0 0 28px; height: 28px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, {t['primary']} 0 5px, transparent 5.5px),
+              conic-gradient(from 0deg, transparent 0 70%, {t['primary']} 100%);
+  -webkit-mask: radial-gradient(circle, #000 0 5px, transparent 5.5px 10.5px, #000 11px 14px);
+          mask: radial-gradient(circle, #000 0 5px, transparent 5.5px 10.5px, #000 11px 14px);
+  animation: tm-orbit 1.1s linear infinite; }}
+.tm-loader {{ display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-radius: 8px; background: {t['surface']};
+  border: 1px solid {t['hair']}; color: {t['muted']}; font-size: 14px; }}
+.tm-loader::before {{ content: ""; flex: 0 0 28px; height: 28px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, {t['primary']} 0 5px, transparent 5.5px),
+              conic-gradient(from 0deg, transparent 0 70%, {t['primary']} 100%);
+  -webkit-mask: radial-gradient(circle, #000 0 5px, transparent 5.5px 10.5px, #000 11px 14px);
+          mask: radial-gradient(circle, #000 0 5px, transparent 5.5px 10.5px, #000 11px 14px);
+  animation: tm-orbit 1.1s linear infinite; }}
+@keyframes tm-orbit {{ to {{ transform: rotate(360deg); }} }}
+.stApp [data-stale="true"] {{ opacity: .55; transition: opacity .3s; }}
+
 /* phones */
 @media (max-width: 720px) {{
   [data-testid="stMainBlockContainer"], .block-container {{ padding: 0 16px 48px !important; }}
   .tm-full header > div, .tm-full > div {{ padding-left: 16px !important; padding-right: 16px !important; }}
   .tm-nav {{ gap: 4px 16px !important; font-size: 13px !important; }}
-  .tm-navclock {{ display: none !important; }}
+  .tm-navclock .tm-utc {{ display: none !important; }}
+  .tm-hero {{ -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 70px), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 70px), transparent 100%); }}
+  .stApp [class*="st-key-card_"] {{ padding: 18px 16px; }}
   .tm-kp-big {{ font-size: 96px !important; }}
   .tm-hero-h1 {{ font-size: 32px !important; }}
   .tm-stat-big {{ font-size: 40px !important; }}
@@ -153,9 +193,13 @@ html {{ scrollbar-width: thin; scrollbar-color: #4A515B transparent; }}
 ::-webkit-scrollbar-thumb:hover {{ background-color: {t['primary']}; }}
 
 /* cursor and trailing ring (desktop only) */
-#tm-ring {{ position: fixed; left: 0; top: 0; width: 32px; height: 32px; box-sizing: border-box; border-radius: 50%;
-  border: 1.5px solid #FFFFFF; mix-blend-mode: difference; pointer-events: none; z-index: 100000; opacity: 0;
-  transition: transform .14s cubic-bezier(.2,.7,.2,1), opacity .2s; }}
+#tm-ring {{ position: fixed; left: 0; top: 0; width: 34px; height: 34px; margin: -17px 0 0 -17px; box-sizing: border-box;
+  border-radius: 50%; border: 1.5px solid {t['primary']}; pointer-events: none; z-index: 100000; opacity: 0;
+  transition: width .22s cubic-bezier(.2,.7,.2,1), height .22s cubic-bezier(.2,.7,.2,1), margin .22s cubic-bezier(.2,.7,.2,1),
+  background-color .22s, opacity .25s; will-change: transform; }}
+#tm-ring.hot {{ width: 48px; height: 48px; margin: -24px 0 0 -24px; background-color: rgba(156,201,255,0.12); }}
+#tm-ring.down {{ width: 24px; height: 24px; margin: -12px 0 0 -12px; }}
+#tm-ring.text {{ opacity: 0 !important; }}
 @media (hover: hover) and (pointer: fine) {{
   .stApp, .stApp * {{ cursor: url('{static("cursor-dot.svg")}') 12 12, auto; }}
   .stApp a, .stApp a *, .stApp button, .stApp button *, .stApp label, .stApp [role="button"], .stApp [role="tab"],
@@ -197,18 +241,35 @@ CLIENT_JS = """<script>
 (function () {
   const w = window.parent, d = w.document;
   if (!w.__tmClock) {
-    const tick = () => { const s = new Date().toISOString().slice(11, 19); d.querySelectorAll('.tm-clock').forEach(e => { e.textContent = s; }); };
+    const tick = () => {
+      const now = new Date();
+      const utc = now.toISOString().slice(11, 19);
+      const pk = new Date(now.getTime() + 5 * 3600 * 1000).toISOString().slice(11, 19);   // Pakistan: UTC+5, no DST
+      d.querySelectorAll('.tm-clock').forEach(e => { e.textContent = utc; });
+      d.querySelectorAll('.tm-clock-pk').forEach(e => { e.textContent = pk; });
+    };
     w.__tmClock = setInterval(tick, 1000); tick();
   }
   const fine = w.matchMedia('(hover: hover) and (pointer: fine)').matches;
   const calm = w.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (fine && !calm && !d.getElementById('tm-ring')) {
+  if (fine && !d.getElementById('tm-ring')) {
     const r = d.createElement('div'); r.id = 'tm-ring'; d.body.appendChild(r);
+    let mx = -100, my = -100, rx = -100, ry = -100, running = false;
+    const ease = calm ? 1 : 0.2;                       // the ring eases behind the pointer
+    const step = () => {
+      rx += (mx - rx) * ease; ry += (my - ry) * ease;
+      r.style.transform = 'translate3d(' + rx + 'px,' + ry + 'px,0)';
+      if (Math.abs(mx - rx) > 0.1 || Math.abs(my - ry) > 0.1) { w.requestAnimationFrame(step); } else { running = false; }
+    };
     d.addEventListener('mousemove', e => {
-      const hot = e.target && e.target.closest ? e.target.closest('a, button, label, input, [role=button], [role=tab]') : null;
-      r.style.opacity = '1';
-      r.style.transform = 'translate(' + (e.clientX - 16) + 'px,' + (e.clientY - 16) + 'px) scale(' + (hot ? 1.5 : 1) + ')';
+      mx = e.clientX; my = e.clientY; r.style.opacity = '1';
+      const tg = e.target && e.target.closest ? e.target : null;
+      r.classList.toggle('hot', !!(tg && tg.closest('a, button, label, [role=button], [role=tab], summary, [data-baseweb=select]')));
+      r.classList.toggle('text', !!(tg && tg.closest('input, textarea')));
+      if (!running) { running = true; w.requestAnimationFrame(step); }
     });
+    d.addEventListener('mousedown', () => r.classList.add('down'));
+    d.addEventListener('mouseup', () => r.classList.remove('down'));
     d.addEventListener('mouseleave', () => { r.style.opacity = '0'; });
   }
 })();

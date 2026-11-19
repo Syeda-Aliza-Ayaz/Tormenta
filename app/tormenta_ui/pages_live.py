@@ -141,13 +141,13 @@ def overview(theme: str, now: pd.Timestamp):
     spark = ""
     if past is not None:
         last = past["kp_pred"].tail(24)
-        spark = (f'<article class="tm-card" style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">'
+        spark = (f'<article class="tm-card" style="padding:22px 24px;display:flex;flex-direction:column;gap:12px">'
                  f'<span style="display:flex;justify-content:space-between" class="tm-eyebrow"><span>NOWCAST · LAST 24 HOURS</span>'
-                 f'<span>max {last.max():.1f}</span></span>{ui.sparkline(list(last), 480, 90, t["primary"], top=max(3.0, float(last.max())))}'
+                 f'<span>max {last.max():.1f}</span></span>{ui.sparkline(list(last), 480, 110, t["primary"], top=max(3.0, float(last.max())), labels=(f"{last.index[0]:%H:00} UTC", f"{last.index[-1]:%H:00} UTC"), unit=" Kp")}'
                  f'<a class="tm-link" href="{ui.href("Nowcast", theme)}" target="_self" style="font-size:13px">Open the nowcast →</a></article>')
     trust = ""
     if head and head[0]:
-        trust = (f'<article class="tm-card" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px">'
+        trust = (f'<article class="tm-card" style="padding:22px 24px;display:flex;flex-direction:column;gap:10px">'
                  f'<span class="tm-eyebrow">HOW FAR TO TRUST THIS</span><span style="font-size:15px;line-height:1.55">'
                  f'Level with NOAA\'s official forecast one day ahead (Ap error {head[0]:.2f} vs {head[1]:.2f}, 2020 – mid-2026). '
                  f'The warning caught {head[2]:.0%} of storm days a day ahead.</span>'
@@ -179,14 +179,14 @@ def _day_cards(hist: pd.DataFrame, warn_rows: pd.DataFrame, t: dict, actual: pd.
             happened = (f'<span style="font-size:12px;color:{t["alert_text"] if a >= config.STORM_THRESHOLD else t["muted"]}">'
                         f'Actual Kp {a:.1f}{" · storm" if a >= config.STORM_THRESHOLD else ""}</span>')
         cards.append(
-            f'<article class="tm-card" style="padding:16px;display:flex;flex-direction:column;gap:10px;{f"border-color:{t["alert"]};" if warn else ""}">'
+            f'<article class="tm-card" style="padding:18px;display:flex;flex-direction:column;gap:10px;{f"border-color:{t["alert"]};" if warn else ""}">'
             f'<span style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:14px;font-weight:600">{d.target_date:%a}</span>'
             f'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;color:{t["muted"]}">{d.target_date.day} {d.target_date:%b}</span></span>'
             f'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:26px;font-weight:600">Kp {d.kpmax:.1f}</span>'
             f'<span style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:2px;background:{t["ramp"][lv[4]]}"></span>'
             f'<span style="font-size:13px">{lv[3]}</span><span style="margin-left:auto;font-family:\'IBM Plex Mono\',monospace;font-size:12px;color:{t["muted"]}">Ap {d.ap:.0f}</span></span>'
             f'{happened}{risk_html}</article>')
-    return ui.grid(cards, 150, 10)
+    return ui.grid(cards, 150, 12)
 
 
 def forecast(theme: str, now: pd.Timestamp):
@@ -234,7 +234,10 @@ def forecast(theme: str, now: pd.Timestamp):
     d1 = hist.iloc[0]
     top_risk = warn_rows.loc[warn_rows["storm_prob"].idxmax()] if len(warn_rows) else None
     obs_last = recent.dropna(subset=["kpmax"]).iloc[-1]
-    kpis = [ui.kpi(f"Tomorrow · {d1['target_date']:%a} {d1['target_date'].day}", f"Kp {d1['kpmax']:.1f}",
+    # day 1 is today when the issue goes out after midnight UTC, which is the usual case
+    gap = (d1["target_date"].normalize() - now.tz_localize(None).normalize()).days
+    d1_name = {0: "Today", 1: "Tomorrow"}.get(gap, f"{d1['target_date']:%A}")
+    kpis = [ui.kpi(f"{d1_name} · {d1['target_date']:%a} {d1['target_date'].day}", f"Kp {d1['kpmax']:.1f}",
                    f"range {d1['kpmax_lo']:.1f} – {d1['kpmax_hi']:.1f}" if pd.notna(d1.get("kpmax_lo")) else "",
                    ui.level_chip(d1["kpmax"], t), t=t),
             ui.kpi(f"Week peak · {peak['target_date']:%a} {peak['target_date'].day}", f"Kp {peak['kpmax']:.1f}",
