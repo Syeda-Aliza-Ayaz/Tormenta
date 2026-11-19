@@ -1,0 +1,12 @@
+{
+  "params": {
+    "min_samples_leaf": 200,
+    "max_leaf_nodes": 7,
+    "max_iter": 200,
+    "learning_rate": 0.03,
+    "l2_regularization": 3.0
+  },
+  "cv_log_loss": 0.4828108679248396,
+  "live_params_cv_log_loss": 0.49052767829550203,
+  "tuned_on": "1947-06-01 -> 2010-12-31"
+}
