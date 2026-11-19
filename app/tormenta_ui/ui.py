@@ -184,6 +184,12 @@ def _scene(scene: str, level: str, height: int) -> str:
     return photo + svg
 
 
+def pk_time(now_label: str) -> str:
+    """Pakistan Standard Time (UTC+5, no daylight saving) for an HH:MM:SS UTC label."""
+    h, m, sec = (int(x) for x in now_label.split(":"))
+    return f"{(h + 5) % 24:02d}:{m:02d}:{sec:02d}"
+
+
 def _nav(active: str, theme: str, now_label: str) -> str:
     links = "".join(
         f'<a href="{href(p, theme)}" target="_self" {"aria-current=page" if p == active else ""} '
@@ -198,7 +204,8 @@ def _nav(active: str, theme: str, now_label: str) -> str:
 <nav class="tm-nav" aria-label="Main" style="display:flex;flex-wrap:wrap;gap:4px 26px;font-size:14px;align-self:stretch">{links}</nav>
 <span style="margin-left:auto;display:flex;align-items:center;gap:16px">
 <span class="tm-navclock" style="display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#C9CED6">
-<span class="sh-dot" style="width:7px;height:7px;border-radius:4px;background:#6FCF97"></span><span class="tm-clock">{now_label}</span> UTC</span>
+<span class="sh-dot" style="width:7px;height:7px;border-radius:4px;background:#6FCF97"></span><span class="tm-utc"><span class="tm-clock">{now_label}</span> UTC</span>
+<span class="tm-utc" style="color:rgba(201,206,214,0.4)">·</span><span><span class="tm-clock-pk">{pk_time(now_label)}</span> PKT</span></span>
 <a href="{href(active, other)}" target="_self" aria-label="{label}" title="{label}" style="width:44px;height:44px;border-radius:6px;border:1px solid rgba(255,255,255,0.16);background:rgba(5,7,10,0.5);color:#F1F2F4;display:flex;align-items:center;justify-content:center">{icon('sunny' if theme == 'dark' else 'moon')}</a>
 </span></div></header>"""
 
@@ -206,7 +213,7 @@ def _nav(active: str, theme: str, now_label: str) -> str:
 def hero(active: str, theme: str, now_label: str, scene: str, level: str, eyebrow: str, heading: str, lead: str,
          stat_value: str, stat_label: str, stat_alert: bool = False) -> str:
     caption = CAPTIONS.get(scene, "")
-    return f"""<section class="tm-full tm-gap" style="position:relative;overflow:hidden;background:#05070A;color:#F1F2F4;min-height:420px;display:flex;flex-direction:column">
+    return f"""<section class="tm-full tm-gap tm-hero" style="position:relative;overflow:hidden;background:#05070A;color:#F1F2F4;min-height:420px;display:flex;flex-direction:column">
 {_scene(scene, level, 420)}
 {_nav(active, theme, now_label)}
 <div style="position:relative;flex-grow:1;max-width:1280px;width:100%;box-sizing:border-box;margin:0 auto;padding:40px 40px 96px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:28px">
@@ -231,7 +238,7 @@ def hero_overview(theme: str, now_label: str, date_label: str, level: str, kp: s
                       f'<span style="display:flex;flex-direction:column;gap:3px"><span style="font-size:14px;font-weight:600;color:#FF8A55">{esc(watch[0])}</span>'
                       f'<span style="font-size:13px;line-height:1.5;color:#E4E7EB">{esc(watch[1])}</span></span></span>')
     live_dot = "#6FCF97" if live_ok else "#9AA0AA"
-    return f"""<section class="tm-full" style="position:relative;overflow:hidden;background:#05070A;color:#F1F2F4;min-height:600px;display:flex;flex-direction:column">
+    return f"""<section class="tm-full tm-hero" style="position:relative;overflow:hidden;background:#05070A;color:#F1F2F4;min-height:600px;display:flex;flex-direction:column">
 {_scene("aurora", level, 600)}
 {_nav("Overview", theme, now_label)}
 <div style="position:relative;flex-grow:1;max-width:1280px;width:100%;box-sizing:border-box;margin:0 auto;padding:44px 40px 120px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:32px">
@@ -246,6 +253,7 @@ def hero_overview(theme: str, now_label: str, date_label: str, level: str, kp: s
 <span style="display:flex;flex-wrap:wrap;gap:8px 22px;font-family:'IBM Plex Mono',monospace;font-size:14px;color:#C9CED6;padding-top:6px">{stats}</span></div>
 <div class="tm-hero-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:16px;flex:0 1 380px">
 <span style="font-family:'IBM Plex Mono',monospace;font-size:34px;font-weight:500;letter-spacing:0.02em"><span class="tm-clock">{now_label}</span><span style="font-size:14px;color:#A9AFB8"> UTC</span></span>
+<span style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:500;color:#C9CED6"><span class="tm-clock-pk">{pk_time(now_label)}</span><span style="font-size:13px;color:#A9AFB8"> PKT · Pakistan</span></span>
 <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#A9AFB8">{esc(date_label)}</span>{watch_html}</div></div>
 </section>"""
 
@@ -270,7 +278,7 @@ def kpi(label: str, value: str, note: str, chip_html: str = "", color: str = Non
             f'<span style="display:flex;align-items:center;gap:8px;font-size:13px;color:{t["muted"]}">{chip_html}{esc(note)}</span></div>')
 
 
-def grid(items: list, min_px: int = 220, gap: int = 12, align: str = "stretch") -> str:
+def grid(items: list, min_px: int = 220, gap: int = 16, align: str = "stretch") -> str:
     return f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax({min_px}px,1fr));gap:{gap}px;align-items:{align}">{"".join(items)}</div>'
 
 
@@ -311,15 +319,36 @@ def kp_scale(kp: float, lo: float, hi: float, t: dict) -> str:
             f'<span>0</span><span>3</span><span>5 · G1</span><span>7 · G3</span><span>9 · G5</span></span></div>')
 
 
-def sparkline(values: list, width: int, height: int, color: str, top: float = None) -> str:
+def sparkline(values: list, width: int, height: int, color: str, top: float = None, labels: tuple = None,
+              unit: str = "") -> str:
+    """Small line chart. With `labels` (start, end) it also draws the top and bottom values and the time span."""
     vals = [v for v in values if v == v]
     if len(vals) < 2:
         return ""
     lo, hi = min(vals), (top if top is not None else max(vals))
     span = (hi - lo) or 1
-    pts = " ".join(f"{i * width / (len(vals) - 1):.1f},{height - 4 - (v - lo) / span * (height - 8):.1f}" for i, v in enumerate(vals))
-    return (f'<svg viewBox="0 0 {width} {height}" style="width:100%;height:auto;display:block" aria-hidden="true">'
-            f'<polyline points="{pts}" fill="none" stroke="{color}" stroke-width="2" stroke-linejoin="round"></polyline></svg>')
+    left, bottom = (34, 18) if labels else (0, 0)
+    w, h = width - left, height - bottom
+    pts = " ".join(f"{left + i * w / (len(vals) - 1):.1f},{h - 4 - (v - lo) / span * (h - 8):.1f}" for i, v in enumerate(vals))
+    last_x, last_y = pts.split(" ")[-1].split(",")
+    axes = ""
+    if labels:
+        mono = "font-family=\"IBM Plex Mono, monospace\" font-size=\"10\" fill=\"currentColor\" opacity=\"0.65\""
+        axes = (f'<line x1="{left}" y1="4" x2="{width}" y2="4" stroke="currentColor" opacity="0.12"></line>'
+                f'<line x1="{left}" y1="{h - 4}" x2="{width}" y2="{h - 4}" stroke="currentColor" opacity="0.2"></line>'
+                f'<text x="{left - 6}" y="8" text-anchor="end" {mono}>{hi:.1f}</text>'
+                f'<text x="{left - 6}" y="{h - 1}" text-anchor="end" {mono}>{lo:.1f}</text>'
+                f'<text x="{left}" y="{height - 2}" {mono}>{esc(labels[0])}</text>'
+                f'<text x="{width}" y="{height - 2}" text-anchor="end" {mono}>{esc(labels[1])}</text>')
+    return (f'<svg viewBox="0 0 {width} {height}" style="width:100%;height:auto;display:block;overflow:visible" role="img" '
+            f'aria-label="{esc(f"from {vals[0]:.1f} to {vals[-1]:.1f}{unit}, highest {max(vals):.1f}")}">{axes}'
+            f'<polyline points="{pts}" fill="none" stroke="{color}" stroke-width="2" stroke-linejoin="round"></polyline>'
+            f'<circle cx="{last_x}" cy="{last_y}" r="3.5" fill="{color}"></circle></svg>')
+
+
+def loader(text: str) -> str:
+    """Inline loading message with the orbit animation (theme.py, .tm-loader)."""
+    return f'<div class="tm-loader" role="status">{esc(text)}</div>'
 
 
 def tile(icon_name: str, title: str, value: str, unit: str, note: str, t: dict, extra: str = "") -> str:

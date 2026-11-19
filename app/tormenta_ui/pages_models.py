@@ -208,7 +208,7 @@ def nowcast_page(theme: str, now: pd.Timestamp):
         wind_html = "".join(
             f'<div class="tm-cell" style="background:{t["surface"]};padding:18px 20px;display:flex;flex-direction:column;gap:6px">'
             f'<span class="tm-sub">{lab}</span><span class="tm-mono" style="font-size:26px;font-weight:600">{v} <span style="font-size:13px;font-weight:400;color:{t["muted"]}">{u}</span></span>'
-            f'{ui.sparkline(list(h24[col]), 240, 40, t["primary"])}<span class="tm-sub" style="font-size:12px">{note}</span></div>'
+            f'{ui.sparkline(list(h24[col]), 240, 64, t["primary"], labels=("24 h ago", "now"))}<span class="tm-sub" style="font-size:12px">{note}</span></div>'
             for lab, v, u, note, col in cells)
         acc = ""
         ref, ref_name = ("kp_gfz", "GFZ quick-look") if "kp_gfz" in past else ("kp_swpc", "NOAA's estimate")

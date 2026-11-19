@@ -50,9 +50,11 @@ def forecast_chart(long: pd.DataFrame, origin: pd.Timestamp, col: str, unit: str
     colour = alt.Color("series:N", scale=alt.Scale(domain=present, range=colours),
                        legend=alt.Legend(orient="top", title=None, symbolStrokeWidth=3))
     top = 9 if col == "kpmax" else max(40.0, float(df["value"].max()) * 1.1)
-    y = alt.Y("value:Q", scale=alt.Scale(domain=[0, top]), title=unit)
+    y = alt.Y("value:Q", scale=alt.Scale(domain=[0, top]), title=unit,
+              axis=alt.Axis(grid=True, tickCount=10 if col == "kpmax" else 8, titlePadding=10))
     x = alt.X("time:T", scale=alt.Scale(type="utc"), title=None,
-              axis=alt.Axis(format="%d %b", labelAngle=0, grid=False, tickCount=8))
+              axis=alt.Axis(format="%d %b", labelAngle=0, grid=False, tickCount={"interval": "day", "step": 2},
+                            labelOverlap=True, labelPadding=8))
     lines = alt.Chart(df).mark_line(strokeWidth=2.2, point=alt.OverlayMarkDef(size=30, filled=True)).encode(
         x=x, y=y, color=colour, detail="series:N")
     start = origin + pd.Timedelta(hours=12)
@@ -84,7 +86,10 @@ def forecast_chart(long: pd.DataFrame, origin: pd.Timestamp, col: str, unit: str
     any_hover = hovers[0] if len(hovers) == 1 else hovers[0] | hovers[1]
     dots = alt.Chart(df).mark_point(filled=True, size=80).encode(
         x=x, y=y, color=colour, opacity=alt.condition(any_hover, alt.value(1), alt.value(0)))
-    layers = [shade, shade_text, lines, dots, *rules]
+    values = alt.Chart(df).mark_text(align="left", dx=9, dy=-9, fontSize=11, fontWeight=600).encode(
+        x=x, y=y, color=colour, text=alt.Text("value:Q", format=".1f" if col == "kpmax" else ".0f"),
+        opacity=alt.condition(any_hover, alt.value(1), alt.value(0)))
+    layers = [shade, shade_text, lines, dots, values, *rules]
     if band is not None and len(band):
         b = band.assign(time=band["time"].dt.tz_localize("UTC"))
         layers.insert(2, alt.Chart(b).mark_area(opacity=t["band"], color=t["primary"]).encode(
@@ -115,8 +120,9 @@ def live_chart(live: pd.DataFrame, theme: str):
     long["series"] = long["col"].map(cols)
     colour = alt.Color("series:N", scale=alt.Scale(domain=[cols[c] for c in present], range=[colours[c] for c in present]),
                        legend=alt.Legend(orient="top", title=None))
-    x = alt.X("time:T", scale=alt.Scale(type="utc"), title=None, axis=alt.Axis(format="%d %b", labelAngle=0, grid=False, tickCount=6))
-    y = alt.Y("kp:Q", scale=alt.Scale(domain=[0, 9]), title="Kp", axis=alt.Axis(tickCount=10))
+    x = alt.X("time:T", scale=alt.Scale(type="utc"), title=None,
+              axis=alt.Axis(format="%d %b %H:00", labelAngle=0, grid=False, tickCount=6, labelOverlap=True, labelPadding=8))
+    y = alt.Y("kp:Q", scale=alt.Scale(domain=[0, 9]), title="Kp", axis=alt.Axis(tickCount=10, grid=True, titlePadding=10))
     band = alt.Chart(df).mark_area(opacity=t["band"], color=t["primary"]).encode(
         x=x, y=alt.Y("kp_lo:Q", scale=alt.Scale(domain=[0, 9])), y2="kp_hi:Q")
     pred = alt.Chart(long[long["col"] == "kp_pred"]).mark_line(strokeWidth=2.2).encode(x=x, y=y, color=colour)
@@ -132,7 +138,11 @@ def live_chart(live: pd.DataFrame, theme: str):
         x=x, y=y, color=colour, opacity=alt.condition(hover, alt.value(1), alt.value(0)))
     layers = [band, storm.mark_rule(strokeDash=[6, 4], color=t["alert"]).encode(y="kp:Q"),
               storm.mark_text(align="left", dx=4, dy=-7, color=t["alert_text"], fontSize=11).encode(y="kp:Q", text="text:N", x=alt.value(0)),
-              pred, obs, dots, rule]
+              pred, obs, dots,
+              alt.Chart(long).mark_text(align="left", dx=9, dy=-9, fontSize=11, fontWeight=600).encode(
+                  x=x, y=y, color=colour, text=alt.Text("kp:Q", format=".1f"),
+                  opacity=alt.condition(hover, alt.value(1), alt.value(0))),
+              rule]
     if df["ahead"].any():
         ahead = pd.DataFrame({"start": [df.loc[df["ahead"], "time"].min()], "end": [df["time"].max()]})
         layers.insert(0, alt.Chart(ahead).mark_rect(color=t["primary"], opacity=0.06).encode(
@@ -193,7 +203,8 @@ def rmse_by_lead(period_leads: pd.DataFrame, theme: str):
 def monitor_chart(windows: pd.DataFrame, floor: float, theme: str):
     t = TOKENS[theme]
     df = windows.assign(time=pd.to_datetime(windows["window_end"]).dt.tz_localize("UTC"))
-    x = alt.X("time:T", scale=alt.Scale(type="utc"), title=None, axis=alt.Axis(format="%Y", grid=False))
+    x = alt.X("time:T", scale=alt.Scale(type="utc"), title=None,
+              axis=alt.Axis(format="%Y", grid=False, tickCount={"interval": "year", "step": 1}, labelPadding=8))
     line = alt.Chart(df).mark_line(strokeWidth=2, color=t["primary"]).encode(
         x=x, y=alt.Y("skill:Q", title="56-day skill vs 27-day average"),
         tooltip=[alt.Tooltip("window_end:N", title="Window ends"), alt.Tooltip("skill:Q", format=".2f")])
