@@ -4,8 +4,8 @@ Every decision we make, why we made it, and what came of it. **Add an entry when
 "Result" once we know it.** Never delete an entry: if a decision is reversed, add a new one that says which entry
 it replaces.
 
-Decisions 1–35 from the nowcaster build are in [TORMENTA_BUILD_PLAN.md §7](TORMENTA_BUILD_PLAN.md).
-The entries below start the forecaster work (v2), planned in [PLAN.md](PLAN.md).
+Decisions 1–35 from the nowcaster build are in [docs/plans/TORMENTA_BUILD_PLAN.md §7](docs/plans/TORMENTA_BUILD_PLAN.md).
+The entries below start the forecaster work (v2), planned in [docs/plans/PLAN.md](docs/plans/PLAN.md).
 
 **Status:** ✅ adopted, result known · ⏳ adopted, result pending · 🔁 replaced (see the entry it points to) · ❌ tried and rejected
 
@@ -183,7 +183,7 @@ Template:
 - **Result / consequence:** pending.
 
 ### D-18 · New plan file; the old plan is kept as the record · 2026-11-10 · ✅
-- **Decision:** the forecaster plan lives in `PLAN.md`. `TORMENTA_BUILD_PLAN.md` gets a pointer line and is
+- **Decision:** the forecaster plan lives in `docs/plans/PLAN.md`. `docs/plans/TORMENTA_BUILD_PLAN.md` gets a pointer line and is
   otherwise left as the nowcaster's record. Decisions are logged here.
 - **Why:** the old plan documents decisions that are still true for the nowcaster, so rewriting it would lose that history.
 - **Alternatives considered:** edit the old plan in place.
@@ -920,7 +920,7 @@ Template:
   here; the app's past forecasts show the test run (previous version) followed by the recent hindcast (this
   version).
 
-### D-60 · Measured: preliminary inputs vs revised inputs (PLAN.md §3) · 2026-11-16 · ✅
+### D-60 · Measured: preliminary inputs vs revised inputs (docs/plans/PLAN.md §3) · 2026-11-16 · ✅
 - **Question:** live forecasts read GFZ's newest, still preliminary values; the models trained on definitive ones.
   How much does that change a forecast?
 - **Method:** `python -m src.forecast.checks skew`. The daily job commits the observations it used
@@ -1033,7 +1033,7 @@ Template:
 ### D-66 · Training start year: keep 1947 · 2026-11-18 · ❌ (shorter history rejected)
 - **Question:** solar cycle 25 is quieter than the mid-century cycles (training 22% storm days, recent years 8–14%).
   Does a shorter, more recent training history fit the present better?
-- **Method:** `python -m src.forecast.start_year`. Start years 1947, 1980, 1995 and 2010, all trained to 2022-12-31.
+- **Method:** `python -m src.forecast.experiments.start_year`. Start years 1947, 1980, 1995 and 2010, all trained to 2022-12-31.
   Settings and storm thresholds chosen inside each variant's own years (5 time-ordered folds, 7-day gap), scored on
   2023-01-01 → last definitive day. No live file touched.
 - **Result:**
@@ -1118,7 +1118,7 @@ Template:
   with gaps, different instruments and no reprocessing. Does the gain survive?
 - **Why synthetic:** the real check (archived DSCOVR real-time data for 2017–2019 vs OMNI) could not be run:
   NOAA's servers timed out, and no netCDF reader is installed. It is listed in [TODO.md](TODO.md).
-- **Method:** `python -m src.forecast.sw_live_stress`. The models are fitted as in D-68 on clean OMNI, and only the
+- **Method:** `python -m src.forecast.experiments.sw_live_stress`. The models are fitted as in D-68 on clean OMNI, and only the
   forecast inputs are degraded. Same years, rule and scoring as D-68. Degradation sizes are assumptions, chosen
   on the pessimistic side:
   - `gaps`: 10% of hours lost; in fast or dense hours (> 600 km/s or > 15 cm⁻³) 30% of plasma values lost; 3% of
@@ -1259,9 +1259,9 @@ Template:
 - **Scores, fixed before looking:** Brier score and its skill against climatology (needs no threshold); storm days
   caught, false alarms and Heidke skill at each forecaster's own best threshold (the same procedure for all three,
   so equally optimistic); per lead day 1–3.
-- **Isolation:** a script in `src/forecast/noaa_storm.py`, results in `reports/forecast/experiments/noaa_storm/`;
+- **Isolation:** a script in `src/forecast/experiments/noaa_storm.py`, results in `reports/forecast/experiments/noaa_storm/`;
   nothing live changes.
-- **Result** (`python -m src.forecast.noaa_storm`; 1,090 days, 91 storm days; all reports had the probabilities):
+- **Result** (`python -m src.forecast.experiments.noaa_storm`; 1,090 days, 91 storm days; all reports had the probabilities):
 
   | Lead | Forecaster | Brier skill | Caught | False alarms | Detection | False-alarm ratio | Heidke |
   |---|---|---|---|---|---|---|---|
@@ -1309,9 +1309,9 @@ Template:
      updates.
   4. The 12 UTC update wins in at least 6 of the 9 years on tomorrow's storm Brier score (vs midnight) and on
      today's max-Kp error (vs the simple rule).
-- **Isolation:** `src/forecast/intraday.py`, results in `reports/forecast/experiments/intraday/`; nothing live
+- **Isolation:** `src/forecast/experiments/intraday.py`, results in `reports/forecast/experiments/intraday/`; nothing live
   changes; fingerprints before and after.
-- **Result** (`python -m src.forecast.intraday`; leakage tests `tests/test_intraday.py`, 17 pass):
+- **Result** (`python -m src.forecast.experiments.intraday`; leakage tests `tests/test_intraday.py`, 17 pass):
 
   | Update | Today max-Kp error: model / simple rule / midnight | Today storm Heidke: model / midnight | Tomorrow storm Heidke: model / midnight | Tomorrow false-alarm ratio: model / midnight |
   |---|---|---|---|---|
@@ -1418,9 +1418,9 @@ Template:
   training span (time-ordered, with a 7-day gap); fixed scaling constants (nothing learned from the year forecast).
 - **Leakage guards:** the test period is not read (asserted); tests check that a forecast for D is unchanged when
   data after D changes.
-- **Isolation:** `src/forecast/report_models.py`; results in `reports/forecast/experiments/yearly/{holt_winters,
+- **Isolation:** `src/forecast/experiments/report_models.py`; results in `reports/forecast/experiments/yearly/{holt_winters,
   lstm,gru}/`; no file in `models/`, `forecasts/` or the daily job changes; fingerprints before and after.
-- **Result** (`python -m src.forecast.report_models hw lstm gru`; leakage tests `tests/test_report_models.py`,
+- **Result** (`python -m src.forecast.experiments.report_models hw lstm gru`; leakage tests `tests/test_report_models.py`,
   4 pass; table in `reports/forecast/experiments/report_models/summary.csv`):
 
   | Model | Ap skill | Ap RMSE d1 / d7 | Years above the 27-day average (Ap) | Max-Kp skill | Max-Kp RMSE d1 |
@@ -1463,3 +1463,48 @@ Template:
 - **Then:** refit on definitive days to `PRODUCTION_END` (images and solar wind included) for live use.
 - **Why lock now:** the candidate passed its rule (D-68, D-70), the leakage robustness runs and the live-image
   check; further experiments on the same validation years would add selection risk.
+
+### D-77 · One-time test of the locked model: adoption rules (a) and (b) pass; level with NOAA · 2026-11-21 · ✅
+- **Run:** `python -m src.forecast.test_locked`, once, exactly as fixed in D-76 (fit ≤ 2019-12-31, targets
+  2020-01-01 → 2026-06-30, 2,373 days, 325 storm days). Inputs: GFZ, OMNI hourly solar wind (complete for the whole
+  period after the SPDF refresh), AIA 193 Å features for 2,360 of 2,373 days (6 days with no 00:00 image in the
+  archive, 7 with a quality flag; those rows have blank image features, which HistGB routes as missing).
+  Results in `reports/forecast/test_locked/`; the marker `test_scored.json` blocks a second run.
+- **Daily Ap RMSE and Diebold–Mariano vs the live HistGB (D-62 test forecasts, same days):**
+
+  | Lead | Locked | Live HistGB | NOAA | 27-day mean | DM vs HistGB (stat, p) |
+  |---|---|---|---|---|---|
+  | 1 | **10.67** | 10.78 | 10.89 | 12.27 | −1.69, 0.091 |
+  | 2 | 11.80 | 11.98 | **11.73** | 12.42 | −2.77, 0.006 |
+  | 3 | **11.73** | 11.91 | 11.90 | 12.45 | −2.25, 0.025 |
+  | 4 | **11.69** | 11.91 | – | 12.45 | −2.98, 0.003 |
+  | 5 | **11.72** | 11.93 | – | 12.45 | −3.78, < 0.001 |
+  | 6 | **11.88** | 11.96 | – | 12.46 | −1.44, 0.149 |
+  | 7 | **11.95** | 12.01 | – | 12.48 | −1.40, 0.161 |
+
+  Max-Kp RMSE is lower at every lead (1.115–1.246 vs 1.138–1.260).
+- **Skill vs the 27-day mean, days 1–7:** locked **0.122**, live HistGB 0.100 (+22 %); 30-day block bootstrap 95 %
+  interval of the difference **[+0.007, +0.050]**, excludes zero.
+- **Against NOAA (Ap, days 1–3, the 2,358–2,359 days NOAA issued):** locked 10.66 / 11.82 / 11.67, NOAA 10.89 /
+  11.73 / 11.90; Diebold–Mariano p = 0.69 / 0.91 / 0.55. **Level with NOAA: ahead on days 1 and 3, behind on
+  day 2, no difference significant.**
+  - Scoring bug found while reading the output: one day with no NOAA day-1 forecast made the script's day-1 DM value
+    NaN (`diebold_mariano` received the gap). Fixed (approved): NOAA is compared only on the days it issued, and
+    `python -m src.forecast.test_locked --rescore` scored the saved forecasts again (nothing refitted or
+    re-forecast; every other number identical; `test_scored.json` keeps `first_scored_at`).
+- **Storm warnings (thresholds from the 2011–2019 harness only):**
+
+  | Lead | Heidke locked | Heidke live | Detection locked / live | False-alarm ratio locked / live |
+  |---|---|---|---|---|
+  | 1 | **0.403** | 0.341 | 53 % / 47 % | 54 % / 59 % |
+  | 2 | **0.263** | 0.195 | 40 % / 38 % | 65 % / 72 % |
+  | 3 | **0.249** | 0.204 | 31 % / 30 % | 62 % / 68 % |
+  | 4–7 | 0.206–0.222 | 0.188–0.215 | | |
+
+  Days 1–3 gain +0.058 Heidke on average, with **fewer** false alarms and slightly more storm days caught at every
+  one of these leads, unlike the rejected storm experiments (D-72 to D-74), which caught more only by warning more.
+- **Adoption rule (D-76):** (a) pooled skill and day-1 RMSE better than the live HistGB: **pass**; (b) storm Heidke
+  days 1–3 not lower: **pass** (+0.058); (c) 3 weeks of shadow with working fallbacks: pending.
+- **Paper guide (ROADMAP §8, fixed before the test):** level with NOAA and clearly better than the live model →
+  **solid paper**, with the coronal-hole features as the contribution.
+- **Next:** production fit (`python -m src.forecast.locked_shadow`), shadow run after the push, then adoption.

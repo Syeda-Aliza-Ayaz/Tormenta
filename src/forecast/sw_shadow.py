@@ -54,8 +54,7 @@ def sw_features(daily: pd.DataFrame, h: int, sw: pd.DataFrame) -> pd.DataFrame:
 
 
 def omni_daily() -> pd.DataFrame:
-    h = pd.read_csv(config.PROCESSED_CSV, usecols=["time", *sw_archive.COLUMNS], parse_dates=["time"]).set_index("time")
-    return sw_archive.daily_summary(h)
+    return sw_archive.daily_summary(sw_archive.omni_hourly())
 
 
 class SolarWindShadow:

@@ -18,7 +18,7 @@ metrics:
 
 Tormenta predicts the planetary **Kp index** (0–9, the standard 3-hourly measure of geomagnetic
 disturbance) from the solar wind measured upstream of Earth. It is a CT-378 Machine Learning project
-(NED University, Fall 2026) by Alizeh and HRK. Code: <https://github.com/Syeda-Aliza-Ayaz/Tormenta>
+(NED University, Fall 2026) by Syeda Aliza Ayaz (CT-24219) and Husn ur Rehman (CT-24070). Code: <https://github.com/Syeda-Aliza-Ayaz/Tormenta>
 
 ## Model card
 

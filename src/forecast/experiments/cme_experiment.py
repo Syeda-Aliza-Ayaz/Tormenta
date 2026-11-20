@@ -20,7 +20,7 @@ Each variant trains to 2022-12-31 with the settings already chosen for it in the
 and without CME features, so the only difference is the CME features. Storm thresholds come from out-of-fold
 probabilities (5 time-ordered folds, 7-day gap). Test: 2023-01-01 → last definitive day. No live file is touched.
 
-    python -m src.forecast.cme_experiment
+    python -m src.forecast.experiments.cme_experiment
 """
 import json
 
@@ -31,8 +31,8 @@ from src import config
 from src.daily import load_daily
 from src.forecast import features as F, gbm, storm
 from src.forecast.baselines import TrailingMean
-from src.forecast.start_year import TEST_START, rows_from
-from src.forecast.start_year import score as score_values
+from src.forecast.experiments.start_year import TEST_START, rows_from
+from src.forecast.experiments.start_year import score as score_values
 from src.ingest.fetch_donki import load_table
 
 REALTIME_START = pd.Timestamp("2014-04-01")

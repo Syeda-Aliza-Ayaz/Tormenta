@@ -1,4 +1,4 @@
-"""Forecast scorecards (PLAN.md §7): error and skill per lead day, and storm-day detection.
+"""Forecast scorecards (docs/plans/PLAN.md §7): error and skill per lead day, and storm-day detection.
 
 Input everywhere: a long forecast frame with `model, origin, lead, target_date`, the predicted targets
 (`ap`, `kpmax`) and the observed ones (`ap_obs`, `kpmax_obs`), as made by backtest.attach_actuals.

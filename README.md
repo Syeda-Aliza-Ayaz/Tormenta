@@ -3,7 +3,7 @@
 Tormenta forecasts geomagnetic activity **for the next 7 days** (daily Ap and daily max Kp, with 80% ranges and a
 storm warning) and **nowcasts the current Kp index** (0–9) from solar-wind measurements taken about an hour upstream
 of Earth. Forecasts are issued every morning and scored against official GFZ data as it arrives.
-CT-378 Machine Learning, NED University, Fall 2026 · **Alizeh & HRK**.
+CT-378 Machine Learning, NED University, Fall 2026 · **Syeda Aliza Ayaz (CT-24219) & Husn ur Rehman (CT-24070)**.
 
 | | |
 |---|---|
@@ -38,6 +38,25 @@ CT-378 Machine Learning, NED University, Fall 2026 · **Alizeh & HRK**.
   and are not issued live. Per-day storm tables: [`reports/forecast/storm_tables.md`](reports/forecast/storm_tables.md).
   Figures: [`reports/forecast/figures/`](reports/forecast/figures/).
 
+### Locked model: HistGB + solar wind + coronal holes (D-76, tested once in D-77)
+
+The next forecaster, chosen on a nine-year validation (2011–2019) with rules fixed before each run, then locked and
+committed before the test period was read. It adds to the live HistGB's 29 inputs the daily solar wind with its
+27-day echo (16) and coronal-hole areas measured on one SDO/AIA 193 Å image per day (7).
+
+| Test 2020-01 → 2026-06 (fitted to 2019) | Ap RMSE day 1 | day 2 | day 3 | day 5 | skill days 1–7 | storm Heidke days 1–3 |
+|---|---|---|---|---|---|---|
+| **Locked model** | **10.67** | 11.80 | **11.73** | **11.72** | **+0.122** | **0.40 / 0.26 / 0.25** |
+| Live HistGB | 10.78 | 11.98 | 11.91 | 11.93 | +0.100 | 0.34 / 0.20 / 0.20 |
+| NOAA official | 10.89 | **11.73** | 11.90 | – | – | – |
+
+- Better than the live HistGB at every lead day; significant on days 2–5 (Diebold–Mariano p ≤ 0.025), and the skill
+  gain's 95% block-bootstrap interval is +0.007 to +0.050. Storm warnings improve with fewer false alarms.
+- **Level with NOAA** on days 1–3 (no significant difference).
+- **Status: shadow mode.** It runs every day next to the live model and is logged in `forecasts/locked_shadow_log.csv`,
+  not shown. It replaces the live forecast after at least 3 weeks of shadow running with working fallbacks
+  (no image for 2 days → solar-wind model; no solar wind → live HistGB).
+
 ### How it works
 
 ```
@@ -47,6 +66,8 @@ GFZ daily Kp/Ap/F10.7 (1932→) ─► src/daily.py ─► src/forecast/features
    ├─► HistGB (14 direct models) · ARIMAX · storm classifier (7) · 80% ranges   ─► models/forecast/
    └─► daily GitHub Actions job (src/issue.py) ─► forecasts/log.csv (append-only) + storm_log.csv + scores
                                                 ─► Streamlit · Flask · HF Space · weekly health check
+NOAA real-time solar wind ─► forecasts/solar_wind_hourly.csv ─┐
+SDO/AIA 193 Å near-real-time image ─► forecasts/imagery_daily.csv ┴─► locked model in shadow ─► locked_shadow_log.csv
 NOAA SWPC forecasts (archive + daily copies) ─► benchmark only, never an input
 ```
 
@@ -103,8 +124,9 @@ models/           current.joblib (nowcaster) + versions + metrics_history.json �
 forecasts/        live forecast log (append-only), storm log, scores, NOAA copies, monitor state, app data
 reports/          nowcaster figures/ and metrics/ (v1, v2 archives) · forecast/ (metrics, figures, storm tables)
 tests/            leakage, live parity, parsers, every forecaster's causality, daily job, monitor, apps
-docs/             PROJECT_NOTES.md (what/why per file) · report_notes.tex (report + viva material)
-PLAN.md, DECISIONS.md   forecaster plan and decision log (every decision, why, and its result)
+docs/             PROJECT_NOTES.md (what/why per file) · report_notes.tex (viva material) · plans/ (original build plans) · report/ (LaTeX reports v1, v2)
+DECISIONS.md      decision log (every decision, why, and its result) · ROADMAP.md (open work)
+dev_notes/        original build plans (PLAN.md, TORMENTA_BUILD_PLAN.md), deferred ideas, fix proposals
 .github/workflows/      daily.yml (forecast) · retrain.yml (weekly health checks and retraining)
 ```
 
@@ -144,8 +166,15 @@ python -m src.forecast.monitor               &:: weekly health check (add --act 
 python -m src.forecast.figures ; python -m src.forecast.tables
 python -m src.forecast.checks skew          &:: preliminary vs revised inputs (D-60)
 python -m src.forecast.checks reliability   &:: storm probability vs observed frequency (D-61)
+python -m src.forecast.validate_yearly       &:: nine-year validation harness, 2011-2019 (D-68)
+python -m src.ingest.fetch_aia --first 2010-05-13 --last 2019-12-31   &:: AIA 193 A archive images (~7 GB)
+python -m src.forecast.imagery               &:: coronal-hole features from the images
+python -m src.forecast.locked_shadow         &:: production fit of the locked model (D-76)
+python -m src.forecast.figures --validation  &:: validation and locked-test figures
 ```
-`python -m src.forecast.test_eval` scored the test period once; it refuses to run again without `--force`.
+`python -m src.forecast.test_eval` scored the test period once for the v2.0 models; it refuses to run again without
+`--force`. `python -m src.forecast.test_locked` scored the locked model once (D-77); a marker file blocks a second
+run, and `--rescore` only re-scores the saved forecasts. Experiment scripts are in `src/forecast/experiments/`.
 
 **Notebooks** (nowcaster record; kernel "Python 3.12 (tormenta)", **Kernel → Restart & Run All**, in order):
 `01_preprocessing` (~1 min) · `02_eda` (~2 min) · `03_modeling` (~40 min) · `04_improvements` (~20 min) ·
@@ -201,11 +230,15 @@ Pyodide).
   `python -m http.server` to test it.
 
 ## Documentation
-- `PLAN.md` and `DECISIONS.md`: the forecaster plan and every decision with its reason and result.
+- `PROJECT_EXP.md`: the whole project explained, step by step, with the reason for each decision.
+- `DECISIONS.md`: every decision with its rule, reason and result. `ROADMAP.md`: open work.
+- `docs/report/v2/`: the full LaTeX report (nowcaster, forecaster, locked model, NOAA comparison); compile on
+  Overleaf (upload the folder). `docs/report/tormenta_report.tex` is the v1 course report.
+- `docs/plans/PLAN.md`: the original forecaster plan.
 - `docs/PROJECT_NOTES.md`: what each file does, how, why, and what it produced.
 - `docs/report_notes.tex`: report and viva material, with figures. Compile on Overleaf; upload `docs/` plus
   `reports/figures`, `reports/v1/figures` and `reports/v2/figures` at the same relative paths.
-- `TORMENTA_BUILD_PLAN.md`: the nowcaster's original plan, decision log and checklist.
+- `docs/plans/TORMENTA_BUILD_PLAN.md`: the nowcaster's original plan, decision log and checklist.
 
 ## The dashboard
 Six pages, each with its own link (`?page=overview|forecast|explore|scorecard|nowcast|method`, plus `&theme=dark`
@@ -219,8 +252,8 @@ the recent days), Scorecard, Nowcast (live Kp and the what-if explorer) and Meth
 
 ## Data and image credits
 NASA/GSFC Space Physics Data Facility OMNIWeb (OMNI2) · GFZ German Research Centre for Geosciences, Kp, Ap and
-F10.7 (CC BY 4.0) · NOAA Space Weather Prediction Center real-time data and forecasts · Amazon Chronos-Bolt
-(Apache 2.0). Not an operational warning service.
+F10.7 (CC BY 4.0) · NOAA Space Weather Prediction Center real-time data and forecasts · SDO/AIA images courtesy of NASA/SDO and the
+AIA science team, via the Stanford JSOC · Amazon Chronos-Bolt (Apache 2.0). Not an operational warning service.
 
 | Image (`app/static`) | Credit | Licence |
 |---|---|---|

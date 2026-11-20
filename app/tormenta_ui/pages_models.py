@@ -59,9 +59,9 @@ def scorecard(theme: str, now: pd.Timestamp):
             w1 = warn[warn["lead"] == 1].iloc[0]
             cells.append((f"{w1['pod']:.0%}", "", "Storm days warned, day 1",
                           f"{int(w1['hits'])} of {int(w1['hits'] + w1['misses'])} storm days caught one day ahead."))
-        ui.show(f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1px;background:{t["hair"]};'
+        ui.show(f'<div class="tm-split" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1px;background:{t["hair"]};'
                 f'border:1px solid {t["hair"]};border-radius:6px;overflow:hidden">'
-                + "".join(f'<div class="tm-cell" style="background:{t["surface"]};padding:22px 24px;display:flex;flex-direction:column;gap:8px">'
+                + "".join(f'<div class="tm-cell" style="background:{t["card"]};padding:22px 24px;display:flex;flex-direction:column;gap:8px">'
                           f'<span class="tm-mono" style="font-size:30px;font-weight:600">{v}<span style="font-size:15px;font-weight:400;color:{t["muted"]}">{s}</span></span>'
                           f'<span style="font-size:14px;font-weight:500">{lab}</span><span class="tm-sub">{note}</span></div>' for v, s, lab, note in cells)
                 + "</div>")
@@ -154,13 +154,33 @@ def _apply_preset(name: str):
 def _fill_live():
     try:
         live, hourly, f107, _ = get_live()
-        shown = live_form_values(hourly, f107, now_hour(live))
+        hour = now_hour(live)
+        shown = live_form_values(hourly, f107, hour)
         for k, v in shown.items():
             st.session_state[k] = float(round(v, 2))
         st.session_state["live_shown"] = shown
+        st.session_state["live_shown_hour"] = hour
+        # predict at once with the filled values, so no older "Predict Kp" values linger
+        st.session_state["manual_values"] = {k: float(round(v, 2)) for k, v in shown.items()}
         st.session_state["history_mode"] = HISTORY_OPTIONS[0]
     except LIVE_ERRORS:
         st.session_state["fill_error"] = True
+
+
+def _follow_live_hour():
+    """If the form holds untouched "latest live values" from an hour that has since passed, refill it for the
+    current hour, so an unedited form always matches the live Kp (runs before the form's widgets are drawn)."""
+    filled_hour = st.session_state.get("live_shown_hour")
+    if filled_hour is None:
+        return
+    try:
+        live, _, _, _ = get_live()
+    except LIVE_ERRORS:
+        return
+    shown = st.session_state.get("live_shown") or {}
+    untouched = st.session_state.get("manual_values") == {k: float(round(v, 2)) for k, v in shown.items()}
+    if now_hour(live) != filled_hour and untouched:
+        _fill_live()
 
 
 def nowcast_page(theme: str, now: pd.Timestamp):
@@ -192,21 +212,24 @@ def nowcast_page(theme: str, now: pd.Timestamp):
         nxt = ""
         if len(ahead):
             a = ahead.iloc[-1]
+            nw = hourly.loc[:ahead.index[-1]].ffill().iloc[-1]
             nxt = (f'<span class="tm-sub">Next hour ({ui.pk(ahead.index[-1]):%H:00} PKT): Kp {a["kp_pred"]:.1f} '
-                   f'({a["kp_lo"]:.1f}–{a["kp_hi"]:.1f}). That solar wind has already passed the spacecraft.</span>')
-        readout = (f'<div class="tm-flat" style="padding:26px 28px;display:flex;flex-direction:column;gap:20px">'
+                   f'({a["kp_lo"]:.1f}–{a["kp_hi"]:.1f}), from wind at {nw["speed"]:.0f} km/s with Bz {nw["bz_gsm"]:+.1f} nT '
+                   f'that has already passed the spacecraft.</span>')
+        readout = (f'<div class="tm-flat" style="padding:26px 28px;display:flex;flex-direction:column;justify-content:space-between;gap:20px;height:100%;box-sizing:border-box">'
                    f'<div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap"><span class="tm-mono" style="font-size:88px;line-height:.9;font-weight:600;letter-spacing:-0.03em">{kp_now:.1f}</span>'
                    f'<span style="display:flex;flex-direction:column;gap:6px;padding-bottom:6px">{ui.level_chip(kp_now, t)}'
                    f'<span class="tm-sub" style="font-size:14px">Kp at {ui.pk(past.index[-1]):%H:00} PKT · 80% range {cur["kp_lo"]:.1f} – {cur["kp_hi"]:.1f}</span></span></div>'
                    f'{ui.kp_scale(kp_now, cur["kp_lo"], cur["kp_hi"], t)}<span style="font-size:14px;line-height:1.5">{ui.esc(lv[5])}</span>{nxt}</div>')
-        w = hourly.dropna().iloc[-1]
-        h24 = hourly.dropna().tail(24)
+        upto = hourly.loc[:past.index[-1]]                  # the "Kp now" hour, like the headline and the form
+        w = upto.ffill().iloc[-1]
+        h24 = upto.dropna().tail(24)
         cells = [("Bz · north–south field", f"{w['bz_gsm']:+.1f}", "nT", "Southward (negative) lets energy in.", "bz_gsm"),
                  ("Wind speed", f"{w['speed']:.0f}", "km/s", "Fast streams run 500–800 km/s.", "speed"),
                  ("Density", f"{w['density']:.1f}", "cm⁻³", "CME sheaths reach 20–40.", "density"),
                  ("Field strength |B|", f"{w['b_scalar']:.1f}", "nT", "Storms usually need 15 nT or more.", "b_scalar")]
         wind_html = "".join(
-            f'<div class="tm-cell" style="background:{t["surface"]};padding:18px 20px;display:flex;flex-direction:column;gap:6px">'
+            f'<div class="tm-cell" style="background:{t["card"]};padding:18px 20px;display:flex;flex-direction:column;gap:6px">'
             f'<span class="tm-sub">{lab}</span><span class="tm-mono" style="font-size:26px;font-weight:600">{v} <span style="font-size:13px;font-weight:400;color:{t["muted"]}">{u}</span></span>'
             f'{ui.sparkline(list(h24[col]), 240, 64, t["primary"], labels=("24 h ago", "now"))}<span class="tm-sub" style="font-size:12px">{note}</span></div>'
             for lab, v, u, note, col in cells)
@@ -226,9 +249,11 @@ def nowcast_page(theme: str, now: pd.Timestamp):
                        + "".join(f'<span style="display:flex;flex-direction:column;gap:4px"><span class="tm-mono" style="font-size:20px;font-weight:600">{v}</span>'
                                  f'<span class="tm-sub" style="font-size:12px">{lab}</span></span>' for v, lab in stats)
                        + f'</div><span class="tm-sub" style="font-size:12px">Test period 2020 onwards (cleaned OMNI data): RMSE 0.57 Kp, 81% of the variation explained.</span></div>')
-        right = (f'<div style="display:flex;flex-direction:column;gap:12px"><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;'
-                 f'background:{t["hair"]};border:1px solid {t["hair"]};border-radius:6px;overflow:hidden">{wind_html}</div>{acc}</div>')
-        ui.show(ui.grid([readout, right], 380, align="start"))
+        right = (f'<div class="tm-split" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;height:100%;'
+                 f'background:{t["hair"]};border:1px solid {t["hair"]};border-radius:6px;overflow:hidden">{wind_html}</div>')
+        ui.show(ui.grid([readout, right], 380, align="stretch"))      # both cards end at the same height
+        if acc:
+            ui.show(acc)                                                # full width, under both cards
 
         with ui.card("pages_models_5"):
             ui.show(ui.section_head("Last 5 days · nowcast vs observed Kp",
@@ -249,6 +274,7 @@ def nowcast_page(theme: str, now: pd.Timestamp):
                             "3 days, so choose what that past looks like."))
     for name, value in DEFAULTS.items():
         st.session_state.setdefault(name, value)
+    _follow_live_hour()
     cols = st.columns(len(PRESETS) + 1)
     for c, name in zip(cols, PRESETS):
         c.button(name, on_click=_apply_preset, args=(name,), width="stretch")
@@ -359,8 +385,8 @@ def method(theme: str, now: pd.Timestamp):
               ("More than one number", "Error, skill, storm catches and false alarms, probability quality and range coverage."),
               ("Live proof", "Forecasts are logged before their day happens and can never be edited.")]
     ui.show(ui.section_head("Six checks before a number is trusted"))
-    ui.show(f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1px;background:{t["hair"]};border:1px solid {t["hair"]};border-radius:6px;overflow:hidden">'
-            + "".join(f'<div class="tm-cell" style="background:{t["surface"]};padding:20px 22px;display:grid;grid-template-columns:40px minmax(0,1fr);gap:4px 12px">'
+    ui.show(f'<div class="tm-split" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1px;background:{t["hair"]};border:1px solid {t["hair"]};border-radius:6px;overflow:hidden">'
+            + "".join(f'<div class="tm-cell" style="background:{t["card"]};padding:20px 22px;display:grid;grid-template-columns:40px minmax(0,1fr);gap:4px 12px">'
                       f'<span class="tm-mono" style="grid-row:span 2;font-size:20px;font-weight:600;color:{t["primary"]}">{i:02d}</span>'
                       f'<span style="font-size:15px;font-weight:600">{a}</span><span class="tm-sub">{b}</span></div>' for i, (a, b) in enumerate(checks, 1))
             + "</div>")
@@ -386,17 +412,12 @@ def method(theme: str, now: pd.Timestamp):
             fig = ROOT / "reports" / "figures" / "14_may2024_nowcast.png"
             if fig.exists():
                 st.image(str(fig))
-    ui.show(ui.grid([
-        f'<article class="tm-flat" style="padding:22px 24px;display:flex;flex-direction:column;gap:12px"><h2 class="tm-h2">Known limits</h2>'
-        f'<ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.55;color:{t["muted"]}">'
+    ui.show(
+        f'<article class="tm-flat" style="padding:28px 32px;display:flex;flex-direction:column;gap:16px">'
+        f'<h2 class="tm-h2" style="font-size:22px !important">Known limits</h2>'
+        f'<ul style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:14px;font-size:17px;line-height:1.6;color:{t["text"]}">'
         '<li>Storms from sudden solar eruptions leave no trace in past Kp, so their onset is usually missed by the 7-day forecast.</li>'
         '<li>The nowcaster under-reads the largest storms (about −0.6 Kp for G3+) and sudden onsets show up 1–2 h late.</li>'
         '<li>Storm chances read somewhat high in quiet spells; warnings are unaffected. A correction was tested and rejected by its own rule.</li>'
-        '<li>This is a course project, not an operational warning service; for that, use NOAA SWPC or GFZ.</li></ul></article>',
-        f'<article class="tm-flat" style="padding:22px 24px;display:flex;flex-direction:column;gap:12px"><h2 class="tm-h2">Every decision is on record</h2>'
-        f'<p class="tm-sub" style="margin:0;font-size:14px;line-height:1.6">{n_dec} decisions, each with its reason, the alternatives and the '
-        'result, including the experiments that failed. Retraining happens only when the weekly health check finds the live skill '
-        'degraded twice in a row.</p>'
-        '<a class="tm-link" href="https://github.com/Syeda-Aliza-Ayaz/Tormenta/blob/main/DECISIONS.md" target="_blank" style="font-size:14px">Read the decision log on GitHub →</a>'
-        '<a class="tm-link" href="https://huggingface.co/aliza-ayaz/tormenta" target="_blank" style="font-size:14px">Model card on Hugging Face →</a></article>'], 340))
+        '<li>This is a course project, not an operational warning service; for that, use NOAA SWPC or GFZ.</li></ul></article>')
     ui.show(ui.credits(t, theme))

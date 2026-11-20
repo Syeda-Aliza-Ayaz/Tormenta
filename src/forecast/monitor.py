@@ -1,4 +1,4 @@
-"""Forecaster health check: retrain only when performance drops (PLAN.md §9, DECISIONS D-12, D-53).
+"""Forecaster health check: retrain only when performance drops (docs/plans/PLAN.md §9, DECISIONS D-12, D-53).
 
 Weekly, from the live scores (forecasts/scores.csv):
   skill   the headline model's skill against the 27-day average over the last WINDOW_DAYS (56) target days,

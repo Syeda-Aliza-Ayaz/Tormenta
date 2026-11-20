@@ -5,7 +5,7 @@ from .data import IN_BROWSER
 
 TOKENS = {
     "dark": {
-        "ground": "#0E0F11", "surface": "#16181B", "raised": "#1D2024", "hair": "#2C3036", "grid": "#1E2125",
+        "ground": "#0E0F11", "surface": "#16181B", "card": "var(--tm-card)", "card_rgb": "22,24,27", "raised": "#1D2024", "hair": "#2C3036", "grid": "#1E2125",
         "track": "#2C3036", "text": "#F1F2F4", "muted": "#9AA0AA", "primary": "#9CC9FF", "primary_fg": "#0B1220",
         "link": "#9CC9FF", "alert": "#FF6A2B", "alert_text": "#FF8A55", "alert_fg": "#1F0B00", "alert_wash": "#24170F",
         "good": "#9CC9FF", "live": "#6FCF97", "band": 0.16, "highlight": "#1A1D21",
@@ -15,7 +15,7 @@ TOKENS = {
         "ramp": ["#2C3036", "#4D525B", "#7C828D", "#FFD166", "#FFA94D", "#FF6A2B", "#F03E5F"],
     },
     "light": {
-        "ground": "#F2F4F7", "surface": "#FFFFFF", "raised": "#F7F8FA", "hair": "#D9DEE5", "grid": "#ECEFF3",
+        "ground": "#F2F4F7", "surface": "#FFFFFF", "card": "var(--tm-card)", "card_rgb": "255,255,255", "raised": "#F7F8FA", "hair": "#D9DEE5", "grid": "#ECEFF3",
         "track": "#E4E8EE", "text": "#0D1B2A", "muted": "#566173", "primary": "#1D4E89", "primary_fg": "#FFFFFF",
         "link": "#1D4E89", "alert": "#FF4F00", "alert_text": "#C23B00", "alert_fg": "#1F0B00", "alert_wash": "#FFF4EE",
         "good": "#1D4E89", "live": "#1E8E5A", "band": 0.13, "highlight": "#F3F6FA",
@@ -78,7 +78,8 @@ def css(theme: str) -> str:
          f"url(\"{LIGHT_DOTS}\") 0 0 / 22px 22px fixed, {t['ground']};")
     return f"""<style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
-:root {{ --tm-text:{t['text']}; --tm-muted:{t['muted']}; --tm-primary:{t['primary']}; --tm-surface:{t['surface']};
+:root {{ --tm-card-alpha: 0.2; --tm-card: rgba({t['card_rgb']}, var(--tm-card-alpha));   /* card background see-through: 0 = clear, 1 = solid */
+  --tm-text:{t['text']}; --tm-muted:{t['muted']}; --tm-primary:{t['primary']}; --tm-surface:{t['surface']};
   --tm-raised:{t['raised']}; --tm-hair:{t['hair']}; --tm-alert:{t['alert']}; }}
 html, body, .stApp {{ {page_bg} color: {t['text']}; }}
 .stApp, .stApp p, .stApp label, .stApp span, .stApp div, .stApp button, .stApp input {{ font-family: 'IBM Plex Sans', system-ui, sans-serif; }}
@@ -86,14 +87,19 @@ html, body, .stApp {{ {page_bg} color: {t['text']}; }}
 .stApp h2.tm-h2, .stApp .stMarkdown h2.tm-h2 {{ font-size: 18px !important; font-weight: 600 !important; line-height: 1.3 !important; padding: 0 !important; margin: 0 !important; letter-spacing: 0 !important; }}
 .stApp .stMarkdown h3 {{ padding: 0 !important; line-height: 1.3 !important; }}
 .stApp .stMarkdown h1 {{ padding: 0 !important; }}
-.stApp [class*="st-key-card_"] {{ background: {t['surface']}; border: 1px solid {t['hair']}; border-radius: 8px; padding: 22px 24px; gap: 14px; }}
+.stApp [class*="st-key-card_"], .tm-card, .tm-flat, [data-testid="stExpander"] details, [data-testid="stForm"] {{ -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }}
+.stApp [class*="st-key-card_"] {{ background: {t['card']}; border: 1px solid {t['hair']}; border-radius: 8px; padding: 22px 24px; gap: 14px; }}
 .stApp code, .tm-mono {{ font-family: 'IBM Plex Mono', monospace !important; }}
 header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], #MainMenu, footer,
 [data-testid="stStatusWidget"] {{ display: none !important; }}
 [data-testid="stMainBlockContainer"], .block-container {{ max-width: 1280px; padding: 0 40px 64px !important; }}
 [data-testid="stAppViewContainer"] > .main, section.main {{ background: transparent; }}
 .stApp [data-testid="stVerticalBlock"] {{ gap: 20px; }}
-.stApp [data-testid="stHorizontalBlock"] {{ gap: 16px; }}
+.stApp [data-testid="stHorizontalBlock"] {{ gap: 16px; align-items: stretch; }}
+/* side-by-side cards: each card fills its column, so cards in one row end at the same height */
+.stApp [data-testid="stColumn"] > [data-testid="stVerticalBlock"] {{ height: 100%; }}
+.stApp [data-testid="stColumn"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-card_"]) {{ flex: 1 1 auto; }}
+.stApp [data-testid="stColumn"] [class*="st-key-card_"] {{ height: 100%; box-sizing: border-box; }}
 .stApp .stMarkdown, .stApp [data-testid="stMarkdown"], .stApp [data-testid="stMarkdownContainer"] {{ margin-bottom: 0 !important; }}
 .stApp [data-testid="stMarkdownContainer"] > div:last-child {{ margin-bottom: 0; }}
 .element-container:has(iframe[height="0"]), [data-testid="stElementContainer"]:has(iframe[srcdoc*="tmClock"]), .element-container:has(iframe[srcdoc*="tmClock"]) {{ display: none !important; }}
@@ -101,7 +107,15 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .tm-gap {{ margin-bottom: 8px; }}
 .tm-hero {{ -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 120px), transparent 100%);
   mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 120px), transparent 100%); }}
-.tm-head {{ background: rgba(5,7,10,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }}
+.tm-head {{ position: fixed !important; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(5,7,10,0.78);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 8px 24px -16px rgba(0,0,0,.6); }}
+.tm-hero {{ padding-top: 65px; box-sizing: border-box; }}
+/* the nav's own block sits above every later block (each Streamlit block is its own stacking layer) */
+.stApp [data-testid="stElementContainer"]:has(.tm-head), .stApp [data-testid="stMarkdown"]:has(.tm-head) {{ position: relative; z-index: 1000 !important; }}
+/* blocks that only hold the stylesheet or an empty placeholder take no space */
+.stApp [data-testid="stElementContainer"]:has(> [data-testid="stEmpty"]),
+.stApp [data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style:only-child) {{ display: none !important; }}
+[data-testid="stMainBlockContainer"], .block-container {{ padding-top: 0 !important; }}
 a {{ color: {t['link']}; }}
 
 
@@ -130,10 +144,10 @@ a {{ color: {t['link']}; }}
   font-family: 'IBM Plex Mono', monospace !important; }}
 [data-baseweb="input"]:focus-within {{ border-color: {t['primary']} !important; box-shadow: 0 0 0 3px rgba(156,201,255,.22); }}
 [data-testid="stNumberInput"] button {{ background: {t['raised']} !important; color: {t['muted']} !important; }}
-[data-testid="stExpander"] details {{ background: {t['surface']}; border: 1px solid {t['hair']} !important; border-radius: 6px; }}
+[data-testid="stExpander"] details {{ background: {t['card']}; border: 1px solid {t['hair']} !important; border-radius: 6px; }}
 [data-testid="stExpander"] summary p {{ color: {t['text']} !important; font-size: 14px !important; }}
-[data-testid="stForm"] {{ background: {t['surface']}; border: 1px solid {t['hair']}; border-radius: 6px; }}
-[data-testid="stAlert"] {{ background: {t['surface']}; border: 1px solid {t['hair']}; color: {t['text']}; }}
+[data-testid="stForm"] {{ background: {t['card']}; border: 1px solid {t['hair']}; border-radius: 6px; }}
+[data-testid="stAlert"] {{ background: {t['card']}; border: 1px solid {t['hair']}; color: {t['text']}; }}
 [data-testid="stCaptionContainer"], .stApp small {{ color: {t['muted']} !important; }}
 [data-testid="stImage"] img {{ border-radius: 6px; }}
 [data-testid="stTabs"] [role="tab"] p {{ color: {t['muted']}; }}
@@ -142,10 +156,12 @@ a {{ color: {t['link']}; }}
 [data-testid="stSliderTickBarMin"], [data-testid="stSliderTickBarMax"] {{ color: {t['muted']}; }}
 
 /* own components */
-.tm-card {{ background: {t['surface']}; border: 1px solid {t['hair']}; border-radius: 8px; box-sizing: border-box; min-width: 0;
+.tm-card {{ background: {t['card']}; border: 1px solid {t['hair']}; border-radius: 8px; box-sizing: border-box; min-width: 0;
   transition: transform .28s cubic-bezier(.2,.7,.2,1), border-color .28s, box-shadow .28s; }}
 .tm-card:hover {{ transform: translateY(-3px); border-color: rgba(156,201,255,0.5); box-shadow: 0 18px 40px -24px rgba(156,201,255,0.45); }}
-.tm-flat {{ background: {t['surface']}; border: 1px solid {t['hair']}; border-radius: 8px; box-sizing: border-box; }}
+.tm-split {{ gap: 0 !important; background: {t['card']} !important; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }}
+.tm-split > * {{ background: transparent !important; box-shadow: 1px 0 0 {t['hair']}, 0 1px 0 {t['hair']}; }}
+.tm-flat {{ background: {t['card']}; border: 1px solid {t['hair']}; border-radius: 8px; box-sizing: border-box; }}
 .tm-flat > .tm-table th:first-child, .tm-flat > .tm-table td:first-child {{ padding-left: 20px; }}
 .tm-flat > .tm-table th:last-child, .tm-flat > .tm-table td:last-child {{ padding-right: 20px; }}
 .tm-flat > .tm-table caption {{ padding: 20px 20px 8px !important; }}
@@ -179,10 +195,10 @@ a {{ color: {t['link']}; }}
 
 /* loader: the logo's field lines draw while a particle orbits */
 [data-testid="stSpinner"] > div {{ display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 8px;
-  background: {t['surface']}; border: 1px solid {t['hair']}; color: {t['muted']}; font-size: 14px; width: fit-content; }}
+  background: {t['card']}; border: 1px solid {t['hair']}; color: {t['muted']}; font-size: 14px; width: fit-content; }}
 [data-testid="stSpinner"] i, [data-testid="stSpinner"] svg, [data-testid="stSpinnerIcon"] {{ display: none !important; }}
 [data-testid="stSpinner"] > div::before {{ content: ""; flex: 0 0 34px; height: 34px; background: url("{SPINNER}") center / contain no-repeat; }}
-.tm-loader {{ display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 8px; background: {t['surface']};
+.tm-loader {{ display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 8px; background: {t['card']};
   border: 1px solid {t['hair']}; color: {t['muted']}; font-size: 14px; width: fit-content; }}
 .tm-load-mark .tm-draw {{ stroke-dasharray: 40; animation: tm-draw 1.8s ease-in-out infinite; }}
 .tm-load-mark .tm-d2 {{ animation-delay: .3s; }}
@@ -221,6 +237,8 @@ a {{ color: {t['link']}; }}
   .tm-nav {{ gap: 4px 16px !important; font-size: 13px !important; }}
   .tm-footer > div:first-child {{ grid-template-columns: 1fr 1fr !important; }}
   .tm-footer > div:first-child > div:first-child {{ grid-column: 1 / -1; }}
+  .tm-hero {{ padding-top: 104px; }}
+  .tm-head > div {{ padding-top: 8px !important; padding-bottom: 8px !important; }}
   .tm-hero {{ -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 70px), transparent 100%);
     mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 70px), transparent 100%); }}
   .stApp [class*="st-key-card_"] {{ padding: 18px 16px; }}
@@ -286,37 +304,44 @@ html {{ scrollbar-width: thin; scrollbar-color: #4A515B transparent; }}
 
 CLIENT_JS = """<script>
 (function () {
+  // Streamlit replaces this helper frame on every rerun, and handlers created by a replaced frame stop running.
+  // So each run removes the previous run's timer and handlers (kept on the page itself) and attaches fresh ones.
   const w = window.parent, d = w.document;
-  if (!w.__tmClock) {
-    const tick = () => {
-      const now = new Date();
-      const pk = new Date(now.getTime() + 5 * 3600 * 1000).toISOString().slice(11, 19);   // Pakistan: UTC+5, no DST
-      d.querySelectorAll('.tm-clock-pk').forEach(e => { e.textContent = pk; });
-    };
-    w.__tmClock = setInterval(tick, 1000); tick();
-  }
+  if (w.__tmTimer) { w.clearInterval(w.__tmTimer); }
+  for (const [type, fn] of Object.entries(w.__tmHandlers || {})) { d.removeEventListener(type, fn); }
+  w.__tmHandlers = {};
+  if (w.__tmFrame) { w.cancelAnimationFrame(w.__tmFrame); }
+
+  const tick = () => {
+    const pk = new Date(Date.now() + 5 * 3600 * 1000).toISOString().slice(11, 19);   // Pakistan: UTC+5, no DST
+    d.querySelectorAll('.tm-clock-pk').forEach(e => { e.textContent = pk; });
+  };
+  w.__tmTimer = w.setInterval(tick, 1000); tick();
+
   const fine = w.matchMedia('(hover: hover) and (pointer: fine)').matches;
   const calm = w.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (fine && !d.getElementById('tm-ring')) {
-    const r = d.createElement('div'); r.id = 'tm-ring'; d.body.appendChild(r);
-    let mx = -100, my = -100, rx = -100, ry = -100, running = false;
-    const ease = calm ? 1 : 0.2;                       // the ring eases behind the pointer
-    const step = () => {
-      rx += (mx - rx) * ease; ry += (my - ry) * ease;
-      r.style.transform = 'translate3d(' + rx + 'px,' + ry + 'px,0)';
-      if (Math.abs(mx - rx) > 0.1 || Math.abs(my - ry) > 0.1) { w.requestAnimationFrame(step); } else { running = false; }
-    };
-    d.addEventListener('mousemove', e => {
-      mx = e.clientX; my = e.clientY; r.style.opacity = '1';
-      const tg = e.target && e.target.closest ? e.target : null;
-      r.classList.toggle('hot', !!(tg && tg.closest('a, button, label, [role=button], [role=tab], summary, [data-baseweb=select]')));
-      r.classList.toggle('text', !!(tg && tg.closest('input, textarea')));
-      if (!running) { running = true; w.requestAnimationFrame(step); }
-    });
-    d.addEventListener('mousedown', () => r.classList.add('down'));
-    d.addEventListener('mouseup', () => r.classList.remove('down'));
-    d.addEventListener('mouseleave', () => { r.style.opacity = '0'; });
-  }
+  if (!fine) { return; }
+  let r = d.getElementById('tm-ring');
+  if (!r) { r = d.createElement('div'); r.id = 'tm-ring'; d.body.appendChild(r); }
+  const st = w.__tmRing || (w.__tmRing = {mx: -100, my: -100, rx: -100, ry: -100});
+  st.rx = st.mx; st.ry = st.my;                       // start at the pointer, no glide from an old position
+  const ease = calm ? 1 : 0.2;                        // the ring eases behind the pointer
+  const step = () => {
+    st.rx += (st.mx - st.rx) * ease; st.ry += (st.my - st.ry) * ease;
+    r.style.transform = 'translate3d(' + st.rx + 'px,' + st.ry + 'px,0)';
+    w.__tmFrame = (Math.abs(st.mx - st.rx) > 0.1 || Math.abs(st.my - st.ry) > 0.1) ? w.requestAnimationFrame(step) : 0;
+  };
+  const on = (type, fn) => { d.addEventListener(type, fn); w.__tmHandlers[type] = fn; };
+  on('mousemove', e => {
+    st.mx = e.clientX; st.my = e.clientY; r.style.opacity = '1';
+    const tg = e.target && e.target.closest ? e.target : null;
+    r.classList.toggle('hot', !!(tg && tg.closest('a, button, label, [role=button], [role=tab], summary, [data-baseweb=select]')));
+    r.classList.toggle('text', !!(tg && tg.closest('input, textarea')));
+    if (!w.__tmFrame) { w.__tmFrame = w.requestAnimationFrame(step); }
+  });
+  on('mousedown', () => r.classList.add('down'));
+  on('mouseup', () => r.classList.remove('down'));
+  on('mouseleave', () => { r.style.opacity = '0'; });
 })();
 </script>"""
 

@@ -11,7 +11,7 @@ two parts:
 Everything is scored against the official values from GFZ Potsdam as they arrive, and compared with NOAA's official
 forecast.
 
-CT-378 Machine Learning, NED University, Fall 2026 · Alizeh & HRK.
+CT-378 Machine Learning, NED University, Fall 2026 · Syeda Aliza Ayaz (CT-24219) & Husn ur Rehman (CT-24070).
 
 | | |
 |---|---|
@@ -394,6 +394,6 @@ Each step lists what was done and the reason recorded at the time. Forecaster st
 | [README.md](README.md) | setup, how to run, repository layout |
 | [DECISIONS.md](DECISIONS.md) | every decision: what, why, the rule, the result |
 | [ROADMAP.md](ROADMAP.md) | open work, in order, with checklists |
-| [PLAN.md](PLAN.md) | the original v2 forecaster plan |
+| [docs/plans/PLAN.md](docs/plans/PLAN.md) | the original v2 forecaster plan |
 | [docs/PROJECT_NOTES.md](docs/PROJECT_NOTES.md) | what each file does and why |
 | [TODO.md](TODO.md) | work blocked by network access or waiting for data |

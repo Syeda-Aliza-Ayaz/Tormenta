@@ -1,7 +1,7 @@
 """Two measurements of known training/live differences (DECISIONS D-60, D-61). Neither changes a model.
 
   skew         Live forecasts read GFZ's newest values while they are still preliminary (nowcast, then provisional);
-               the models were trained on definitive values (PLAN.md §3). The daily job commits the observations it
+               the models were trained on definitive values (docs/plans/PLAN.md §3). The daily job commits the observations it
                used (forecasts/recent.csv), so git history holds each day's inputs as first published. For each
                live issue day, the production models forecast twice: from those inputs, and from the same days as
                GFZ publishes them now. The differences are reported per model and lead day, beside the size of the

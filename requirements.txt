@@ -3,6 +3,7 @@
 numpy==2.5.4
 pandas==3.1.0
 scipy==1.18.1
+astropy==8.0.3                 # reads the solar images for the coronal-hole features (D-70, D-76)
 scikit-learn==1.9.1
 joblib==1.6.0
 # v2 forecaster: ARIMA / SARIMA / ARIMAX (src/forecast/arima.py)

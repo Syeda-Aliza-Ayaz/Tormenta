@@ -80,6 +80,21 @@ def update(fetch=None, now: pd.Timestamp = None, path=None) -> pd.DataFrame:
     return out
 
 
+def omni_hourly() -> pd.DataFrame:
+    """Hourly OMNI solar wind for the forecaster: the processed table, extended with NASA's yearly SPDF files
+    (data/raw/spdf/omni2_YYYY.dat) for hours after the table's last row. Never overwrites a row of the table."""
+    import glob
+    from src.ingest import fetch_omni
+    h = pd.read_csv(config.PROCESSED_CSV, usecols=["time", *COLUMNS], parse_dates=["time"]).set_index("time")
+    last = h.dropna(subset=["speed"]).index.max()
+    years = sorted(int(p[-8:-4]) for p in glob.glob(str(fetch_omni.SPDF_DIR / "omni2_*.dat")) if int(p[-8:-4]) >= last.year)
+    if years:
+        extra = fetch_omni.load_omni_spdf(years[0], years[-1], download=False)
+        extra = extra.loc[extra.index > last, COLUMNS].dropna(how="all")
+        h = pd.concat([h.loc[:last], extra])
+    return h.sort_index()
+
+
 def daily_summary(hourly: pd.DataFrame) -> pd.DataFrame:
     """Daily solar-wind features (UTC days). A day needs at least 12 hourly speed values, otherwise it is blank."""
     h = hourly[COLUMNS].astype(float)

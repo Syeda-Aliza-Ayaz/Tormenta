@@ -1,4 +1,4 @@
-"""Daily job (PLAN.md §8): issue today's 7-day forecasts, save NOAA's, score everything whose day has arrived.
+"""Daily job (docs/plans/PLAN.md §8): issue today's 7-day forecasts, save NOAA's, score everything whose day has arrived.
 
 Run by .github/workflows/daily.yml at 02:00 UTC, or by hand:
     python -m src.issue               # download GFZ + NOAA, update forecasts/
@@ -11,17 +11,20 @@ Files written (all in forecasts/, all committed):
                  observed value and its quality flag (it changes when provisional values become definitive).
   recent.csv     the last 60 days of observed Ap / max Kp, so the apps can draw history without calling GFZ.
   noaa_live.csv  NOAA's 27-day outlook and 3-day forecast, parsed; the raw texts go to forecasts/noaa/.
+  imagery_daily.csv  APPEND-ONLY daily coronal-hole features from the near-real-time image (src/ingest/aia_live.py).
+  locked_shadow_log.csv APPEND-ONLY. The locked model (D-76) in shadow mode, with its fallbacks.
   shadow_log.csv APPEND-ONLY. The solar-wind candidate in shadow mode, with its fallback (src/forecast/sw_shadow.py).
+  nowcast_log.csv APPEND-ONLY. Every completed hour's live nowcast (src/nowcast_log.py).
   solar_wind_hourly.csv  hourly live solar wind, kept beyond the feed's 7 days (src/ingest/sw_archive.py).
 """
 import argparse
 
 import pandas as pd
 
-from src import backtest, config
+from src import backtest, config, nowcast_log
 from src.daily import build_daily, check
-from src.forecast import intervals, registry, storm, sw_shadow
-from src.ingest import fetch_noaa, sw_archive
+from src.forecast import intervals, locked_shadow, registry, storm, sw_shadow
+from src.ingest import aia_live, fetch_noaa, sw_archive
 from src.ingest.fetch_gfz import download_gfz, load_gfz_daily
 
 LOG_COLUMNS = ["issued_at", "origin", "origin_flag", "model", "model_version", "lead", "target_date",
@@ -129,6 +132,10 @@ def run(download: bool = True, now: pd.Timestamp = None, models=None) -> dict:
     check(daily)
     # keeps solar wind past the feed's 7 days, before issuing so the shadow model sees the latest day
     sw = sw_archive.update() if download else sw_archive.load()
+    if download:
+        nowcast_log.update()                          # hourly live nowcast, kept for scoring; failure only warns
+        aia_live.update()                             # daily coronal-hole features from the near-real-time image
+    images = aia_live.load()
 
     log = load_log()
     origin = choose_origin(daily, now.normalize())
@@ -148,6 +155,16 @@ def run(download: bool = True, now: pd.Timestamp = None, models=None) -> dict:
         new_storm = issue_storm(daily, origin, now)
         if new_storm is not None:
             storm_log = append_storm(storm_log, new_storm)
+    locked_log = locked_shadow.load_log()
+    if origin is not None and locked_shadow.BUNDLE.exists() and sw_shadow.BUNDLE.exists():
+        try:                                          # the locked model in shadow mode (D-76); never blocks the forecast
+            locked_new = locked_shadow.issue(daily, origin, new, sw, images, now)
+            before_locked = len(locked_log)
+            locked_log = locked_shadow.append(locked_log, locked_new)
+            print(f"locked shadow {locked_shadow.NAME}: origin {origin.date()}, status {locked_new['status'].iloc[0]}, "
+                  f"served {locked_new['served'].iloc[0]}, {len(locked_log) - before_locked} new rows")
+        except Exception as exc:                      # noqa: BLE001
+            print(f"WARNING: locked shadow forecast not issued ({type(exc).__name__}: {exc})")
     shadow_log = sw_shadow.load_log()
     if origin is not None and sw_shadow.BUNDLE.exists():
         try:                                          # the shadow model must never block the live forecast
@@ -171,6 +188,8 @@ def run(download: bool = True, now: pd.Timestamp = None, models=None) -> dict:
     score_storm(storm_log, daily).to_csv(config.STORM_SCORES, index=False)
     if len(shadow_log):
         shadow_log.reindex(columns=sw_shadow.LOG_COLUMNS).to_csv(config.SHADOW_LOG, index=False)
+    if len(locked_log):
+        locked_log.reindex(columns=locked_shadow.LOG_COLUMNS).to_csv(config.LOCKED_SHADOW_LOG, index=False)
     print(f"log {len(log)} rows | scored {len(scores)} | NOAA rows {len(noaa)} | storm log {len(storm_log)} rows")
     return {"origin": origin, "new_rows": n_new, "log": log, "scores": scores}
 

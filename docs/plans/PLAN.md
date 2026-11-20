@@ -1,10 +1,10 @@
 # Tormenta v2: from nowcaster to 7-day forecaster
 
 **Status:** planning · **Window:** Tue 10 Nov → ~Fri 20 Nov 2026 (about 1.5 weeks)
-**Team:** Alizeh, HRK · CT-378 Machine Learning, NED University
+**Team:** Syeda Aliza Ayaz (CT-24219), Husn ur Rehman (CT-24070) · CT-378 Machine Learning, NED University
 
 The nowcaster (v1, built from [TORMENTA_BUILD_PLAN.md](TORMENTA_BUILD_PLAN.md)) is finished and stays as it is.
-This plan adds a forecaster on top of it. Every decision and its outcome is logged in [DECISIONS.md](DECISIONS.md).
+This plan adds a forecaster on top of it. Every decision and its outcome is logged in [DECISIONS.md](../../DECISIONS.md).
 
 ---
 
@@ -58,7 +58,7 @@ The only new source is NOAA, and **only as a benchmark**, never as a model input
 
 | Role | Source | Cadence | Status |
 |---|---|---|---|
-| Training data + forecast inputs + verification | GFZ `Kp_ap_Ap_SN_F107_since_1932.txt` | daily | **have**: also keep the `Ap` column ([fetch_gfz.py:36](src/ingest/fetch_gfz.py#L36) drops it) and add daily max Kp |
+| Training data + forecast inputs + verification | GFZ `Kp_ap_Ap_SN_F107_since_1932.txt` | daily | **have**: also keep the `Ap` column ([fetch_gfz.py:36](../../src/ingest/fetch_gfz.py#L36) drops it) and add daily max Kp |
 | Today's partial Kp (live input / scoring) | GFZ `Kp_ap_nowcast.txt` | every 3 h | **have** |
 | F10.7 when GFZ is late | SWPC `10cm-flux-30-day.json` | daily | **have** |
 | Solar wind (nowcaster only) | SWPC propagated solar wind; OMNI2 | live / months behind | **have** |
@@ -164,7 +164,7 @@ demonstrates the system; the backtest is the statistical evidence.
 
 ## 9. Retraining only when performance drops
 
-**Today:** [update.py](src/update.py) retrains every Monday whenever there is new data, and the gate decides
+**Today:** [update.py](../../src/update.py) retrains every Monday whenever there is new data, and the gate decides
 whether to promote. Nothing checks whether the current model is actually doing badly.
 
 **New rule (`src/monitor.py`, weekly):**
@@ -206,7 +206,7 @@ Streamlit Cloud (a real server) and a static HF Space (the app runs in the visit
 |---|---|---|
 | **GitHub Actions daily job** (batch serving) | every model issues the official daily forecast, scores the old ones, then commits | runs (torch installed in the job) |
 | **Streamlit Cloud** (main, already live) | the whole app: every model forecasts live from the teacher's inputs; scorecards read `forecasts/*.csv` from the repo | live, with the CPU-only torch build + Chronos-Bolt-small, loaded once and cached. If it exceeds memory: show the forecast the daily job saved, labelled as such |
-| **HF static Space** (stlite, in the browser) | the same app. Baselines in numpy; HistGB per lead day as portable `.npz` (extend [portable.py](src/portable.py)); ARIMA family with statsmodels in the browser (Pyodide) | saved forecast only (no torch in the browser) |
+| **HF static Space** (stlite, in the browser) | the same app. Baselines in numpy; HistGB per lead day as portable `.npz` (extend [portable.py](../../src/portable.py)); ARIMA family with statsmodels in the browser (Pyodide) | saved forecast only (no torch in the browser) |
 | **HF model repo** | forecaster bundles + updated model card | — |
 | **Flask** (local) | add a `/forecast` page and a `/api/forecast` JSON endpoint | saved forecast |
 

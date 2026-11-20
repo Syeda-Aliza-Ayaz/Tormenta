@@ -1,4 +1,4 @@
-"""ARIMA, SARIMA (27-day season) and ARIMAX (PLAN.md §6), as state-space models from statsmodels.
+"""ARIMA, SARIMA (27-day season) and ARIMAX (docs/plans/PLAN.md §6), as state-space models from statsmodels.
 
 How a rolling backtest stays fast and honest (DECISIONS D-10):
   * the parameters are estimated ONCE, on the training years (fit);

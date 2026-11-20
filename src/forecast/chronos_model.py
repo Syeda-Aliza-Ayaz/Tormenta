@@ -1,4 +1,4 @@
-"""Chronos-Bolt, a pretrained time-series transformer, used zero-shot (PLAN.md §6, DECISIONS D-11).
+"""Chronos-Bolt, a pretrained time-series transformer, used zero-shot (docs/plans/PLAN.md §6, DECISIONS D-11).
 
 Pretrained by Amazon with self-supervised learning on many time series; it is not trained here. For each issue day D it
 receives the last CONTEXT_DAYS daily values up to D (never later) and returns D+1 … D+7. Ap and max Kp are
