@@ -1,4 +1,4 @@
-"""HistGradientBoosting, one model per lead day and target ("direct" multi-step forecasting; PLAN.md §6).
+"""HistGradientBoosting, one model per lead day and target ("direct" multi-step forecasting; docs/plans/PLAN.md §6).
 
 Seven independent models per target: lead day h learns features(D) → value on D+h. No model feeds on another's
 output, so errors do not compound across days.

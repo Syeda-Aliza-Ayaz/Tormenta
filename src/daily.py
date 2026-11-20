@@ -1,4 +1,4 @@
-"""GFZ → the daily table the forecaster trains, forecasts and verifies on (PLAN.md §3).
+"""GFZ → the daily table the forecaster trains, forecasts and verifies on (docs/plans/PLAN.md §3).
 
 One row per UTC day, 1932 → the last day GFZ has published (usually yesterday):
   ap        daily Ap (GFZ)                       target + input

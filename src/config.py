@@ -122,7 +122,7 @@ GATE_HOLDOUT_MONTHS = 6
 GATE_TOLERANCE = 1.02        # promote if candidate RMSE <= current RMSE × 1.02
 NOWCAST_HEALTH_MARGIN = 0.10 # retrain the nowcaster only if its holdout skill vs persistence drops > 0.10 below test
 
-# ── v2 forecaster (PLAN.md) ──────────────────────────────────────────────────
+# ── v2 forecaster (docs/plans/PLAN.md) ──────────────────────────────────────────────────
 DAILY_CSV = PROCESSED_DIR / "daily.csv"          # one row per UTC day from GFZ (rebuilt, not committed)
 FORECAST_LEADS = list(range(1, 8))               # lead days 1–7: issued after day D, covering D+1 … D+7
 FORECAST_TARGETS = ["ap", "kpmax"]               # daily Ap and daily max Kp (NOAA's forecast quantities)
@@ -154,6 +154,9 @@ PAST_FORECASTS = FORECASTS_DIR / "past_forecasts.csv.gz"   # saved out-of-sample
 NOAA_LIVE_CSV = FORECASTS_DIR / "noaa_live.csv"   # NOAA 27-day outlook + 3-day forecast, parsed, saved every day
 NOAA_LIVE_DIR = FORECASTS_DIR / "noaa"            # the raw NOAA texts, as evidence
 STORM_LOG = FORECASTS_DIR / "storm_log.csv"       # APPEND-ONLY storm risk per lead day (src/forecast/storm.py, D-48)
+IMAGERY_LOG = FORECASTS_DIR / "imagery_daily.csv"     # APPEND-ONLY daily coronal-hole features, near-real-time images (src/ingest/aia_live.py)
+LOCKED_SHADOW_LOG = FORECASTS_DIR / "locked_shadow_log.csv"   # APPEND-ONLY locked model in shadow mode (src/forecast/locked_shadow.py, D-76)
+NOWCAST_LOG = FORECASTS_DIR / "nowcast_log.csv"      # APPEND-ONLY hourly live nowcast (src/nowcast_log.py, ROADMAP 5a)
 SHADOW_LOG = FORECASTS_DIR / "shadow_log.csv"        # APPEND-ONLY solar-wind candidate in shadow mode (src/forecast/sw_shadow.py, D-69)
 SOLAR_WIND_ARCHIVE = FORECASTS_DIR / "solar_wind_hourly.csv"  # hourly live solar wind kept past the 7-day feed (src/ingest/sw_archive.py)
 STORM_SCORES = FORECASTS_DIR / "storm_scores.csv" # storm_log rows whose day has arrived, with the observed max Kp

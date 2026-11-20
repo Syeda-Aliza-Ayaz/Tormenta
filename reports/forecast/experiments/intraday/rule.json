@@ -1,0 +1,9 @@
+{
+  "checks": {
+    "1 tomorrow storm Heidke at 12 UTC beats midnight": true,
+    "2 tomorrow false-alarm ratio at 12 UTC not higher": true,
+    "3 today max-Kp error below the simple rule at 06, 12, 18 UTC": true,
+    "4 12 UTC wins >= 6/9 years (tomorrow Brier 5/9, today max Kp 9/9)": false
+  },
+  "passes": false
+}

@@ -1,4 +1,4 @@
-"""80% forecast ranges for every model (PLAN.md §6): from each model's own validation errors, per lead day.
+"""80% forecast ranges for every model (docs/plans/PLAN.md §6): from each model's own validation errors, per lead day.
 
 For each model, target and lead day, the 10th and 90th percentiles of the validation errors give the range:
   Ap      errors as log ratios, log(1+obs) − log(1+forecast): the range widens on active days, stays ≥ 0, and

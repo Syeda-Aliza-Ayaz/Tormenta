@@ -104,7 +104,10 @@ SC_KIND = {"histgb": "Gradient-boosted trees, 14 direct models", "noaa": "Offici
            "persistence": "Tomorrow = today", "recurrence27": "Value one solar rotation earlier"}
 SC_FIGURES = {"Skill vs lead day": "01_skill_vs_lead.png", "Storm skill vs lead day": "02_storm_skill_vs_lead.png",
               "80% range coverage (test)": "03_interval_coverage_test.png",
-              "May 2024 superstorm": "04_may2024_case_study.png"}
+              "May 2024 superstorm": "04_may2024_case_study.png",
+              "Model comparison (validation)": "05_validation_models.png",
+              "Year by year (validation)": "06_validation_by_year.png",
+              "Storm warnings vs NOAA (validation)": "07_storms_vs_noaa.png"}
 
 
 @st.cache_data(ttl=600)

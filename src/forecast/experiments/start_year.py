@@ -8,7 +8,7 @@ only the training rows start there.
 
 This changes no live model, app file or earlier result.
 
-    python -m src.forecast.start_year
+    python -m src.forecast.experiments.start_year
 """
 import json
 

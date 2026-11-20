@@ -1,4 +1,4 @@
-"""Reference forecasts every model must beat (PLAN.md §6). Vectorised: one pass over all origins.
+"""Reference forecasts every model must beat (docs/plans/PLAN.md §6). Vectorised: one pass over all origins.
 
   persistence   tomorrow … D+7 look like day D
   recurrence27  day D+h looks like day D+h−27 (one solar rotation earlier; always in the past for h ≤ 7)

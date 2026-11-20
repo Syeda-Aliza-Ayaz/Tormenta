@@ -4,8 +4,8 @@ Every decision we make, why we made it, and what came of it. **Add an entry when
 "Result" once we know it.** Never delete an entry: if a decision is reversed, add a new one that says which entry
 it replaces.
 
-Decisions 1–35 from the nowcaster build are in [TORMENTA_BUILD_PLAN.md §7](TORMENTA_BUILD_PLAN.md).
-The entries below start the forecaster work (v2), planned in [PLAN.md](PLAN.md).
+Decisions 1–35 from the nowcaster build are in [docs/plans/TORMENTA_BUILD_PLAN.md §7](docs/plans/TORMENTA_BUILD_PLAN.md).
+The entries below start the forecaster work (v2), planned in [docs/plans/PLAN.md](docs/plans/PLAN.md).
 
 **Status:** ✅ adopted, result known · ⏳ adopted, result pending · 🔁 replaced (see the entry it points to) · ❌ tried and rejected
 
@@ -183,7 +183,7 @@ Template:
 - **Result / consequence:** pending.
 
 ### D-18 · New plan file; the old plan is kept as the record · 2026-11-10 · ✅
-- **Decision:** the forecaster plan lives in `PLAN.md`. `TORMENTA_BUILD_PLAN.md` gets a pointer line and is
+- **Decision:** the forecaster plan lives in `docs/plans/PLAN.md`. `docs/plans/TORMENTA_BUILD_PLAN.md` gets a pointer line and is
   otherwise left as the nowcaster's record. Decisions are logged here.
 - **Why:** the old plan documents decisions that are still true for the nowcaster, so rewriting it would lose that history.
 - **Alternatives considered:** edit the old plan in place.
@@ -920,7 +920,7 @@ Template:
   here; the app's past forecasts show the test run (previous version) followed by the recent hindcast (this
   version).
 
-### D-60 · Measured: preliminary inputs vs revised inputs (PLAN.md §3) · 2026-11-16 · ✅
+### D-60 · Measured: preliminary inputs vs revised inputs (docs/plans/PLAN.md §3) · 2026-11-16 · ✅
 - **Question:** live forecasts read GFZ's newest, still preliminary values; the models trained on definitive ones.
   How much does that change a forecast?
 - **Method:** `python -m src.forecast.checks skew`. The daily job commits the observations it used
@@ -1033,7 +1033,7 @@ Template:
 ### D-66 · Training start year: keep 1947 · 2026-11-18 · ❌ (shorter history rejected)
 - **Question:** solar cycle 25 is quieter than the mid-century cycles (training 22% storm days, recent years 8–14%).
   Does a shorter, more recent training history fit the present better?
-- **Method:** `python -m src.forecast.start_year`. Start years 1947, 1980, 1995 and 2010, all trained to 2022-12-31.
+- **Method:** `python -m src.forecast.experiments.start_year`. Start years 1947, 1980, 1995 and 2010, all trained to 2022-12-31.
   Settings and storm thresholds chosen inside each variant's own years (5 time-ordered folds, 7-day gap), scored on
   2023-01-01 → last definitive day. No live file touched.
 - **Result:**
@@ -1118,7 +1118,7 @@ Template:
   with gaps, different instruments and no reprocessing. Does the gain survive?
 - **Why synthetic:** the real check (archived DSCOVR real-time data for 2017–2019 vs OMNI) could not be run:
   NOAA's servers timed out, and no netCDF reader is installed. It is listed in [TODO.md](TODO.md).
-- **Method:** `python -m src.forecast.sw_live_stress`. The models are fitted as in D-68 on clean OMNI, and only the
+- **Method:** `python -m src.forecast.experiments.sw_live_stress`. The models are fitted as in D-68 on clean OMNI, and only the
   forecast inputs are degraded. Same years, rule and scoring as D-68. Degradation sizes are assumptions, chosen
   on the pessimistic side:
   - `gaps`: 10% of hours lost; in fast or dense hours (> 600 km/s or > 15 cm⁻³) 30% of plasma values lost; 3% of
@@ -1164,3 +1164,347 @@ Template:
     days, `no_sw`). With `no_sw` the served value is the live HistGB forecast (fallback). A failure in the shadow
     step never blocks the live forecast.
   - Adoption still needs: several weeks of shadow scores, and the real-time vs OMNI check with rescaling if biased.
+
+### D-70 · Solar imagery (coronal holes) as a forecaster input: rules before any data · 2026-11-20 · ⏳
+- **Idea:** coronal holes release fast solar wind that reaches Earth about 2–4 days after a hole crosses the
+  Sun's central meridian. Days 2–7 are the forecaster's weakest; the solar-wind features (D-68) describe only the
+  wind arriving now. Daily coronal-hole measurements from extreme-ultraviolet images could add lead time.
+  Not expected: much help with CME storms (D-67).
+- **Data:** SDO/AIA 193 Å, one image per day, May 2010 onward (JSOC synoptic archive or SDOML). Simple measured
+  features, no deep network: coronal-hole area near the central meridian, mean darkness, latitude, 1–3 day change.
+- **Isolation:** code in `src/forecast/imagery/`, images in `data/raw/imagery/` (not committed), results in
+  `reports/forecast/experiments/imagery/`. Nothing in `models/`, `src/issue.py`, `forecasts/` or the daily job
+  changes. Live-file fingerprints are checked before and after each step.
+- **Test period:** not used. Validation on 2011–2019 only, with the D-68 yearly harness; the 2020 → test runs once,
+  after the model is locked.
+- **Rule, fixed before any run.** The variant is the current candidate (`sw_rec_poisson`, D-68) plus the imagery
+  features, compared with that candidate on the same days. Judged on **2013–2019** (7 years), because images start
+  in May 2010 and earlier years would rest on under 2.5 years of image history. Keep only if all hold:
+  1. pooled Ap skill vs the 27-day average improves;
+  2. Ap skill on lead days 2–4 (pooled) improves, since that is the purpose;
+  3. it wins in at least 5 of the 7 years (Ap);
+  4. storm Heidke days 1–3 (thresholds tuned on 2011–2014, scored 2015–2019) drops by no more than 0.01.
+- **Stop early** if the sanity check fails: on 2011–2019, coronal-hole area near the central meridian shows no
+  relation to solar-wind speed or Ap 2–4 days later.
+- **Live use, only if it passes:** compare the archive images with the real-time source (GOES SUVI 195 Å or SDO
+  near-real-time), as D-69 did for solar wind, then shadow mode.
+- **Download trial (2026-11-20):** June 2015 from the JSOC AIA synoptic archive
+  (`jsoc1.stanford.edu/data/aia/synoptic/YYYY/MM/DD/H0000/`): 30 of 30 daily 193 Å files at 00:00 UTC, 1024×1024,
+  quality flag 0, 37 MB in 56 s (4 parallel). No account needed. Reading them needs `astropy`, installed in the local
+  environment only (`requirements.txt` unchanged, numpy/scikit-learn/pandas untouched). A rough cut (pixels below
+  0.35 × the disk median) finds 1–8 % of the disk dark and shows the coronal hole crossing the centre on 10–13 June;
+  it also catches filaments, so step 3 needs a size and shape filter. The header's `R_SUN` is in 4096-px units;
+  the radius for these images is `RSUN_OBS / CDELT1` (about 394 px).
+- **Full download estimate:** about 6,000 days (May 2010 → now), about 7.4 GB, about 3 hours at the trial speed.
+- **One-year check, 2016 (the stop-early test):** 357 of 366 days usable (no 00:00 image on 1 June and 3–10 August).
+  Low-latitude coronal-hole area in the Earth-facing strip vs what arrives later: wind speed +0.51 / +0.68 / +0.66
+  at 2 / 3 / 4 days, log Ap +0.49 / +0.50 / +0.33. Added value, by blocked cross-validation over the four quarters
+  of 2016, with a 5-input linear model that already has today's and yesterday's Ap, today's wind speed and the
+  27-day echo of Ap and wind speed: log-Ap error 2 / 3 / 4 days ahead falls by 8.6 / 8.5 / 7.3 %, better in
+  4 / 3 / 3 of 4 quarters. **Passes the stop-early test.** Not a model result: the real candidate is far stronger
+  than this 5-input model, and 2016 (declining phase) favours coronal holes, so the D-70 rule decides.
+- **Full test (2026-11-21):** images for 13 May 2010 – 31 Dec 2019 (3,489 files; 31 days have no 00:00 image;
+  22 images skipped for a non-zero quality flag), daily features in
+  `reports/forecast/experiments/imagery/ch_features.csv` (`python -m src.forecast.imagery`; 3,467 days; identical to
+  the one-year check on sampled days). Variant `sw_rec_poisson_imagery`: the candidate plus, for issue day D,
+  low-latitude Earth-facing area (D, D−1, D−2, change since D−1), incoming area, disk area and darkness, all from
+  images at or before 00:00 UTC on D.
+
+  | Check (2013–2019) | Candidate | + coronal holes | |
+  |---|---|---|---|
+  | 1. Pooled Ap skill | 0.131 | **0.160** | pass |
+  | 2. Ap skill, lead days 2–4 | 0.110 | **0.155** | pass |
+  | 3. Years better | — | **7 of 7** | pass |
+  | 4. Storm Heidke days 1–3 (2015–2019) | 0.310 | **0.364** | pass (no drop) |
+
+  - By lead day (Ap skill): 0.267 / 0.114 / 0.109 / 0.108 / 0.110 / 0.106 / 0.106 → 0.284 / 0.158 / 0.157 /
+    0.149 / 0.146 / 0.116 / 0.111. The gain is largest on days 2–5, the travel time of fast wind from a coronal hole.
+  - 2014 (solar maximum) moves from −0.035 to +0.029.
+- **Decision: passes the rule. Candidate, not adopted.**
+- **Leakage robustness (2026-11-21), two runs fixed before running:** a row for issue day D was checked to use the
+  image file dated D. Then:
+
+  | Run (2013–2019) | Pooled Ap skill | Days 2–4 | Years better |
+  |---|---|---|---|
+  | candidate, no images | 0.131 | 0.110 | — |
+  | + coronal holes | 0.160 | 0.155 | 7 / 7 |
+  | + previous day's image | 0.154 | 0.151 | 7 / 7 |
+  | + images assigned to random days (placebo) | 0.137 | 0.116 | 4 / 7 (fails) |
+
+  The gain survives a one-day delay (coronal holes change slowly) and mostly vanishes with shuffled dates, so it
+  comes from the real images on their real dates. The placebo's small residue (+0.005) comes from images existing
+  only from May 2010, which marks the era. **Passed.**
+- **Live source (2026-11-21):** the archive (`jsoc1.stanford.edu/data/aia/synoptic/`) lags about 10 days, too
+  late for a daily forecast. JSOC's near-real-time folder (`…/synoptic/nrt/YYYY/MM/DD/H0000/`, from 2023) has the
+  same 1024×1024 level-1.5 FITS at 00:00 UTC the same day. Its quality word carries a near-real-time marker
+  (bit 30), which the feature code now accepts (`imagery.usable`); all other quality bits still exclude an image.
+- **Live-image check (2026-11-21):** 30 days (11 Oct – 9 Nov 2026, live period, not test) downloaded from both
+  sources. Coronal-hole features agree to within a few hundredths of a percent (low-latitude Earth-facing area:
+  mean 6.23 vs 6.22 %, typical difference 0.07, correlation 1.000; every feature correlation 1.000). **Passed:** live
+  inputs match training inputs; no rescaling needed.
+- **Next:** shadow mode (daily fetch of the near-real-time image, features, logging next to the live model, with
+  fallbacks); the final test runs once after the lock.
+
+### D-71 · NOAA's storm-forecast skill, measured on validation years · 2026-11-20 · ⏳
+- **Why:** before any storm-warning work (ROADMAP §3), know what "good" looks like: how often NOAA's official
+  forecast catches a storm day, on the same days and with the same storm definition as ours.
+- **Data:** NOAA's daily RSGA reports, section VI "Geomagnetic Activity Probabilities": the chance of a minor storm
+  and of a major-severe storm, middle latitudes, for 1, 2 and 3 days ahead. NOAA's storm chance = minor + major.
+  Raw yearly archives from the SWPC FTP warehouse, kept in `data/raw/noaa_rsga_raw/` (not committed).
+- **Days:** 2017–2019 only (NOAA's archive starts in 2017; 2020 onward is the closed test period).
+- **Ours:** the storm probabilities already produced by the yearly validation (D-68) for those days, for the live
+  model (`baseline`) and the candidate (`sw_rec_poisson`). Nothing is refitted.
+- **Storm day:** GFZ daily max Kp ≥ 4.5 (Kp 5−), our definition. NOAA's categories are mid-latitude K indices, so
+  the match is close but not exact; stated with the result.
+- **Scores, fixed before looking:** Brier score and its skill against climatology (needs no threshold); storm days
+  caught, false alarms and Heidke skill at each forecaster's own best threshold (the same procedure for all three,
+  so equally optimistic); per lead day 1–3.
+- **Isolation:** a script in `src/forecast/experiments/noaa_storm.py`, results in `reports/forecast/experiments/noaa_storm/`;
+  nothing live changes.
+- **Result** (`python -m src.forecast.experiments.noaa_storm`; 1,090 days, 91 storm days; all reports had the probabilities):
+
+  | Lead | Forecaster | Brier skill | Caught | False alarms | Detection | False-alarm ratio | Heidke |
+  |---|---|---|---|---|---|---|---|
+  | 1 | NOAA | **0.221** | 33 | 23 | 36 % | **41 %** | **0.412** |
+  | 1 | live model | 0.205 | 41 | 58 | 45 % | 59 % | 0.377 |
+  | 1 | solar-wind candidate | 0.215 | 43 | 58 | **47 %** | 57 % | 0.395 |
+  | 2 | NOAA | **0.185** | 30 | 24 | 33 % | **44 %** | **0.375** |
+  | 2 | live model | 0.140 | 36 | 64 | 40 % | 64 % | 0.317 |
+  | 2 | solar-wind candidate | 0.154 | 29 | 32 | 32 % | 53 % | 0.337 |
+  | 3 | NOAA | 0.151 | 34 | 54 | 37 % | 61 % | 0.324 |
+  | 3 | live model | 0.146 | 29 | 41 | 32 % | 59 % | 0.310 |
+  | 3 | solar-wind candidate | **0.167** | 29 | 31 | 32 % | **52 %** | **0.340** |
+
+  - Day 1: NOAA slightly ahead (Heidke 0.412 vs 0.395); ours catch more storm days but raise many more false alarms.
+  - Day 2: NOAA clearly ahead (0.375 vs 0.337). This is the gap to close.
+  - Day 3: the solar-wind candidate is ahead of NOAA (0.340 vs 0.324, Brier skill 0.167 vs 0.151).
+  - Caveats: 2017–2019 is solar minimum (few CME storms, where NOAA's solar imagery matters most); 91 storm days,
+    so differences of a few hundredths are within noise; best thresholds are optimistic for all three alike;
+    NOAA's categories are mid-latitude K, ours planetary Kp.
+- **Status:** measured. Target for ROADMAP §3: NOAA's day-1 and day-2 Heidke (0.41, 0.38) on these days.
+
+### D-72 · Re-issue today and tomorrow every 3 hours: rules before any run · 2026-11-20 · ⏳
+- **Idea:** the forecast is issued once, just after midnight UTC, and does not change during the day. At 03, 06,
+  09, 12, 15, 18 and 21 UTC, update **today** (lead 0, a new product) and **tomorrow** from what has happened so far
+  today. Days 2–7 stay once a day.
+- **Inputs at update k (k = 1 … 7 blocks of today ended):** the live daily features as of yesterday (unchanged);
+  today's ended Kp blocks (count k, highest Kp so far, Ap so far from the blocks' ap, last block, last-block change);
+  today's solar wind up to the update time (OMNI hourly, 1998 onward, blank before: mean speed, most southward Bz,
+  mean V·Bs, and the same for the last 3 hours). A block counts only once it has ended.
+- **Not used:** the nowcaster's output (trained on data that includes 2011–2019, so it would leak); the solar wind
+  it reads is used directly.
+- **Model, fixed in advance:** one set of models per update time: HistGB regressors for Ap and max Kp (live
+  settings, `histgb_params.json`) and a storm classifier (`storm.PARAMS`), for today and for tomorrow. No variant
+  is chosen by its results.
+- **Validation:** the D-68 yearly harness, 2011–2019: for each year, train on target days before 1 January of that
+  year, forecast the year. The test period is not read.
+- **Yardsticks:** the midnight forecast (the live model, D-68 `baseline`: lead 1 for today, lead 2 for tomorrow,
+  issued the evening before); and a simple rule for today: max Kp = the higher of "max so far" and the midnight
+  forecast; Ap = the blocks so far plus the midnight forecast for the blocks left.
+- **Rule, fixed before any run. Keep only if all hold:**
+  1. Tomorrow's storm warning at the 12 UTC update beats the midnight forecast: higher Heidke on 2015–2019, each
+     forecaster's threshold tuned on 2011–2014.
+  2. Tomorrow's false-alarm ratio on 2015–2019 at the 12 UTC update is not higher than the midnight forecast's.
+  3. Today's max-Kp error (RMSE, 2011–2019 pooled) is lower than the simple rule's at the 06, 12 and 18 UTC
+     updates.
+  4. The 12 UTC update wins in at least 6 of the 9 years on tomorrow's storm Brier score (vs midnight) and on
+     today's max-Kp error (vs the simple rule).
+- **Isolation:** `src/forecast/experiments/intraday.py`, results in `reports/forecast/experiments/intraday/`; nothing live
+  changes; fingerprints before and after.
+- **Result** (`python -m src.forecast.experiments.intraday`; leakage tests `tests/test_intraday.py`, 17 pass):
+
+  | Update | Today max-Kp error: model / simple rule / midnight | Today storm Heidke: model / midnight | Tomorrow storm Heidke: model / midnight | Tomorrow false-alarm ratio: model / midnight |
+  |---|---|---|---|---|
+  | 06 UTC | 0.82 / 1.00 / 1.12 | 0.60 / 0.37 | 0.27 / 0.27 | 0.69 / 0.68 |
+  | 12 UTC | 0.69 / 0.94 / 1.12 | 0.77 / 0.37 | 0.31 / 0.27 | 0.63 / 0.68 |
+  | 18 UTC | 0.49 / 0.87 / 1.12 | 0.86 / 0.37 | 0.31 / 0.27 | 0.58 / 0.68 |
+  | 21 UTC | 0.33 / 0.82 / 1.12 | 0.94 / 0.37 | 0.34 / 0.27 | 0.57 / 0.68 |
+
+  - Checks 1–3 pass: tomorrow's Heidke at 12 UTC 0.306 vs 0.272; false-alarm ratio 0.63 vs 0.68; today's max-Kp
+    error below the simple rule at every update (0.82 / 0.69 / 0.49 vs 1.00 / 0.94 / 0.87).
+  - **Check 4 fails:** at 12 UTC, today's max-Kp error beats the simple rule in 9 of 9 years, but tomorrow's storm
+    Brier score beats the midnight forecast in only 5 of 9 (needed 6). Two of the losses are near-ties (2016 by
+    0.00001, 2018 by 0.00017); counted as losses, as the rule states.
+- **Decision: fails the rule; not adopted.** The "today" part is a large, consistent gain; the "tomorrow" part
+  improves warnings on pooled scores but not consistently by year. Adopting "today" alone would be a rule chosen
+  after seeing these results, so it is not done on this evidence. If wanted, write a new rule for a today-only
+  product and judge it on data not yet seen (a live shadow run), not on 2011–2019 again.
+
+### D-73 · Storm start vs continuation: how yesterday ended, as inputs · rules before any run · 2026-11-20 · ⏳
+- **Why:** against NOAA (D-71), our storm warnings lose mainly on false alarms. A storm already under way at the
+  end of the issue day is the easy case; a new storm is the hard one. The daily features describe whole days, not
+  how the issue day ended.
+- **One variant, fixed in advance (no others tried):** the current candidate (`sw_rec_poisson`, D-68) plus five
+  inputs from the issue day's 3-hour Kp blocks, all known when the forecast is issued: the last block (21–24 UTC),
+  the highest of the last four blocks, the number of blocks at Kp ≥ 4.5, storm days in a row ending on the issue
+  day, and the change over the last four blocks (last minus first). Used by the value models and the storm
+  classifier, all lead days. Same settings otherwise.
+- **Validation:** the D-68 yearly harness, 2011–2019; the test period is not read. Compared with `sw_rec_poisson`
+  on the same days.
+- **Rule, fixed before any run. Keep only if all hold:**
+  1. Storm Heidke, lead days 1–3 pooled (thresholds tuned on 2011–2014, scored on 2015–2019), is higher.
+  2. The false-alarm ratio on the same days and thresholds is not higher.
+  3. Storm Brier score, lead days 1–3, is lower in at least 6 of the 9 years.
+  4. Pooled Ap skill vs the 27-day average drops by no more than 0.005 (the values must not get worse).
+- **Isolation:** a variant in `src/forecast/validate_yearly.py`, results in
+  `reports/forecast/experiments/yearly/sw_rec_poisson_progress/`; nothing live changes; fingerprints before and
+  after.
+- **Result** (`python -m src.forecast.validate_yearly sw_rec_poisson_progress`; leakage tests
+  `tests/test_progress_features.py`, 3 pass):
+
+  | Check | Candidate | + how the day ended | |
+  |---|---|---|---|
+  | 1. Storm Heidke, days 1–3 (2015–2019) | 0.310 | 0.317 | pass |
+  | 2. False-alarm ratio, same days | 0.561 | **0.582** | **fail** |
+  | 3. Storm Brier, days 1–3, years better | — | 7 of 9 | pass |
+  | 4. Pooled Ap skill | 0.112 | 0.122 | pass |
+
+  The new inputs raise detection (0.34 → 0.38) at a lower tuned threshold (0.26 vs 0.29), so warnings become more
+  frequent and the false-alarm ratio rises: the opposite of the aim.
+- **Decision: fails the rule (check 2); not adopted.** Not used: the Ap-skill gain (+0.010) is a finding the rule
+  was not written for; adopting the variant for it would choose the reason after seeing the result. If wanted, it
+  needs its own rule and data not yet seen (the final test or a shadow run).
+
+### D-74 · Flare, radio and proton warning signs as inputs: rules before any run · 2026-11-20 · ⏳
+- **Idea:** storms mostly come from CMEs, which leave no trace in past Kp or in the solar wind until they arrive.
+  The Sun usually signals an eruption: a large X-ray flare, its position (near the disk centre it faces Earth),
+  radio sweeps of type II/IV, and a proton shower. NOAA lists these daily since 1996, much longer than DONKI
+  (2014, D-67), so the model sees far more storms to learn from.
+- **Data:** SWPC edited event reports (`YYYY_events.tar.gz`) and daily particle data (`YYYY_DPD.txt`), 1996–2019,
+  from the FTP warehouse, kept in `data/raw/noaa_events/` (not committed). 2020 onward is not downloaded.
+- **Inputs for issue day D (events that began on D or the two days before; all before the forecast is issued):**
+  largest X-ray flare (log peak flux); largest X-ray flare from a region whose optical flare position is within 30°
+  of the disk centre; number of type II and of type IV radio sweeps; largest daily >10 MeV proton fluence (log).
+  One variant, fixed in advance, added to the candidate (`sw_rec_poisson`, D-68); all lead days.
+- **Validation:** the D-68 yearly harness, 2011–2019; the test period is not read. Compared with `sw_rec_poisson`.
+- **Rule, fixed before any run. Keep only if all hold:**
+  1. Storm Heidke, lead days 1–3 pooled (thresholds tuned on 2011–2014, scored on 2015–2019), is higher.
+  2. The false-alarm ratio on the same days and thresholds is not higher.
+  3. Storm Brier score, lead days 1–3, is lower in at least 6 of the 9 years.
+  4. Pooled Ap skill vs the 27-day average drops by no more than 0.005.
+- **Live use, only if it passes:** the archive files are written days after the day, while the live feed
+  (`json/edited_events.json`) updates every few minutes; before adoption, log the live feed for some weeks and
+  check that events appear in time (the D-67 lesson), then shadow mode.
+- **Isolation:** `src/ingest/fetch_events.py`, a variant in `src/forecast/validate_yearly.py`, results in
+  `reports/forecast/experiments/yearly/sw_rec_poisson_events/`; nothing live changes; fingerprints before and after.
+- **Data, as downloaded:** 48 files, no failures. Event reports from 31 Jul 1996 (earlier 1996 days are not in the
+  archive), 8,525 days; particle data for every year (two date layouts, both parsed; the largest >10 MeV fluence
+  is 15 Jul 2000, the Bastille Day event, as expected). Parsing and leakage tests: `tests/test_events_features.py`.
+- **Result** (`python -m src.forecast.validate_yearly sw_rec_poisson_events`):
+
+  | Check | Candidate | + warning signs | |
+  |---|---|---|---|
+  | 1. Storm Heidke, days 1–3 (2015–2019) | 0.310 | 0.308 | **fail** |
+  | 2. False-alarm ratio, same days | 0.561 | 0.584 | **fail** |
+  | 3. Storm Brier, days 1–3, years better | — | 6 of 9 | pass |
+  | 4. Pooled Ap skill | 0.112 | 0.118 | pass |
+
+  Detection rises (0.34 → 0.36) but so do false alarms; warning skill does not improve.
+- **Decision: fails the rule (checks 1 and 2); not adopted.** Noted, not used: storm skill is scored on
+  2015–2019, the quiet end of the solar cycle, where few CME storms occur and flare signs matter least. A retry
+  would need a rule written for active years before any run, judged on data not yet seen.
+
+### D-75 · Report comparisons: Holt-Winters, LSTM, GRU on the yearly harness · 2026-11-20 · ✅
+- **Purpose:** baselines for the report and viva (classical exponential smoothing and recurrent neural networks),
+  scored exactly like HistGB. **Comparison only: none of these is a candidate, whatever the result.**
+- **Same days and yardstick:** the D-68 harness rows (issue days through 2011–2019, lead days 1–7) and the same
+  reference (the 27-day average); results line up with `baseline` and `sw_rec_poisson`.
+- **Holt-Winters:** additive level + 27-day season (one solar rotation), one per target (daily Ap, max Kp).
+  Smoothing parameters fitted on the 10 years before each validation year (one-step error); the recursion then
+  rolls forward day by day, so a forecast issued on D uses observations up to D only.
+- **LSTM and GRU:** one recurrent layer (64 units) reading the 81 days up to the issue day (Ap, max Kp, F10.7,
+  season), predicting Ap and max Kp for lead days 1–7 together. For each validation year: trained on issue days
+  whose targets are all before 1 January of that year, from 1947; early stopping on the last two years of that
+  training span (time-ordered, with a 7-day gap); fixed scaling constants (nothing learned from the year forecast).
+- **Leakage guards:** the test period is not read (asserted); tests check that a forecast for D is unchanged when
+  data after D changes.
+- **Isolation:** `src/forecast/experiments/report_models.py`; results in `reports/forecast/experiments/yearly/{holt_winters,
+  lstm,gru}/`; no file in `models/`, `forecasts/` or the daily job changes; fingerprints before and after.
+- **Result** (`python -m src.forecast.experiments.report_models hw lstm gru`; leakage tests `tests/test_report_models.py`,
+  4 pass; table in `reports/forecast/experiments/report_models/summary.csv`):
+
+  | Model | Ap skill | Ap RMSE d1 / d7 | Years above the 27-day average (Ap) | Max-Kp skill | Max-Kp RMSE d1 |
+  |---|---|---|---|---|---|
+  | HistGB + solar wind (candidate) | **0.112** | **7.42 / 8.38** | 7 / 9 | **0.124** | **1.08** |
+  | HistGB (live model) | 0.089 | 7.58 / 8.49 | 6 / 9 | 0.099 | 1.12 |
+  | GRU | 0.051 | 7.75 / 8.62 | 8 / 9 | 0.049 | 1.16 |
+  | LSTM | 0.029 | 7.83 / 8.71 | 6 / 9 | 0.031 | 1.18 |
+  | Holt-Winters | −0.108 | 8.69 / 9.24 | 1 / 9 | −0.032 | 1.30 |
+
+  - Gradient boosting with hand-built features beats both recurrent networks clearly; the GRU beats the LSTM.
+  - Holt-Winters is worse than the 27-day average: it follows day-to-day noise.
+- **Status:** done; comparison only, nothing adopted.
+
+### D-76 · Model locked: HistGB + solar wind + 27-day echo + coronal holes · test protocol fixed before any test data · 2026-11-21 · 🔒
+- **Locked model ("HistGB-SW-CH"):** the D-68 yearly-harness variant `sw_rec_poisson_imagery`, exactly as validated:
+  - inputs: the live HistGB features (D-31), daily solar wind of the issue day and the day before plus the 27-day
+    echo of speed and By (D-68), and the coronal-hole features from the 00:00 UTC AIA 193 Å image (D-70);
+  - 14 HistGB regressors with Poisson loss and the live settings in `histgb_params.json` (unchanged; no retuning);
+  - the storm classifier with `storm.PARAMS` (unchanged) on the same inputs.
+- **Live fallbacks:** no usable image in the last 2 days → the solar-wind model (`sw_rec_poisson`); no solar wind
+  on the issue day → the live HistGB (D-69). Each logged row states which model served it.
+- **Test protocol, fixed now and run once:**
+  1. Fit on definitive days 1947-06-01 → 2019-12-31 (as the live models were fitted for D-52/D-62).
+  2. Forecast every issue day from 2019-12-31 so that targets cover 2020-01-01 → 2026-06-30 (GFZ's last definitive
+     day), lead days 1–7. Inputs: GFZ, OMNI hourly solar wind, AIA 193 Å images from the JSOC archive.
+  3. Storm warning lines per lead day: the thresholds that maximise Heidke on the locked model's out-of-sample
+     yearly-harness probabilities for 2011–2019 (no test data).
+  4. Scores: Ap and max-Kp RMSE per lead day; skill vs the 27-day average (days 1–7); storm detection, false-alarm
+     ratio and Heidke per lead day; the same for the live HistGB fitted to 2019 (D-62) and NOAA (Ap days 1–3, RSGA).
+  5. Significance: Diebold–Mariano test on daily squared Ap errors (Newey–West variance, lag h−1) for the locked
+     model vs NOAA (days 1–3) and vs the live HistGB (days 1–7), and a 30-day block bootstrap interval for the skill
+     difference.
+  6. Data gaps are reported, never filled from the future: if OMNI cannot be refreshed past 2026-01-10, the test is
+     reported on 2020-01-01 → 2026-01-10 with full inputs, and 2026-01-11 → 06-30 separately with solar wind blank.
+  7. A marker file blocks a second run; the result is recorded whatever it shows.
+- **Adoption rule, fixed now:** the locked model replaces the live HistGB only if, on the test, (a) its pooled Ap
+  skill (days 1–7) and day-1 Ap RMSE are better than the live HistGB's on the same days, (b) storm Heidke days 1–3
+  is not lower by more than 0.01, and (c) a shadow run of at least 3 weeks shows no failure of the fallbacks.
+- **Then:** refit on definitive days to `PRODUCTION_END` (images and solar wind included) for live use.
+- **Why lock now:** the candidate passed its rule (D-68, D-70), the leakage robustness runs and the live-image
+  check; further experiments on the same validation years would add selection risk.
+
+### D-77 · One-time test of the locked model: adoption rules (a) and (b) pass; level with NOAA · 2026-11-21 · ✅
+- **Run:** `python -m src.forecast.test_locked`, once, exactly as fixed in D-76 (fit ≤ 2019-12-31, targets
+  2020-01-01 → 2026-06-30, 2,373 days, 325 storm days). Inputs: GFZ, OMNI hourly solar wind (complete for the whole
+  period after the SPDF refresh), AIA 193 Å features for 2,360 of 2,373 days (6 days with no 00:00 image in the
+  archive, 7 with a quality flag; those rows have blank image features, which HistGB routes as missing).
+  Results in `reports/forecast/test_locked/`; the marker `test_scored.json` blocks a second run.
+- **Daily Ap RMSE and Diebold–Mariano vs the live HistGB (D-62 test forecasts, same days):**
+
+  | Lead | Locked | Live HistGB | NOAA | 27-day mean | DM vs HistGB (stat, p) |
+  |---|---|---|---|---|---|
+  | 1 | **10.67** | 10.78 | 10.89 | 12.27 | −1.69, 0.091 |
+  | 2 | 11.80 | 11.98 | **11.73** | 12.42 | −2.77, 0.006 |
+  | 3 | **11.73** | 11.91 | 11.90 | 12.45 | −2.25, 0.025 |
+  | 4 | **11.69** | 11.91 | – | 12.45 | −2.98, 0.003 |
+  | 5 | **11.72** | 11.93 | – | 12.45 | −3.78, < 0.001 |
+  | 6 | **11.88** | 11.96 | – | 12.46 | −1.44, 0.149 |
+  | 7 | **11.95** | 12.01 | – | 12.48 | −1.40, 0.161 |
+
+  Max-Kp RMSE is lower at every lead (1.115–1.246 vs 1.138–1.260).
+- **Skill vs the 27-day mean, days 1–7:** locked **0.122**, live HistGB 0.100 (+22 %); 30-day block bootstrap 95 %
+  interval of the difference **[+0.007, +0.050]**, excludes zero.
+- **Against NOAA (Ap, days 1–3, the 2,358–2,359 days NOAA issued):** locked 10.66 / 11.82 / 11.67, NOAA 10.89 /
+  11.73 / 11.90; Diebold–Mariano p = 0.69 / 0.91 / 0.55. **Level with NOAA: ahead on days 1 and 3, behind on
+  day 2, no difference significant.**
+  - Scoring bug found while reading the output: one day with no NOAA day-1 forecast made the script's day-1 DM value
+    NaN (`diebold_mariano` received the gap). Fixed (approved): NOAA is compared only on the days it issued, and
+    `python -m src.forecast.test_locked --rescore` scored the saved forecasts again (nothing refitted or
+    re-forecast; every other number identical; `test_scored.json` keeps `first_scored_at`).
+- **Storm warnings (thresholds from the 2011–2019 harness only):**
+
+  | Lead | Heidke locked | Heidke live | Detection locked / live | False-alarm ratio locked / live |
+  |---|---|---|---|---|
+  | 1 | **0.403** | 0.341 | 53 % / 47 % | 54 % / 59 % |
+  | 2 | **0.263** | 0.195 | 40 % / 38 % | 65 % / 72 % |
+  | 3 | **0.249** | 0.204 | 31 % / 30 % | 62 % / 68 % |
+  | 4–7 | 0.206–0.222 | 0.188–0.215 | | |
+
+  Days 1–3 gain +0.058 Heidke on average, with **fewer** false alarms and slightly more storm days caught at every
+  one of these leads, unlike the rejected storm experiments (D-72 to D-74), which caught more only by warning more.
+- **Adoption rule (D-76):** (a) pooled skill and day-1 RMSE better than the live HistGB: **pass**; (b) storm Heidke
+  days 1–3 not lower: **pass** (+0.058); (c) 3 weeks of shadow with working fallbacks: pending.
+- **Paper guide (ROADMAP §8, fixed before the test):** level with NOAA and clearly better than the live model →
+  **solid paper**, with the coronal-hole features as the contribution.
+- **Next:** production fit (`python -m src.forecast.locked_shadow`), shadow run after the push, then adoption.

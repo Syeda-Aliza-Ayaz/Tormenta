@@ -224,9 +224,8 @@ def _nav(active: str, theme: str, now_label: str) -> str:
 def hero(active: str, theme: str, now_label: str, scene: str, level: str, eyebrow: str, heading: str, lead: str,
          stat_value: str, stat_label: str, stat_alert: bool = False) -> str:
     caption = CAPTIONS.get(scene, "")
-    return f"""<section class="tm-full tm-gap tm-hero" style="position:relative;overflow:hidden;background:#05070A;color:#F1F2F4;min-height:420px;display:flex;flex-direction:column">
+    return f"""{_nav(active, theme, now_label)}<section class="tm-full tm-gap tm-hero" style="position:relative;overflow:hidden;background:#05070A;color:#F1F2F4;min-height:420px;display:flex;flex-direction:column">
 {_scene(scene, level, 420)}
-{_nav(active, theme, now_label)}
 <div style="position:relative;flex-grow:1;max-width:1280px;width:100%;box-sizing:border-box;margin:0 auto;padding:40px 40px 96px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:28px">
 <div style="display:flex;flex-direction:column;gap:12px;flex:1 1 560px;min-width:0">
 <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.16em;color:#A9AFB8">{esc(eyebrow)}</span>
@@ -249,9 +248,8 @@ def hero_overview(theme: str, now_label: str, date_label: str, level: str, kp: s
                       f'<span style="display:flex;flex-direction:column;gap:3px"><span style="font-size:14px;font-weight:600;color:#FF8A55">{esc(watch[0])}</span>'
                       f'<span style="font-size:13px;line-height:1.5;color:#E4E7EB">{esc(watch[1])}</span></span></span>')
     live_dot = "#6FCF97" if live_ok else "#9AA0AA"
-    return f"""<section class="tm-full tm-hero" style="position:relative;overflow:hidden;background:#05070A;color:#F1F2F4;min-height:600px;display:flex;flex-direction:column">
+    return f"""{_nav("Overview", theme, now_label)}<section class="tm-full tm-hero" style="position:relative;overflow:hidden;background:#05070A;color:#F1F2F4;min-height:600px;display:flex;flex-direction:column">
 {_scene("aurora", level, 600)}
-{_nav("Overview", theme, now_label)}
 <div style="position:relative;flex-grow:1;max-width:1280px;width:100%;box-sizing:border-box;margin:0 auto;padding:44px 40px 120px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:32px">
 <div style="display:flex;flex-direction:column;gap:14px;flex:1 1 520px;min-width:0">
 <span style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;color:#A9AFB8">
@@ -383,8 +381,7 @@ def credits(t: dict, theme: str = "dark") -> str:
     pages = [(name, href(name, theme).replace("&amp;", "&")) for name in PAGES]
     data = [("GFZ Potsdam · Kp, Ap, F10.7", "https://kp.gfz.de/en/"), ("NOAA SWPC · real-time solar wind", "https://www.swpc.noaa.gov/"),
             ("NASA OMNIWeb · training archive", "https://omniweb.gsfc.nasa.gov/")]
-    project = [("GitHub repository", REPO), ("Decision log", REPO + "/blob/main/DECISIONS.md"),
-               ("Open work", REPO + "/blob/main/TODO.md"), ("Releases · v2.0", REPO + "/releases/tag/v2.0")]
+    project = [("GitHub repository", REPO), ("Releases · v2.0", REPO + "/releases/tag/v2.0")]
     gh = ('<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"></path></svg>')
     return (f'<div class="tm-footer" role="contentinfo" style="margin-top:28px;border-top:1px solid {t["hair"]};padding-top:36px;display:flex;flex-direction:column;gap:28px">'
             f'<div style="display:grid;grid-template-columns:minmax(240px,1.6fr) repeat(auto-fit,minmax(160px,1fr));gap:28px 36px">'

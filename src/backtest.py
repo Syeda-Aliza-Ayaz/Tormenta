@@ -1,4 +1,4 @@
-"""Rolling-origin backtest (PLAN.md §7): one forecast per day, each built only from data up to its issue day.
+"""Rolling-origin backtest (docs/plans/PLAN.md §7): one forecast per day, each built only from data up to its issue day.
 
     python -m src.backtest                 # validation period (2017–2019), every registered model
     python -m src.backtest --period recent # hindcast: the LIVE models on the days after the last definitive day

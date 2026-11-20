@@ -29,7 +29,9 @@ def paths(tmp_path, monkeypatch):
     for name, rel in [("FORECASTS_DIR", ""), ("FORECAST_LOG", "log.csv"), ("FORECAST_SCORES", "scores.csv"),
                       ("FORECAST_RECENT", "recent.csv"), ("NOAA_LIVE_CSV", "noaa_live.csv"), ("NOAA_LIVE_DIR", "noaa"),
                       ("STORM_LOG", "storm_log.csv"), ("STORM_SCORES", "storm_scores.csv"),
-                      ("SHADOW_LOG", "shadow_log.csv"), ("SOLAR_WIND_ARCHIVE", "solar_wind_hourly.csv")]:
+                      ("SHADOW_LOG", "shadow_log.csv"), ("SOLAR_WIND_ARCHIVE", "solar_wind_hourly.csv"),
+                      ("NOWCAST_LOG", "nowcast_log.csv"), ("IMAGERY_LOG", "imagery_daily.csv"),
+                      ("LOCKED_SHADOW_LOG", "locked_shadow_log.csv")]:
         monkeypatch.setattr(config, name, tmp_path / rel)
     return tmp_path
 

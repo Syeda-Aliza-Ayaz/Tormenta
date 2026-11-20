@@ -1,4 +1,4 @@
-"""Forecast features (PLAN.md §5): one row per issue day D, built ONLY from days ≤ D. Shared by training, the
+"""Forecast features (docs/plans/PLAN.md §5): one row per issue day D, built ONLY from days ≤ D. Shared by training, the
 backtest and the daily job, so they can never disagree.
 
 Base features (the same for every lead day):

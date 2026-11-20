@@ -20,6 +20,7 @@ Rule, fixed before any run (D-68). A change is kept only if
 """
 import argparse
 import json
+import time
 
 import numpy as np
 import pandas as pd
@@ -83,7 +84,7 @@ class Cme(Variant):
         if h not in CME_LEADS:
             return x
         if Cme._cache is None:
-            from src.forecast.cme_experiment import REALTIME_START, cme_features
+            from src.forecast.experiments.cme_experiment import REALTIME_START, cme_features
             days = daily.index[(daily.index >= REALTIME_START - pd.Timedelta(days=1)) & (daily.index.year < config.TEST_START_YEAR)]
             Cme._cache = cme_features(days)
         base, lead = Cme._cache
@@ -93,8 +94,7 @@ class Cme(Variant):
 def solar_wind_daily() -> pd.DataFrame:
     """Daily solar-wind summaries (UTC days) from the hourly OMNI table, 1998 onward, with the same definition the
     live archive uses (sw_archive.daily_summary). Day D is complete by the end of D, when the forecast is issued."""
-    h = pd.read_csv(config.PROCESSED_CSV, usecols=["time", *sw_archive.COLUMNS], parse_dates=["time"]).set_index("time")
-    return sw_archive.daily_summary(h)
+    return sw_archive.daily_summary(sw_archive.omni_hourly())
 
 
 class SolarWind(Variant):
@@ -155,8 +155,105 @@ class SolarWindRecPoissonCme(SolarWindRecPoisson):
         return x.join(c[[k for k in c.columns if k.startswith("cme_")]])
 
 
+def progress_features(daily: pd.DataFrame) -> pd.DataFrame:
+    """How the issue day ended (D-73), from its 3-hour Kp blocks; all known when the forecast is issued."""
+    from src.ingest.fetch_gfz import load_gfz_daily
+    kp = load_gfz_daily()[[f"kp{i}" for i in range(1, 9)]].reindex(daily.index)
+    storm_day = (daily["kpmax"] >= config.STORM_THRESHOLD).astype(float).where(daily["kpmax"].notna())
+    run = storm_day.groupby((storm_day != 1).cumsum()).cumsum()            # storm days in a row ending on D
+    return pd.DataFrame({
+        "kp_last_block": kp["kp8"],
+        "kp_max_last4": kp[["kp5", "kp6", "kp7", "kp8"]].max(axis=1),
+        "storm_blocks": (kp >= config.STORM_THRESHOLD).sum(axis=1).where(kp.notna().all(axis=1)),
+        "storm_days_in_row": run,
+        "kp_change_last4": kp["kp8"] - kp["kp5"],
+    }, index=daily.index)
+
+
+class SolarWindRecPoissonProgress(SolarWindRecPoisson):
+    """The candidate plus how the issue day ended (D-73): one variant, fixed before the run."""
+    name = "sw_rec_poisson_progress"
+    _cache = None
+
+    def features(self, daily, h):
+        x = super().features(daily, h)
+        if SolarWindRecPoissonProgress._cache is None:
+            SolarWindRecPoissonProgress._cache = progress_features(daily)
+        return x.join(SolarWindRecPoissonProgress._cache.reindex(x.index))
+
+
+class SolarWindRecPoissonEvents(SolarWindRecPoisson):
+    """The candidate plus flare, radio and proton warning signs (D-74): one variant, fixed before the run."""
+    name = "sw_rec_poisson_events"
+    _cache = None
+
+    def features(self, daily, h):
+        x = super().features(daily, h)
+        if SolarWindRecPoissonEvents._cache is None:
+            from src.forecast.experiments.events_features import event_features
+            ev = event_features(daily.index)
+            ev.loc[ev.index.year >= config.TEST_START_YEAR] = np.nan      # the test period stays blank
+            SolarWindRecPoissonEvents._cache = ev
+        return x.join(SolarWindRecPoissonEvents._cache.reindex(x.index))
+
+
+class SolarWindRecPoissonImagery(SolarWindRecPoisson):
+    """The candidate plus daily coronal-hole features from AIA 193 Å images (D-70): one variant, fixed before the run.
+    The image of day D (00:00 UTC) is known when the forecast for D is issued; blank before May 2010 and on days
+    without a usable image."""
+    name = "sw_rec_poisson_imagery"
+    _cache = None
+
+    shift_days = 0          # robustness checks: 1 = use the previous day's image
+    placebo = False         # robustness check: images assigned to random days
+    allow_test = False      # only the one-time locked test (D-76) reads images from the test period
+
+    def _images(self, daily):
+        from src.forecast import imagery
+        ch = imagery.load()
+        if self.placebo:                                                  # each day gets a random day's image
+            rng = np.random.default_rng(config.RANDOM_STATE)
+            ch = pd.DataFrame(ch.to_numpy()[rng.permutation(len(ch))], index=ch.index, columns=ch.columns)
+        ch = ch.reindex(daily.index).shift(self.shift_days)
+        if not self.allow_test:
+            ch.loc[ch.index.year >= config.TEST_START_YEAR] = np.nan      # the test period stays blank
+        return ch
+
+    def features(self, daily, h):
+        x = super().features(daily, h)
+        key = (type(self).__name__, self.allow_test)
+        cache = SolarWindRecPoissonImagery.__dict__.get("_caches") or {}
+        SolarWindRecPoissonImagery._caches = cache
+        if key not in cache:
+            ch = self._images(daily)
+            out = pd.DataFrame(index=daily.index)
+            out["ch_band_low"] = ch["ch_band_low"]
+            out["ch_band_low_lag1"] = ch["ch_band_low"].shift(1)
+            out["ch_band_low_lag2"] = ch["ch_band_low"].shift(2)
+            out["ch_band_low_change"] = ch["ch_band_low"] - ch["ch_band_low"].shift(1)
+            out["ch_east"] = ch["ch_east"]
+            out["ch_disk"] = ch["ch_disk"]
+            out["ch_dark"] = ch["ch_dark"]
+            cache[key] = out
+        return x.join(cache[key].reindex(x.index))
+
+
+class SolarWindRecPoissonImageryLag1(SolarWindRecPoissonImagery):
+    """Robustness (D-70): the previous day's image; the gain should mostly survive."""
+    name = "sw_rec_poisson_imagery_lag1"
+    shift_days = 1
+
+
+class SolarWindRecPoissonImageryPlacebo(SolarWindRecPoissonImagery):
+    """Robustness (D-70): images assigned to random days; the gain should vanish."""
+    name = "sw_rec_poisson_imagery_placebo"
+    placebo = True
+
+
 VARIANTS = {v.name: v for v in (Variant, Poisson, LogAp, StormTuned, Cme, SolarWind, SolarWindRec,
-                                SolarWindRecPoisson, SolarWindRecPoissonCme)}
+                                SolarWindRecPoisson, SolarWindRecPoissonCme, SolarWindRecPoissonProgress,
+                                SolarWindRecPoissonEvents, SolarWindRecPoissonImagery, SolarWindRecPoissonImageryLag1,
+                                SolarWindRecPoissonImageryPlacebo)}
 
 
 # ── storm classifier settings, chosen on data before 2011 ─────────────────────────────────────────────────────
@@ -245,12 +342,15 @@ def run_variant(name: str, daily: pd.DataFrame) -> None:
     params, _ = gbm.load_params()
     clf_params = variant.clf_params()
     feats = {h: variant.features(daily, h) for h in config.FORECAST_LEADS}
-    vals, probs = [], []
-    for year in YEARS:
+    vals, probs, t0 = [], [], time.time()
+    years = YEARS
+    for i, year in enumerate(years, 1):
         v, p = run_block(variant, daily, feats, params, clf_params,
                          pd.Timestamp(f"{year}-01-01"), pd.Timestamp(f"{year}-12-31"))
         vals.append(v.assign(year=year)); probs.append(p.assign(year=year))
-        print(f"  {name} {year}: done", flush=True)
+        spent = time.time() - t0
+        print(f"  [{i}/{len(years)}] {name} {year} done | elapsed {spent / 60:.1f} min | "
+              f"about {spent / i * (len(years) - i) / 60:.0f} min left", flush=True)
     d = OUT / name
     d.mkdir(parents=True, exist_ok=True)
     pd.concat(vals).to_csv(d / "forecasts.csv", index=False)

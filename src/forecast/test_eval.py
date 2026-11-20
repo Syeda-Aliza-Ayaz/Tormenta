@@ -1,8 +1,8 @@
-"""One-time test evaluation (PLAN.md §7, DECISIONS D-08, D-51): 2020-01-01 → last definitive day.
+"""One-time test evaluation (docs/plans/PLAN.md §7, DECISIONS D-08, D-51): 2020-01-01 → last definitive day.
 
 Every model is fitted on data up to 2019-12-31 (the production window), exactly as it runs live, and scored once on
 the test period, which no choice has looked at. The headline model was fixed BEFORE this run by the rule in
-PLAN.md §6 (highest mean validation skill over lead days 1–7): HistGB for values, the storm classifier for warnings.
+docs/plans/PLAN.md §6 (highest mean validation skill over lead days 1–7): HistGB for values, the storm classifier for warnings.
 
 A marker file records the run. Running again refuses unless --force, so the test score cannot be repeated until it
 looks good; a forced re-run must be justified in DECISIONS.md.

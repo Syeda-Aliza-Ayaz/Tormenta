@@ -112,7 +112,7 @@ def overview(theme: str, now: pd.Timestamp):
                 f'<span style="position:absolute;top:-6px;bottom:-6px;left:50%;width:1px;background:{t["alert"]};opacity:0.6"></span></span>'
                 f'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:18px;font-weight:600;text-align:right">{d.kpmax:.1f}</span></div>')
         origin_rows = issue[1]
-        ui.show(f'<div class="tm-flat" style="position:relative;z-index:2;margin-top:-76px;overflow:hidden">'
+        ui.show(f'<div class="tm-flat" style="position:relative;z-index:2;margin-top:12px;overflow:hidden">'
                 f'<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid {t["hair"]}">'
                 f'<span class="tm-eyebrow">DAILY MAXIMUM KP · NEXT {len(days)} DAYS</span>'
                 f'<a class="tm-link" href="{ui.href("Forecast", theme)}" target="_self" style="font-size:13px">Full forecast →</a></div>{rows_html}'
@@ -122,7 +122,7 @@ def overview(theme: str, now: pd.Timestamp):
 
     tiles = []
     if hourly is not None:
-        w = hourly.dropna().iloc[-1]
+        w = hourly.loc[:past.index[-1]].ffill().iloc[-1]      # the "Kp now" hour shown in the hero
         speed_note = "Fast stream." if w["speed"] >= 500 else "Slow. Fast streams run 500–800 km/s."
         bz_note = ("Southward: energy is entering Earth's field." if w["bz_gsm"] < -2 else
                    "Northward: little coupling." if w["bz_gsm"] > 0 else "Near zero: little coupling.")
@@ -236,7 +236,7 @@ def forecast(theme: str, now: pd.Timestamp):
     obs_last = recent.dropna(subset=["kpmax"]).iloc[-1]
     # day 1 is today when the issue goes out after midnight (GFZ days are UTC days), which is the usual case
     gap = (d1["target_date"].normalize() - now.tz_localize(None).normalize()).days
-    d1_name = {0: "Today", 1: "Tomorrow"}.get(gap, f"{d1['target_date']:%A}")
+    d1_name = {0: "Today", 1: "Tomorrow"}.get(gap, "Day 1")
     kpis = [ui.kpi(f"{d1_name} · {d1['target_date']:%a} {d1['target_date'].day}", f"Kp {d1['kpmax']:.1f}",
                    f"range {d1['kpmax_lo']:.1f} – {d1['kpmax_hi']:.1f}" if pd.notna(d1.get("kpmax_lo")) else "",
                    ui.level_chip(d1["kpmax"], t), t=t),
@@ -403,12 +403,12 @@ def _replay(t, theme, past, recent_obs, origin):
         cells = [(f"{tally['caught']} of {storm_days}" if storm_days else "0", "storm days warned", t["good"]),
                  (str(tally["missed"]), "storm days missed", t["alert_text"] if tally["missed"] else t["text"]),
                  (str(tally["fa"]), "false alarms", t["text"]), (str(tally["quiet"]), "quiet days called right", t["text"])]
-        tally_html = "".join(f'<span class="tm-cell" style="background:{t["surface"]};padding:12px 14px;display:flex;flex-direction:column;gap:4px">'
+        tally_html = "".join(f'<span class="tm-cell" style="background:{t["card"]};padding:12px 14px;display:flex;flex-direction:column;gap:4px">'
                              f'<span class="tm-mono" style="font-size:24px;font-weight:600;color:{c}">{n}</span><span class="tm-sub">{lab}</span></span>'
                              for n, lab, c in cells)
         ui.show(f'<aside class="tm-flat" style="padding:22px 24px;display:flex;flex-direction:column;gap:16px">'
                 f'<h2 class="tm-h2" style="font-size:16px">What happened</h2><p style="margin:0;font-size:14px;line-height:1.6">{ui.esc(story)}</p>'
-                f'<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:{t["hair"]};border:1px solid {t["hair"]};border-radius:4px;overflow:hidden">{tally_html}</div></aside>')
+                f'<div class="tm-split" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:{t["hair"]};border:1px solid {t["hair"]};border-radius:4px;overflow:hidden">{tally_html}</div></aside>')
     names = {"caught": ("Storm caught", t["good"]), "missed": ("Storm missed", t["alert"]),
              "fa": ("False alarm", t["alert_text"]), "quiet": ("Correct, quiet", t["muted"])}
     hist = values[values["model"] == "histgb"].set_index("target_date")
@@ -421,8 +421,15 @@ def _replay(t, theme, past, recent_obs, origin):
                      f'<strong style="color:{t["alert_text"] if a >= config.STORM_THRESHOLD else t["text"]}">{a:.1f}</strong>',
                      f'<span style="display:inline-flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:4px;background:{names[key][1]}"></span>{names[key][0]}</span>'])
     if rows:
-        ui.show(ui.table(["Day", "Forecast Kp", "Storm risk", "Warning", "Actual Kp", "Verdict"], rows, {1, 2, 4},
-                         caption="Forecast against reality, day by day", min_width=720))
+        ui.show(ui.table(["Day", "Days ahead", "Forecast Kp", "Storm risk", "Warning", "Actual Kp", "Verdict"],
+                         [[row[0], str(r.lead)] + row[1:] for row, (r, *_rest) in zip(rows, verdicts)], {1, 2, 3, 5},
+                         caption=f"One forecast, issued {origin.day} {origin:%b}: each day forecast 1 to 7 days ahead",
+                         min_width=760))
+    one_day = _one_day_ahead(t, past, actual, [r.target_date for r, *_ in verdicts], names)
+    if one_day:
+        ui.show(ui.table(["Day", "Issued", "Forecast Kp", "Storm risk", "Warning", "Actual Kp", "Verdict"], one_day[0],
+                         {2, 3, 5}, caption="Each day forecast 1 day ahead, by the issue of the evening before",
+                         note=one_day[1], min_width=760))
     obs = recent_obs["ap"].reindex(values["target_date"]).to_numpy()
     err = values.assign(abs_err=(values["ap"] - obs).abs()).dropna(subset=["abs_err"])
     if len(err):
@@ -431,6 +438,37 @@ def _replay(t, theme, past, recent_obs, origin):
                          [[FC_SERIES.get(m, m), f"{v:.1f}"] for m, v in summary.items()], {1},
                          note="Lower is better. Models fitted on data up to 2019 for issue days up to June 2026 (the test run, scored once); "
                               "the live models, refitted up to June 2026, after that."))
+
+
+def _one_day_ahead(t, past, actual, days, names):
+    """Rows for the same days, each from the issue made the evening before (lead 1), with its verdict and a tally."""
+    lead1 = past[(past["lead"] == 1) & past["target_date"].isin(days)]
+    warn = lead1[lead1["model"] == "storm_warning"].set_index("target_date")
+    hist = lead1[lead1["model"] == "histgb"].set_index("target_date")
+    rows, tally = [], {"caught": 0, "missed": 0, "fa": 0, "quiet": 0}
+    for d in sorted(days):
+        if d not in warn.index:
+            continue
+        r, a = warn.loc[d], actual.get(d)
+        if a is None or pd.isna(a):
+            continue
+        w = bool(r["warning"]) if not isinstance(r["warning"], str) else r["warning"] == "True"
+        storm = a >= config.STORM_THRESHOLD
+        key = "caught" if storm and w else "missed" if storm else "fa" if w else "quiet"
+        tally[key] += 1
+        fc = hist["kpmax"].get(d)
+        rows.append([f"{d:%a %d %b}", f'{r["origin"]:%a %d %b}', f"{fc:.1f}" if fc is not None and pd.notna(fc) else "—",
+                     f'<span style="color:{t["alert_text"] if w else t["text"]}">{r["storm_prob"]:.0%}</span>',
+                     ui.chip("WARNING", t["alert"], t["alert_fg"]) if w else f'<span style="color:{t["muted"]}">—</span>',
+                     f'<strong style="color:{t["alert_text"] if storm else t["text"]}">{a:.1f}</strong>',
+                     f'<span style="display:inline-flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:4px;background:{names[key][1]}"></span>{names[key][0]}</span>'])
+    if not rows:
+        return None
+    storms = tally["caught"] + tally["missed"]
+    note = (f"One day ahead: {tally['caught']} of {storms} storm days warned, {tally['missed']} missed, "
+            f"{tally['fa']} false alarm{'s' if tally['fa'] != 1 else ''}, {tally['quiet']} quiet day{'s' if tally['quiet'] != 1 else ''} called right. "
+            "Each issue used data up to its own evening only.")
+    return rows, note
 
 
 def _edit(t, theme, recent_obs):

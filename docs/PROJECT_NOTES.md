@@ -1,6 +1,6 @@
 # Tormenta — Project Notes
 
-**Team:** Alizeh, HRK · **Course:** CT-378 Machine Learning, NED University (Fall 2026)
+**Team:** Syeda Aliza Ayaz (CT-24219), Husn ur Rehman (CT-24070) · **Course:** CT-378 Machine Learning, NED University (Fall 2026)
 
 A running, plain-language log of every file in the project: **what** it does, **how**, **why**, and **what we got from it**. Updated as each phase is built. The detailed, report-ready version (data sources, variable glossary, physics, viva notes) is [`report_notes.tex`](report_notes.tex).
 
@@ -626,7 +626,7 @@ candidate gate RMSE 0.5794 vs current 0.5791 (tolerance ×1.02) → promote: Tru
 - two-column, 10 pt, aiming for 4 pages;
 - figures and cropped deployment screenshots are in `docs/report/figs/`.
 
-To compile, upload `docs/report/overleaf_upload.zip` to Overleaf (New Project → Upload Project). The team still needs to **fill in the individual-contribution table** (marked in red). Screenshots were taken with Playwright driving the installed Edge.
+To compile, zip the `docs/report/` folder (`tormenta_report.tex` and `figs/`) and upload it to Overleaf (New Project → Upload Project). The ready-made zip was removed in the 2026-11-21 clean-up; every file in it is in `docs/report/`. The team still needs to **fill in the individual-contribution table** (marked in red). Screenshots were taken with Playwright driving the installed Edge.
 
 ### Hugging Face live Space ✅ (free)
 The guidelines want "a **live** Space (Gradio or Streamlit)". Hosted Gradio/Docker Spaces need PRO, so we use a free **static** Space that runs our Streamlit app **in the visitor's browser** with **stlite** (Streamlit on Pyodide = Python compiled for the browser).
@@ -686,7 +686,7 @@ When a feature is NaN, HistGB still predicts (missing values go down the branch 
 
 ## v2 forecaster: Day 1 — daily data, baselines, NOAA benchmark (2026-11-10)
 
-The teacher asked for a forecaster with a horizon of at least one week. The plan is in [`PLAN.md`](../PLAN.md), and
+The teacher asked for a forecaster with a horizon of at least one week. The plan is in [`docs/plans/PLAN.md`](plans/PLAN.md), and
 every decision with its reason is in [`DECISIONS.md`](../DECISIONS.md). The nowcaster is unchanged; a snapshot of
 it is kept on the `nowcaster` branch.
 

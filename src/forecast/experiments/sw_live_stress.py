@@ -1,6 +1,6 @@
 """Stress test (DECISIONS D-69): sw_rec_poisson trained on OMNI, forecasting from degraded (live-like) solar wind.
 
-    python -m src.forecast.sw_live_stress [output_dir]   # default reports/forecast/experiments/sw_stress
+    python -m src.forecast.experiments.sw_live_stress [output_dir]   # default reports/forecast/experiments/sw_stress
 
 Models are fitted exactly as in validate_yearly (clean OMNI features, targets before each validation year).
 Only the prediction rows get degraded solar-wind features. Scenarios:

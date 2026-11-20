@@ -9,7 +9,7 @@
 
 > This document is the single source of truth for the build. Follow the phases in order. The constraints in §0 are non-negotiable — violating any of them breaks the project, usually silently.
 >
-> **Team:** Alizeh, HRK. Notebooks are run in Anaconda Jupyter with the "Python 3.12 (tormenta)" kernel. After every phase, update `docs/PROJECT_NOTES.md` and `docs/report_notes.tex`.
+> **Team:** Syeda Aliza Ayaz (CT-24219), Husn ur Rehman (CT-24070). Notebooks are run in Anaconda Jupyter with the "Python 3.12 (tormenta)" kernel. After every phase, update `docs/PROJECT_NOTES.md` and `docs/report_notes.tex`.
 
 ---
 
