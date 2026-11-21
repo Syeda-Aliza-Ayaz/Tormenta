@@ -53,6 +53,11 @@ Karachi, Pakistan}
 NED University of Engineering \& Technology\\
 Karachi, Pakistan}}
 
+\definecolor{brand}{HTML}{1F4E8C}
+\definecolor{brandgreen}{HTML}{2E9E6A}
+\definecolor{logobg}{HTML}{0B1220}
+\definecolor{logoblue}{HTML}{9CC9FF}
+\definecolor{logogreen}{HTML}{6FCF97}
 \definecolor{maroon}{HTML}{6B1F3A}
 \definecolor{night}{HTML}{0B1426}
 \definecolor{aurora}{HTML}{3DDC97}
@@ -63,47 +68,44 @@ Karachi, Pakistan}}
 
 % ---------------------------------------------------------------- title page
 \thispagestyle{empty}
-% Cover page in the NED report style. Every element is placed absolutely, so it is always exactly one page.
+% Cover page. Every element is placed absolutely, so it is always exactly one page.
 \begin{tikzpicture}[remember picture, overlay]
-  \def\W{14.6cm}
-  \newcommand{\rulex}[1]{\draw[maroon, line width=0.9pt] ([xshift=-7.3cm, yshift=-#1]current page.north) -- ([xshift=7.3cm, yshift=-#1]current page.north);}
-  \rulex{3.0cm}
-  \node[font=\large, align=center] at ([yshift=-3.75cm]current page.north)
-    {\textsc{NED University of Engineering \& Technology, Karachi}};
-  \node[font=\small, align=center] at ([yshift=-4.3cm]current page.north)
-    {Department of Computer Science \& Information Technology};
-  \rulex{4.75cm}
-  \node at ([yshift=-7.55cm]current page.north) {%
-    \IfFileExists{figs/ned_logo.png}{\includegraphics[height=4.6cm]{ned_logo.png}}%
-    {\tikz\draw[gray, dashed] (0,0) circle (2.3cm) node[align=center, font=\small] {NED logo\\(figs/ned\_logo.png)};}};
-  \node[font=\large, align=center] at ([yshift=-10.75cm]current page.north) {Machine Learning\\(CT-378)};
-  \rulex{11.7cm}
-  \node[font=\fontsize{22}{26}\selectfont\bfseries] at ([yshift=-12.6cm]current page.north) {Semester Project};
-  \node[font=\Large] at ([yshift=-13.4cm]current page.north) {Project Report: TORMENTA};
-  \node[font=\normalsize\itshape, align=center] at ([yshift=-14.05cm]current page.north)
-    {Nowcasting and 7-Day Forecasting of Geomagnetic Activity with Machine Learning};
-  \rulex{14.75cm}
-  \node[anchor=north, font=\normalsize] at ([yshift=-15.6cm]current page.north) {%
-    \renewcommand{\arraystretch}{1.15}%
-    \begin{tabular}{@{}>{\bfseries}r@{\hspace{0.9em}}l@{}}
-    Group Members: & Syeda Aliza Ayaz (CT-24219)\\
-                   & Husn ur Rehman (CT-24070)\\
-    Course:        & Machine Learning (CT-378)\\
-    Instructor:    & Ms.\ Murk Marvi\\
-    Assessment:    & Semester Project Report (with live demonstration)\\
-    Technology:    & Python 3.12, scikit-learn, pandas, Streamlit, Flask, Hugging Face\\
-    Live app:      & \url{https://tormenta.streamlit.app/}\\
-    Code:          & \url{https://github.com/Syeda-Aliza-Ayaz/Tormenta}\\
-    Submitted:     & November 2026\\
+  \node[font=\normalsize] at ([yshift=-3.0cm]current page.north) {NED University of Engineering \& Technology, Karachi};
+  \node[font=\small] at ([yshift=-3.65cm]current page.north) {Department of Computer Science \& Software Engineering};
+  \node[font=\small] at ([yshift=-4.3cm]current page.north) {CT-378\quad Machine Learning};
+  % Tormenta emblem (app/static/logo.svg): magnetic field lines around Earth
+  \begin{scope}[shift={([xshift=-1.25cm, yshift=-6.0cm]current page.north)}, x=0.078cm, y=-0.078cm]
+    \fill[logobg, rounded corners=0.55cm] (0,0) rectangle (32,32);
+    \begin{scope}[line width=1.3pt, line cap=round]
+      \draw[logoblue] (16,11.2) .. controls (4.5,3) and (1.5,26) .. (16,20.8);
+      \draw[logogreen] (16,11.2) .. controls (27.5,3) and (30.5,26) .. (16,20.8);
+      \draw[logoblue, opacity=0.6] (16,11.2) .. controls (9.5,8) and (8.5,22.5) .. (16,20.8);
+      \draw[logogreen, opacity=0.6] (16,11.2) .. controls (22.5,8) and (23.5,22.5) .. (16,20.8);
+    \end{scope}
+    \shade[left color=logoblue, right color=logogreen] (16,16) circle (4.2);
+    \draw[logogreen, line width=1.15pt, line cap=round] (12.6,10.1) .. controls (16,7.6) .. (19.4,10.1);
+  \end{scope}
+  \node[font=\fontsize{40}{46}\selectfont, text=brand] at ([yshift=-10.4cm]current page.north) {Tormenta};
+  \node[font=\Large, align=center] at ([yshift=-12.2cm]current page.north)
+    {Nowcasting and 7-Day Forecasting of\\Geomagnetic Activity with Machine Learning};
+  \node[font=\small\itshape] at ([yshift=-13.75cm]current page.north)
+    {Solar wind \,$\bullet$\, Solar images \,$\bullet$\, Gradient boosting \,$\bullet$\, Live deployment};
+  % details
+  \node[anchor=north, font=\normalsize] at ([yshift=-18.2cm]current page.north) {%
+    \renewcommand{\arraystretch}{1.25}%
+    \begin{tabular}{@{}>{\bfseries}r@{\hspace{0.8em}}l@{}}
+    Submitted by: & Syeda Aliza Ayaz \quad\textbullet\quad Husn ur Rehman\\
+    Roll numbers: & CT-24219 \quad\textbullet\quad CT-24070\\[5pt]
+    Submitted to: & Ms.\ Murk Marvi\\
+    Course:       & CT-378 Machine Learning\\[5pt]
+    Live Demo:    & \fcolorbox{brandgreen}{white}{\texttt{\small https://tormenta.streamlit.app/}}\\
+    GitHub Repo:  & \texttt{\small https://github.com/Syeda-Aliza-Ayaz/Tormenta}\\[5pt]
+    Date:         & November 2026\\
     \end{tabular}};
-  \rulex{21.4cm}
-  \node[font=\small, align=center] at ([yshift=-22.4cm]current page.north)
-    {Bachelor of Science in Computer Science\\Academic Session 2024 -- 2028};
 \end{tikzpicture}
 \null
 \clearpage
 
-\maketitle
 
 \begin{abstract}
 Geomagnetic storms disturb power grids, satellites, GPS and HF radio; their strength is measured by the
