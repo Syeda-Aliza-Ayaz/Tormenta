@@ -1,29 +1,34 @@
-% Tormenta: CT-378 Machine Learning final report (course template, two columns).
+% Tormenta: CT-378 Machine Learning final report, IEEE conference format (IEEEtran).
 % Compile on Overleaf (pdfLaTeX) or with tectonic. Upload the whole docs/report/final/ folder; figures are in figs/.
 % Graphs are drawn at column width by `python -m src.report_figures`; screenshots are of the live Streamlit app.
-\documentclass[10pt,a4paper,twocolumn]{article}
-\usepackage[a4paper,margin=1.6cm,columnsep=0.65cm]{geometry}
+\documentclass[conference,a4paper]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
 \usepackage[T1]{fontenc}
-\usepackage{lmodern}
-\usepackage{microtype}
+\usepackage{newtxtext,newtxmath}   % Times, the IEEE body font
+\usepackage{iftex}                 % sans serif for the cover page only: Helvetica (pdfLaTeX) or its clone (XeTeX)
+\ifXeTeX
+  \usepackage{fontspec}
+  \setsansfont{texgyreheros}[Scale=0.92, Extension=.otf, UprightFont=*-regular, BoldFont=*-bold,
+    ItalicFont=*-italic, BoldItalicFont=*-bolditalic]
+  \newcommand{\coverfont}{\sffamily}
+\else
+  \usepackage[scaled=0.92]{helvet}
+  \newcommand{\coverfont}{\fontfamily{phv}\selectfont}
+\fi
+\usepackage{amsmath}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{array}
 \usepackage{tabularx}
-\usepackage{amsmath}
-\usepackage{caption}
-\usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning}
 \usepackage{placeins}
-\usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!50!black]{hyperref}
+\usepackage{balance}               % balance the two columns on the last page
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
 \graphicspath{{figs/}}
-\captionsetup{font=small,labelfont=bf,skip=3pt}
-\setlist{nosep,leftmargin=*,topsep=2pt}
-\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
-\setlength{\floatsep}{7pt plus 2pt minus 2pt}
-\setlength{\intextsep}{7pt plus 2pt minus 2pt}
-\setlength{\dbltextfloatsep}{8pt plus 2pt minus 2pt}
 \renewcommand{\topfraction}{0.92}
 \renewcommand{\bottomfraction}{0.8}
 \renewcommand{\textfraction}{0.06}
@@ -34,23 +39,74 @@
 \setcounter{totalnumber}{6}
 \newcommand{\code}[1]{\texttt{\footnotesize #1}}
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
-\makeatletter
-\renewcommand\section{\@startsection{section}{1}{\z@}{-1.6ex plus -.4ex minus -.2ex}{0.7ex}{\normalfont\large\bfseries}}
-\renewcommand\subsection{\@startsection{subsection}{2}{\z@}{-1.2ex plus -.3ex minus -.2ex}{0.4ex}{\normalfont\normalsize\bfseries}}
-\renewcommand\paragraph{\@startsection{paragraph}{4}{\z@}{0.8ex plus .2ex}{-0.6em}{\normalfont\normalsize\bfseries}}
-\makeatother
 
-\title{\vspace{-1.6em}\textbf{Tormenta: Nowcasting and 7-Day Forecasting of Geomagnetic Activity\\with Machine Learning}\vspace{-0.4em}}
-\author{Syeda Aliza Ayaz (CT-24219) \qquad Husn ur Rehman (CT-24070)\\[2pt]
-\small CT-378 Machine Learning, NED University of Engineering \& Technology, Fall 2026\\[1pt]
-\small GitHub: \url{https://github.com/Syeda-Aliza-Ayaz/Tormenta} \quad Live app: \url{https://tormenta.streamlit.app/}}
-\date{\vspace{-2em}}
+\title{Tormenta: Nowcasting and 7-Day Forecasting of Geomagnetic Activity with Machine Learning%
+\thanks{CT-378 Machine Learning semester project, Fall 2026, submitted to Ms.\ Murk Marvi, Course Instructor.
+Code: \url{https://github.com/Syeda-Aliza-Ayaz/Tormenta}; live app: \url{https://tormenta.streamlit.app/}.}}
+\author{\IEEEauthorblockN{Syeda Aliza Ayaz}
+\IEEEauthorblockA{Roll No.\ CT-24219\\
+NED University of Engineering \& Technology\\
+Karachi, Pakistan}
+\and
+\IEEEauthorblockN{Husn ur Rehman}
+\IEEEauthorblockA{Roll No.\ CT-24070\\
+NED University of Engineering \& Technology\\
+Karachi, Pakistan}}
+
+\definecolor{maroon}{HTML}{6B1F3A}
+\definecolor{night}{HTML}{0B1426}
+\definecolor{aurora}{HTML}{3DDC97}
+\definecolor{ice}{HTML}{8EC5FF}
+\definecolor{ink}{HTML}{1A2433}
 
 \begin{document}
+
+% ---------------------------------------------------------------- title page
+\thispagestyle{empty}
+% Cover page in the NED report style. Every element is placed absolutely, so it is always exactly one page.
+\begin{tikzpicture}[remember picture, overlay]
+  \def\W{14.6cm}
+  \newcommand{\rulex}[1]{\draw[maroon, line width=0.9pt] ([xshift=-7.3cm, yshift=-#1]current page.north) -- ([xshift=7.3cm, yshift=-#1]current page.north);}
+  \rulex{3.0cm}
+  \node[font=\large, align=center] at ([yshift=-3.75cm]current page.north)
+    {\textsc{NED University of Engineering \& Technology, Karachi}};
+  \node[font=\small, align=center] at ([yshift=-4.3cm]current page.north)
+    {Department of Computer Science \& Information Technology};
+  \rulex{4.75cm}
+  \node at ([yshift=-7.55cm]current page.north) {%
+    \IfFileExists{figs/ned_logo.png}{\includegraphics[height=4.6cm]{ned_logo.png}}%
+    {\tikz\draw[gray, dashed] (0,0) circle (2.3cm) node[align=center, font=\small] {NED logo\\(figs/ned\_logo.png)};}};
+  \node[font=\large, align=center] at ([yshift=-10.75cm]current page.north) {Machine Learning\\(CT-378)};
+  \rulex{11.7cm}
+  \node[font=\fontsize{22}{26}\selectfont\bfseries] at ([yshift=-12.6cm]current page.north) {Semester Project};
+  \node[font=\Large] at ([yshift=-13.4cm]current page.north) {Project Report: TORMENTA};
+  \node[font=\normalsize\itshape, align=center] at ([yshift=-14.05cm]current page.north)
+    {Nowcasting and 7-Day Forecasting of Geomagnetic Activity with Machine Learning};
+  \rulex{14.75cm}
+  \node[anchor=north, font=\normalsize] at ([yshift=-15.6cm]current page.north) {%
+    \renewcommand{\arraystretch}{1.15}%
+    \begin{tabular}{@{}>{\bfseries}r@{\hspace{0.9em}}l@{}}
+    Group Members: & Syeda Aliza Ayaz (CT-24219)\\
+                   & Husn ur Rehman (CT-24070)\\
+    Course:        & Machine Learning (CT-378)\\
+    Instructor:    & Ms.\ Murk Marvi\\
+    Assessment:    & Semester Project Report (with live demonstration)\\
+    Technology:    & Python 3.12, scikit-learn, pandas, Streamlit, Flask, Hugging Face\\
+    Live app:      & \url{https://tormenta.streamlit.app/}\\
+    Code:          & \url{https://github.com/Syeda-Aliza-Ayaz/Tormenta}\\
+    Submitted:     & November 2026\\
+    \end{tabular}};
+  \rulex{21.4cm}
+  \node[font=\small, align=center] at ([yshift=-22.4cm]current page.north)
+    {Bachelor of Science in Computer Science\\Academic Session 2024 -- 2028};
+\end{tikzpicture}
+\null
+\clearpage
+
 \maketitle
 
 \begin{abstract}
-\noindent Geomagnetic storms disturb power grids, satellites, GPS and HF radio; their strength is measured by the
+Geomagnetic storms disturb power grids, satellites, GPS and HF radio; their strength is measured by the
 planetary Kp index (0--9). Tormenta has two parts. The \textbf{nowcaster} estimates the current hour's Kp from
 solar-wind measurements taken about an hour upstream of Earth: from 8 raw inputs we build 66 causal features, compare
 a persistence baseline with Linear Regression, KNN, SVR, Random Forest and HistGradientBoosting tuned by 5-fold
@@ -61,6 +117,10 @@ one solar image per day; on the 2020--2026 test period it beats an index-only mo
 significant on days 2--5) and is level with NOAA's official forecast. Both are deployed on Streamlit Community
 Cloud, the Hugging Face Hub and a local Flask app, and every forecast is logged and scored daily.
 \end{abstract}
+
+\begin{IEEEkeywords}
+space weather, geomagnetic storms, Kp index, solar wind, gradient boosting, time-series forecasting, model deployment
+\end{IEEEkeywords}
 
 %=====================================================================================================================
 \section{Problem and motivation}
@@ -119,24 +179,24 @@ NASA DONKI & coronal mass ejections, 2010 $\to$ & REST API with a key held in an
 The two notebooks and the forecaster scripts produced 15 EDA plots; Figs.~\ref{fig:eda1}--\ref{fig:eda3} show six
 that cover the five required views. All use training years only.
 
-\paragraph{Class balance (Fig.~\ref{fig:eda1}, top).} Kp is strongly right-skewed: storm hours are only 4.5\% of the
+\paragraph{Class balance (Fig.~\ref{fig:eda1}, top)} Kp is strongly right-skewed: storm hours are only 4.5\% of the
 training years and G3+ about 0.5\%. A squared-error model will under-predict storms, so we report storm-hour RMSE
 separately and train a dedicated storm classifier with thresholds tuned for the rare class.
 
-\paragraph{Missing values (Fig.~\ref{fig:eda1}, middle).} At most 2.3\% per input overall, but up to 12\% in
+\paragraph{Missing values (Fig.~\ref{fig:eda1}, middle)} At most 2.3\% per input overall, but up to 12\% in
 2000--2002, and half of all missing hours lie in gaps longer than 24\,h. Interpolation would invent storms, so gaps
 are kept as gaps and handled by the models.
 
-\paragraph{Correlations (Fig.~\ref{fig:eda1}, bottom; Fig.~\ref{fig:eda2}).} Speed ($\rho$\,=\,0.58), temperature,
+\paragraph{Correlations (Fig.~\ref{fig:eda1}, bottom; Fig.~\ref{fig:eda2})} Speed ($\rho$\,=\,0.58), temperature,
 $|B|$ and $VB_s$ correlate most with Kp. Kp rises steeply as $B_z$ turns \emph{southward} and hardly at all for
 northward $B_z$: reconnection at the dayside lets energy in only for southward fields. This motivated the coupling
 features ($-VB_z$, $VB_s$ and the Newell function \cite{newell2007}).
 
-\paragraph{Distributions and outliers (Fig.~\ref{fig:eda3}).} Speed and density are skewed with long tails (speed
+\paragraph{Distributions and outliers (Fig.~\ref{fig:eda3})} Speed and density are skewed with long tails (speed
 up to 1189\,km/s; $B_z$ down to $-58$\,nT). These extremes coincide with documented storms, so they are real physics
 and are kept; tree models are insensitive to scale.
 
-\paragraph{Time structure (Fig.~\ref{fig:eda2}, bottom).} Daily Ap is autocorrelated for a few days and peaks again
+\paragraph{Time structure (Fig.~\ref{fig:eda2}, bottom)} Daily Ap is autocorrelated for a few days and peaks again
 every 27 days, one solar rotation; the peaks vanish when the series is shuffled. This motivated the 27/54/81-day
 ``echo'' features. Storm frequency ranges from 0.2\% of hours (2009) to 15.5\% (2003), so every split is
 time-ordered.
@@ -185,27 +245,27 @@ deploy; score every live forecast daily};
 \end{figure}
 
 \subsection{Pre-processing and feature engineering}
-\paragraph{Cleaning.} Placeholder codes (e.g.\ 999.9, 9999) become missing. The data are put on a complete hourly
+\paragraph{Cleaning} Placeholder codes (e.g.\ 999.9, 9999) become missing. The data are put on a complete hourly
 grid, so a 3-hour lag always means 3 hours even across gaps. F10.7 values more than twice their trailing 27-day
 median are flare spikes, not the Sun's real activity level, and become missing.
 
-\paragraph{Nowcaster features (66).} From 8 raw inputs: coupling functions ($-VB_z$, $VB_s$, Newell), dynamic
+\paragraph{Nowcaster features (66)} From 8 raw inputs: coupling functions ($-VB_z$, $VB_s$, Newell), dynamic
 pressure, plasma $\beta$, Alfv\'en Mach number; lags of 1--9\,h; 3--24\,h windows (means, spread, extremes);
 statistics since the current 3-hour block began; yesterday's F10.7 and its 81-day mean; and sin/cos of hour and day
 of year. The sin/cos pair is the \textbf{encoding} of cyclic time (23:00 sits next to 00:00) and carries the
 Russell--McPherron season effect \cite{russell1973}; there are no categorical inputs to one-hot encode.
 
-\paragraph{Forecaster features (52).} 29 from past indices (Ap and max Kp of the last 7 days; 3/7/27-day means; Ap
+\paragraph{Forecaster features (52)} 29 from past indices (Ap and max Kp of the last 7 days; 3/7/27-day means; Ap
 27, 54 and 81 days before the target; F10.7; season), 16 from daily solar wind (issue day, day before, and the
 27-day echo of speed), and 7 coronal-hole areas from the AIA image: pixels darker than $0.35\times$ the disk median
 after a median filter, cleaned by a $7\times7$ morphological opening and a 300-pixel size filter
 (Fig.~\ref{fig:ch}). Coronal holes emit fast wind that reaches Earth 2--4 days later \cite{vrsnak2007}.
 
-\paragraph{Imputation and scaling.} Median imputation and standard scaling sit inside a scikit-learn
+\paragraph{Imputation and scaling} Median imputation and standard scaling sit inside a scikit-learn
 \code{Pipeline} fitted on training rows only \cite{pedregosa2011}; they are needed by Linear Regression, KNN and
 SVR. HistGB routes missing values natively.
 
-\paragraph{Why feature engineering sits before the Pipeline.} A \code{Pipeline} prevents leakage from steps that
+\paragraph{Why feature engineering sits before the Pipeline} A \code{Pipeline} prevents leakage from steps that
 \emph{learn} from data, by fitting them on training rows only. Our features learn nothing: each is a fixed formula
 over the current and past hours, so it gives the same value inside or outside a \code{Pipeline} and cannot carry
 test information. Every step that does learn is inside. Three reasons keep the features outside:
@@ -219,18 +279,18 @@ from all hours, and a \code{Pipeline} cannot drop rows between steps.
 \end{itemize}
 
 \subsection{Split, models and tuning}
-\paragraph{Split (time-ordered, never shuffled).} Nowcaster: train 1998--2016 (166{,}560\,h, 68\%), validation
+\paragraph{Split (time-ordered, never shuffled)} Nowcaster: train 1998--2016 (166{,}560\,h, 68\%), validation
 2017--2019 (26{,}280\,h, 11\%), test 2020--Jan 2026 (52{,}848\,h, 21\%). Forecaster: train from 1947; validation
 2011--2019 year by year (each year forecast by a model trained on all earlier years); test 2020-01-01 to 2026-06-30
 (2{,}373 days, 325 storm days).
 
-\paragraph{Models.} Nowcaster: persistence baseline (``Kp now = last block's Kp''), Linear Regression, KNN, SVR (RBF
+\paragraph{Models} Nowcaster: persistence baseline (``Kp now = last block's Kp''), Linear Regression, KNN, SVR (RBF
 kernel), Random Forest and HistGradientBoosting (HistGB) \cite{ke2017}. Forecaster: reference forecasts
 (persistence, 27-day recurrence, 27-day mean, climatology), ARIMA/SARIMA/ARIMAX \cite{box2015}, LSTM, GRU, a
 pretrained transformer used zero-shot, and HistGB with one model per lead day and target, so day-1 errors never
 feed day 2. A HistGB classifier gives the storm-day probability.
 
-\paragraph{Tuning.} Each nowcaster model is tuned with \code{RandomizedSearchCV} over 5-fold \code{TimeSeriesSplit}
+\paragraph{Tuning} Each nowcaster model is tuned with \code{RandomizedSearchCV} over 5-fold \code{TimeSeriesSplit}
 on the training years (every fold trains on the past and validates on the future). The forecaster uses the same
 random search with 5 time-ordered folds and a 7-day \emph{gap}: a target lies up to 7 days after its issue day, so
 without the gap the last training rows would carry targets inside the validation fold. Table~\ref{tab:params}
@@ -250,10 +310,10 @@ L2 regularisation & 0.28 & 3.0 & 3.0 & 1.0\\\bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Prediction interval.} Two quantile HistGB models (10th and 90th percentile) give an 80\% band, widened by
+\paragraph{Prediction interval} Two quantile HistGB models (10th and 90th percentile) give an 80\% band, widened by
 a conformalized-quantile-regression margin \cite{romano2019} estimated on out-of-fold training and validation years.
 
-\paragraph{Adoption rules.} Every change had to pass a rule written \emph{before} it ran, e.g.\ for the forecaster:
+\paragraph{Adoption rules} Every change had to pass a rule written \emph{before} it ran, e.g.\ for the forecaster:
 better pooled skill, better in at least 6 of 9 validation years, and storm skill not lower. Failed ideas (CME
 catalogue, flare reports, intraday updates, log target) were rejected and kept on record.
 
@@ -296,7 +356,7 @@ Random Forest & 0.545 & 0.644 & 0.564 & 0.606 & 0.785 & 0.972\\
 HistGB is the best model on every split (Table~\ref{tab:now}, Fig.~\ref{fig:models}): 34\% below persistence
 overall and 38\% on storm hours.
 
-\paragraph{Over- and under-fitting.} HistGB's train, CV and validation RMSE are close (0.534 / 0.561 / 0.522), so
+\paragraph{Over- and under-fitting} HistGB's train, CV and validation RMSE are close (0.534 / 0.561 / 0.522), so
 it does not overfit. KNN memorises the training data (train RMSE $\approx$\,0, validation 0.614), and Linear
 Regression underfits (train error 0.689 above its validation error). The learning curve (Fig.~\ref{fig:fit}a)
 shows the train--validation gap closing with more data, and doubling the data gains only 0.003. In the complexity
@@ -304,7 +364,7 @@ curve (Fig.~\ref{fig:fit}b) validation RMSE is flat from 31 to 127 leaves while 
 trees only memorise. The remaining error is an information limit of single-point L1 measurements, not a lack of
 model capacity.
 
-\paragraph{Errors.} Error grows with storm level (Fig.~\ref{fig:level}) and large storms are under-predicted
+\paragraph{Errors} Error grows with storm level (Fig.~\ref{fig:level}) and large storms are under-predicted
 (G3+ bias $-$0.57 Kp for HistGB, $-$0.93 for persistence): rare extremes are pulled towards the mean. Onsets appear
 1--2\,h late, because a 3-hour block's driver has not fully arrived in its first hour. The May 2024 G5 storm, never
 seen in training, is tracked from onset to recovery with a predicted peak of 8.6 against an observed 9
@@ -349,20 +409,26 @@ Pretrained transformer & 11.83 & -- & 12.66 & 12.65 & $-$0.015\\
 Day & Heidke & Detected & False al. & F1 & Indices only\\\midrule
 1 & \textbf{0.40} & 53\% & 54\% & 0.49 & 0.34\\
 2 & \textbf{0.26} & 40\% & 65\% & 0.37 & 0.20\\
-3 & \textbf{0.25} & 31\% & 62\% & 0.34 & 0.20\\\bottomrule
+3 & \textbf{0.25} & 30\% & 61\% & 0.34 & 0.20\\
+4 & \textbf{0.22} & 29\% & 65\% & 0.32 & 0.21\\
+5 & 0.21 & 36\% & 70\% & 0.33 & \textbf{0.22}\\
+6 & \textbf{0.21} & 54\% & 74\% & 0.35 & 0.20\\
+7 & \textbf{0.22} & 34\% & 68\% & 0.33 & 0.19\\\bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Values.} The final model beats the index-only HistGB at every lead day (Table~\ref{tab:fc},
+\paragraph{Values} The final model beats the index-only HistGB at every lead day (Table~\ref{tab:fc},
 Fig.~\ref{fig:fc}a). A Diebold--Mariano test \cite{diebold1995} on daily squared errors finds the gain significant on
 days 2--5 ($p\le0.025$), exactly the 2--4 day travel time of fast wind from a coronal hole. The 95\% block-bootstrap
 interval of the skill gain is $+0.007$ to $+0.050$, so it is not chance. Against NOAA's official forecast it is ahead
 on days 1 and 3 and behind on day 2, with no significant difference ($p$ = 0.69 / 0.91 / 0.55).
 
-\paragraph{Storm warnings.} Classification metrics are in Table~\ref{tab:storm} and Fig.~\ref{fig:conf}. On day 1
-the model catches 53\% of storm days with 54\% of its warnings false (F1 0.49); Heidke skill (0 = chance,
-1 = perfect) improves on days 1--3 over the index-only model, with fewer false alarms. Skill falls with lead time
-because storms caused by sudden solar eruptions cannot be seen days ahead.
+\paragraph{Storm warnings} Classification metrics are in Table~\ref{tab:storm} and Fig.~\ref{fig:conf}. On day 1
+the model catches 53\% of storm days with 54\% of its warnings false (F1 0.49). Heidke skill (0 = chance,
+1 = perfect) is clearly better than the index-only model on days 1--3, with fewer false alarms, and about equal on
+days 4--7. Skill falls with lead time (F1 0.32--0.37 from day 2) because storms caused by sudden solar eruptions
+cannot be seen days ahead; on day 6 a lower warning threshold catches more storms at the cost of more false
+alarms.
 
 \begin{figure}[t]\centering
 \includegraphics[width=\columnwidth]{res_forecaster_test.png}
@@ -370,7 +436,8 @@ because storms caused by sudden solar eruptions cannot be seen days ahead.
 \end{figure}
 \begin{figure}[t]\centering
 \includegraphics[width=0.85\columnwidth]{res_storm_confusion.png}
-\caption{Confusion matrices of the storm warnings on the test period, lead days 1 and 3.}\label{fig:conf}
+\caption{Confusion matrices of the final model's storm warnings on the test period, lead days 1--7 (2{,}373 days,
+325 storm days).}\label{fig:conf}
 \end{figure}
 
 %=====================================================================================================================
@@ -392,7 +459,8 @@ error messages (e.g.\ ``speed must be a number'').
 \textbf{Automation.} A daily GitHub Actions job issues the 7-day forecast, saves NOAA's forecasts, scores every
 forecast whose day has arrived, and commits append-only logs; forecasts are never edited. A weekly check retrains
 only after two degraded health checks and promotes a model only if it beats the current one on unseen data. The
-final forecaster runs in \emph{shadow mode} (logged, not shown) for three weeks before it replaces the live model.
+final model of this report runs in \emph{shadow mode} (issued and logged every day, but not shown) for three
+weeks before it replaces the live forecaster.
 
 \begin{figure}[t]\centering
 \includegraphics[width=\columnwidth]{app_dark_overview.png}\\[3pt]
@@ -410,7 +478,8 @@ range and the live solar wind (bottom).}\label{fig:app1}
 \section{Limitations and future work}
 \begin{itemize}
 \item \textbf{Sudden eruptions.} Storms from coronal mass ejections are invisible in our inputs until they arrive,
-so the first storm day is usually missed (10 May 2024 was missed; the next three storm days were warned).
+so the first storm day is usually missed: both the live and the final model missed the onset of the May 2024 storm
+on 10 May and warned for the next three storm days.
 \item \textbf{Extremes.} Kp\,9 is very rare in training, so storm size is under-predicted and trees cannot
 extrapolate beyond the largest values seen; during storms the storm warning is the number to trust.
 \item \textbf{Lead time.} The nowcast sees at most about one hour ahead, the solar wind's travel time from L1.
@@ -423,29 +492,30 @@ forecaster's shadow run checks this before it goes live.
 Kp forecasts 1--3 hours ahead, and a journal paper on the coronal-hole forecaster.
 
 %=====================================================================================================================
-{\footnotesize
-\begin{thebibliography}{20}\setlength{\itemsep}{0pt}
-\bibitem{matzka2021} J.~Matzka, C.~Stolle, Y.~Yamazaki, O.~Bronkalla and A.~Morschhauser, ``The geomagnetic Kp index and derived indices of geomagnetic activity,'' \emph{Space Weather}, 19, e2020SW002641, 2021.
-\bibitem{gfzkp} J.~Matzka, O.~Bronkalla, K.~Tornow, K.~Elger and C.~Stolle, \emph{Geomagnetic Kp index}, V.~1.0, GFZ Data Services, 2021, doi:10.5880/Kp.0001.
-\bibitem{king2005} J.~H. King and N.~E. Papitashvili, ``Solar wind spatial scales in and comparisons of hourly Wind and ACE plasma and magnetic field data,'' \emph{J. Geophys. Res.}, 110, A02104, 2005.
-\bibitem{lemen2012} J.~R. Lemen et al., ``The Atmospheric Imaging Assembly (AIA) on the Solar Dynamics Observatory (SDO),'' \emph{Solar Physics}, 275, 17--40, 2012.
-\bibitem{swpc} NOAA Space Weather Prediction Center, real-time solar wind and forecast products, \url{https://www.swpc.noaa.gov}.
-\bibitem{newell2007} P.~T. Newell, T.~Sotirelis, K.~Liou, C.-I. Meng and F.~J. Rich, ``A nearly universal solar wind-magnetosphere coupling function inferred from 10 magnetospheric state variables,'' \emph{J. Geophys. Res.}, 112, A01206, 2007.
-\bibitem{russell1973} C.~T. Russell and R.~L. McPherron, ``Semiannual variation of geomagnetic activity,'' \emph{J. Geophys. Res.}, 78(1), 92--108, 1973.
-\bibitem{vrsnak2007} B.~Vr\v{s}nak, M.~Temmer and A.~M. Veronig, ``Coronal holes and solar wind high-speed streams: II.~Forecasting the geomagnetic effects,'' \emph{Solar Physics}, 240, 331--346, 2007.
-\bibitem{pedregosa2011} F.~Pedregosa et al., ``Scikit-learn: Machine learning in Python,'' \emph{JMLR}, 12, 2825--2830, 2011.
-\bibitem{ke2017} G.~Ke et al., ``LightGBM: A highly efficient gradient boosting decision tree,'' \emph{NeurIPS}, 2017.
-\bibitem{box2015} G.~E.~P. Box, G.~M. Jenkins, G.~C. Reinsel and G.~M. Ljung, \emph{Time Series Analysis: Forecasting and Control}, 5th ed., Wiley, 2015.
-\bibitem{romano2019} Y.~Romano, E.~Patterson and E.~Cand\`es, ``Conformalized quantile regression,'' \emph{NeurIPS}, 2019.
-\bibitem{diebold1995} F.~X. Diebold and R.~S. Mariano, ``Comparing predictive accuracy,'' \emph{J. Business \& Economic Statistics}, 13(3), 253--263, 1995.
-\end{thebibliography}}
+\balance
+\begin{thebibliography}{13}
+\bibitem{matzka2021} J.~Matzka, C.~Stolle, Y.~Yamazaki, O.~Bronkalla, and A.~Morschhauser, ``The geomagnetic Kp index and derived indices of geomagnetic activity,'' \emph{Space Weather}, vol.~19, Art.~no.~e2020SW002641, 2021.
+\bibitem{gfzkp} J.~Matzka, O.~Bronkalla, K.~Tornow, K.~Elger, and C.~Stolle, ``Geomagnetic Kp index,'' V.~1.0, GFZ Data Services, 2021, doi: 10.5880/Kp.0001.
+\bibitem{king2005} J.~H. King and N.~E. Papitashvili, ``Solar wind spatial scales in and comparisons of hourly Wind and ACE plasma and magnetic field data,'' \emph{J. Geophys. Res.}, vol.~110, Art.~no.~A02104, 2005.
+\bibitem{lemen2012} J.~R. Lemen \emph{et al.}, ``The Atmospheric Imaging Assembly (AIA) on the Solar Dynamics Observatory (SDO),'' \emph{Sol. Phys.}, vol.~275, pp.~17--40, 2012.
+\bibitem{swpc} NOAA Space Weather Prediction Center, ``Real-time solar wind and forecast products.'' [Online]. Available: \url{https://www.swpc.noaa.gov}
+\bibitem{newell2007} P.~T. Newell, T.~Sotirelis, K.~Liou, C.-I. Meng, and F.~J. Rich, ``A nearly universal solar wind-magnetosphere coupling function inferred from 10 magnetospheric state variables,'' \emph{J. Geophys. Res.}, vol.~112, Art.~no.~A01206, 2007.
+\bibitem{russell1973} C.~T. Russell and R.~L. McPherron, ``Semiannual variation of geomagnetic activity,'' \emph{J. Geophys. Res.}, vol.~78, no.~1, pp.~92--108, 1973.
+\bibitem{vrsnak2007} B.~Vr\v{s}nak, M.~Temmer, and A.~M. Veronig, ``Coronal holes and solar wind high-speed streams: II. Forecasting the geomagnetic effects,'' \emph{Sol. Phys.}, vol.~240, pp.~331--346, 2007.
+\bibitem{pedregosa2011} F.~Pedregosa \emph{et al.}, ``Scikit-learn: Machine learning in Python,'' \emph{J. Mach. Learn. Res.}, vol.~12, pp.~2825--2830, 2011.
+\bibitem{ke2017} G.~Ke \emph{et al.}, ``LightGBM: A highly efficient gradient boosting decision tree,'' in \emph{Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)}, 2017.
+\bibitem{box2015} G.~E.~P. Box, G.~M. Jenkins, G.~C. Reinsel, and G.~M. Ljung, \emph{Time Series Analysis: Forecasting and Control}, 5th~ed. Hoboken, NJ, USA: Wiley, 2015.
+\bibitem{romano2019} Y.~Romano, E.~Patterson, and E.~Cand\`es, ``Conformalized quantile regression,'' in \emph{Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)}, 2019.
+\bibitem{diebold1995} F.~X. Diebold and R.~S. Mariano, ``Comparing predictive accuracy,'' \emph{J. Bus. Econ. Stat.}, vol.~13, no.~3, pp.~253--263, 1995.
+\end{thebibliography}
 
 %=====================================================================================================================
-\section*{Individual contributions}
+\section*{Individual Contributions}
 Syeda Aliza Ayaz and Husn ur Rehman worked jointly on every stage and contributed equally; each wrote and reviewed
 code in every area, so both can explain every part.
 
-\begin{table}[h]\centering\footnotesize
+\vspace{4pt}
+\noindent{\centering\footnotesize
 \begin{tabular}{@{}p{1.7cm}p{5.0cm}p{0.7cm}@{}}\toprule
 Stage & Work & By\\\midrule
 Problem & topic, targets, success metrics, proposal & Both\\
@@ -456,7 +526,6 @@ Modelling & baselines, nowcast and forecast models, tuning, intervals & Both\\
 Evaluation & validation, one-time tests, NOAA comparison, leakage tests & Both\\
 Deployment & Streamlit, Hugging Face, Flask, daily automation & Both\\
 Report & writing, figures, demo and viva preparation & Both\\\bottomrule
-\end{tabular}
-\end{table}
+\end{tabular}\par}
 
 \end{document}

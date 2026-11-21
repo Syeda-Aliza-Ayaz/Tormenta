@@ -262,26 +262,29 @@ def error_by_level():
 
 
 def storm_confusion():
-    """Confusion matrices of the final storm classifier on the test period, lead days 1 and 3, stacked."""
+    """Confusion matrices of the final storm classifier on the test period, every lead day 1-7, stacked."""
     d = config.FORECAST_REPORTS_DIR / "test_locked"
     probs = pd.read_csv(d / "storm_probs.csv.gz")
     probs = probs[probs["obs_definitive"]]
     th = pd.read_csv(d / "storms.csv").set_index("lead")["threshold"]
-    fig, axes = plt.subplots(2, 1, figsize=(W, 3.6))
-    for ax, h in zip(axes, (1, 3)):
+    leads = config.FORECAST_LEADS
+    fig, axes = plt.subplots(len(leads), 1, figsize=(W * 0.82, 1.32 * len(leads)))
+    for ax, h in zip(axes, leads):
         g = probs[probs["lead"] == h]
         warn, obs = g["storm_prob"] >= th[h], g["storm_obs"].astype(bool)
         m = np.array([[(~warn & ~obs).sum(), (warn & ~obs).sum()], [(~warn & obs).sum(), (warn & obs).sum()]])
         ax.imshow(m, cmap="Blues", vmin=0, vmax=m.max() * 1.6)
         for i in range(2):
             for j in range(2):
-                ax.text(j, i, f"{m[i, j]:,}", ha="center", va="center", fontsize=9)
-        ax.set_xticks([0, 1]); ax.set_xticklabels(["no warning", "warning"])
+                ax.text(j, i, f"{m[i, j]:,}", ha="center", va="center", fontsize=8)
+        ax.set_xticks([0, 1]); ax.set_xticklabels(["no warning", "warning"] if h == leads[-1] else ["", ""])
+        ax.tick_params(axis="x", length=0 if h != leads[-1] else 3.5)
         ax.set_yticks([0, 1]); ax.set_yticklabels(["no storm", "storm"])
         ax.grid(False)
         pod, far = m[1, 1] / m[1].sum(), m[0, 1] / m[:, 1].sum()
-        ax.set_title(f"Lead day {h}: detects {pod:.0%} of storms, {far:.0%} false alarms", loc="left")
-    fig.tight_layout(h_pad=0.8)
+        f1 = 2 * m[1, 1] / (2 * m[1, 1] + m[0, 1] + m[1, 0])
+        ax.set_title(f"Day {h}: detects {pod:.0%}, false alarms {far:.0%}, F1 {f1:.2f}", loc="left", fontsize=7.5)
+    fig.tight_layout(h_pad=0.5)
     save(fig, "res_storm_confusion")
 
 
