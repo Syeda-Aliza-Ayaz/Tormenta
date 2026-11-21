@@ -144,6 +144,8 @@ Blocked items (network, waiting for data) are listed in [TODO.md](TODO.md); [doc
 - [x] If they pass: production fit on definitive days to `PRODUCTION_END` (`python -m src.forecast.locked_shadow`)
 - [ ] Push and merge (needs the user's go-ahead; goes with the UI changes): the bot starts the image log and the
       locked shadow log
+- [ ] Locked shadow status: add the 27-day echo state (`no_echo`, echo days missing) like sw_shadow; the first
+      bot run logged `full` while 9 echo days were missing (proposed 2026-11-21, awaiting approval)
 - [ ] At least 3 weeks of shadow running; check every fallback was exercised or tested (adoption rule part c)
 - [ ] Switch the served forecast to the locked model with its fallbacks; update the app and the model card
 - [ ] Paper: the angle from the test results (locked model vs NOAA vs live HistGB, with the significance tests)

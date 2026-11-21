@@ -142,12 +142,13 @@ Use Python **3.12** and the exact pins: models are pickled scikit-learn 1.9.1 ob
 version differs. The Chronos comparison is optional:
 `pip install -r requirements-chronos.txt -c requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu`.
 
-**Data** (`data/raw/`, not in git):
-- The OMNIWeb subset `omni2_*.lst` + `.fmt` (1998-01-01 onward) for the nowcaster.
-- The GFZ file `Kp_ap_Ap_SN_F107_since_1932.txt` from <https://kp.gfz.de> (`python -m src.daily` downloads it).
-
-Alternatively, `python -m src.update --dry-run` downloads everything from NASA SPDF and GFZ and rebuilds
-`data/processed/` (needs access to spdf.gsfc.nasa.gov).
+**Data** (`data/raw/` and `data/processed/` are not in git; every dataset is downloaded by script):
+```bat
+python -m src.download_data                 &:: core: GFZ + NASA OMNI -> daily and hourly tables (~2 min)
+python -m src.download_data --images        &:: + SDO/AIA solar images and coronal-hole features (~3 h, ~7 GB)
+python -m src.download_data --all           &:: + the experiment datasets (NOAA event reports, RSGA, NASA DONKI)
+```
+Sources, collection methods, licences and access dates: [DATA.md](DATA.md).
 
 ## Run
 
@@ -232,6 +233,9 @@ Pyodide).
 ## Documentation
 - `PROJECT_EXP.md`: the whole project explained, step by step, with the reason for each decision.
 - `DECISIONS.md`: every decision with its rule, reason and result. `ROADMAP.md`: open work.
+- `docs/report/final/`: **the final course report** (`tormenta_final_report.pdf` and its LaTeX source); its graphs
+  are drawn by `python -m src.report_figures`.
+- `DATA.md`: every dataset, how it was collected, its licence and access date.
 - `docs/report/v2/`: the full LaTeX report (nowcaster, forecaster, locked model, NOAA comparison); compile on
   Overleaf (upload the folder). `docs/report/tormenta_report.tex` is the v1 course report.
 - `docs/plans/PLAN.md`: the original forecaster plan.

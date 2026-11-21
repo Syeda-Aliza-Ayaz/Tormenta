@@ -80,6 +80,27 @@ Actions job and scored against GFZ data as it arrives.
 - **Limitation:** storms caused by sudden solar eruptions (e.g. the May 2024 superstorm) cannot be foreseen from
   past values alone; their onset is missed and the risk rises only once the storm has begun.
 
+### Next model: HistGB + solar wind + coronal holes (locked, in shadow mode)
+
+| | |
+|---|---|
+| **Model** | `models/forecast/locked_shadow.joblib`: the same 14 regressors (Poisson loss) and 7 storm classifiers, with 52 inputs: the 29 above, 16 daily solar-wind features (issue day, day before, and the 27-day echo), and 7 coronal-hole areas measured on one SDO/AIA 193 Å image per day |
+| **Selection** | Nine-year validation (2011–2019), each year trained on all earlier years, with rules fixed before each run; locked and committed before the test period was read |
+| **Status** | Shadow mode since 2026-11-21: issued and logged every day (`forecasts/locked_shadow_log.csv`) but not shown. It replaces the live forecast after at least 3 weeks with working fallbacks (no image for 2 days → solar-wind model; no solar wind → live HistGB) |
+
+One-time test, same period, models fitted to 2019:
+
+| Ap, root-mean-square error | day 1 | day 2 | day 3 | day 7 | skill days 1–7 | storm Heidke days 1–3 |
+|---|---|---|---|---|---|---|
+| **Locked model** | **10.67** | 11.80 | **11.73** | **11.95** | **0.122** | **0.40 / 0.26 / 0.25** |
+| HistGB (live) | 10.78 | 11.98 | 11.91 | 12.01 | 0.100 | 0.34 / 0.20 / 0.20 |
+| NOAA official | 10.89 | **11.73** | 11.90 | – | – | – |
+
+- Better than the live HistGB at every lead day, significantly on days 2–5 (Diebold–Mariano p ≤ 0.025); 95%
+  block-bootstrap interval of the skill gain +0.007 to +0.050.
+- Level with NOAA on days 1–3 (no significant difference).
+- All test scores are from models fitted to 2019; the deployed models were refitted on data to June 2026 afterwards.
+
 ## Use the model
 
 **Live demo:** <https://huggingface.co/spaces/aliza-ayaz/tormenta> (runs in your browser) · <https://tormenta.streamlit.app/> (server)
@@ -114,4 +135,6 @@ The bundle is a dict with `point`, `q_lo`, `q_hi` (fitted `HistGradientBoostingR
 
 ### Data and licences
 NASA/GSFC Space Physics Data Facility OMNIWeb; GFZ German Research Centre for Geosciences Kp and F10.7
-(CC BY 4.0); NOAA Space Weather Prediction Center real-time data (public domain).
+(CC BY 4.0); NOAA Space Weather Prediction Center real-time data (public domain); SDO/AIA images courtesy of NASA/SDO
+and the AIA science team, via the Stanford JSOC. Full list with collection methods and access dates:
+[DATA.md](https://github.com/Syeda-Aliza-Ayaz/Tormenta/blob/main/DATA.md).
