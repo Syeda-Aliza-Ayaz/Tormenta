@@ -71,20 +71,10 @@ Karachi, Pakistan}}
 % Cover page. Every element is placed absolutely, so it is always exactly one page.
 \begin{tikzpicture}[remember picture, overlay]
   \node[font=\normalsize] at ([yshift=-3.0cm]current page.north) {NED University of Engineering \& Technology, Karachi};
-  \node[font=\small] at ([yshift=-3.65cm]current page.north) {Department of Computer Science \& Software Engineering};
+  \node[font=\small] at ([yshift=-3.65cm]current page.north) {Department of Computer Science \& Information Technology};
   \node[font=\small] at ([yshift=-4.3cm]current page.north) {CT-378\quad Machine Learning};
-  % Tormenta emblem (app/static/logo.svg): magnetic field lines around Earth
-  \begin{scope}[shift={([xshift=-1.25cm, yshift=-6.0cm]current page.north)}, x=0.078cm, y=-0.078cm]
-    \fill[logobg, rounded corners=0.55cm] (0,0) rectangle (32,32);
-    \begin{scope}[line width=1.3pt, line cap=round]
-      \draw[logoblue] (16,11.2) .. controls (4.5,3) and (1.5,26) .. (16,20.8);
-      \draw[logogreen] (16,11.2) .. controls (27.5,3) and (30.5,26) .. (16,20.8);
-      \draw[logoblue, opacity=0.6] (16,11.2) .. controls (9.5,8) and (8.5,22.5) .. (16,20.8);
-      \draw[logogreen, opacity=0.6] (16,11.2) .. controls (22.5,8) and (23.5,22.5) .. (16,20.8);
-    \end{scope}
-    \shade[left color=logoblue, right color=logogreen] (16,16) circle (4.2);
-    \draw[logogreen, line width=1.15pt, line cap=round] (12.6,10.1) .. controls (16,7.6) .. (19.4,10.1);
-  \end{scope}
+  % NED University logo
+  \node at ([yshift=-7.2cm]current page.north) {\includegraphics[width=3.7cm]{ned_logo.png}};
   \node[font=\fontsize{40}{46}\selectfont, text=brand] at ([yshift=-10.4cm]current page.north) {Tormenta};
   \node[font=\Large, align=center] at ([yshift=-12.2cm]current page.north)
     {Nowcasting and 7-Day Forecasting of\\Geomagnetic Activity with Machine Learning};
@@ -513,10 +503,6 @@ Kp forecasts 1--3 hours ahead, and a journal paper on the coronal-hole forecaste
 
 %=====================================================================================================================
 \section*{Individual Contributions}
-Syeda Aliza Ayaz and Husn ur Rehman worked jointly on every stage and contributed equally; each wrote and reviewed
-code in every area, so both can explain every part.
-
-\vspace{4pt}
 \noindent{\centering\footnotesize
 \begin{tabular}{@{}p{1.7cm}p{5.0cm}p{0.7cm}@{}}\toprule
 Stage & Work & By\\\midrule
